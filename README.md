@@ -237,14 +237,9 @@ kept/
 │   ├── api/
 │   └── web/
 ├── docs/
-│   ├── 01 - Product Lead/
-│   ├── 02 - Product Designer/
-│   ├── 03 - Monad + Smart Contract Engineer/
-│   ├── 04 - Wallet & Cross-Chain Engineer/
-│   ├── 05 - Backend, Data, Verification Engineer/
-│   ├── 06 - Privacy, Trust & Security Lead/
-│   ├── 07 - Economic, Risk & Regulatory Research Lead/
-│   ├── 08 - QA, Hackathon, Release Lead/
+│   ├── decisions/
+│   ├── specs/
+│   ├── handoffs/
 │   └── Product-Outline.txt
 ├── packages/
 │   ├── commitment-catalogue/
@@ -295,11 +290,11 @@ Repository documents are not all equally authoritative.
 
 Use this hierarchy:
 
-1. `docs/01 - Product Lead/Product Lead Decision Log.txt`
+1. `docs/decisions/Product Lead Decision Log.txt`
 2. `docs/Product-Outline.txt`
-3. current accepted implementation specifications
-4. current specialist deliverables
-5. specialist handoffs
+3. current accepted implementation specifications under `docs/specs/`
+4. current specialist deliverables under `docs/specs/`
+5. specialist handoffs under `docs/handoffs/`
 6. historical research
 7. general knowledge / new ideas
 
@@ -328,6 +323,9 @@ As of 08-Sep-2026, accepted decisions include:
 - **KEPT-PL-011** — Consumer Products & Payments is the intended primary Metropolis track.
 - **KEPT-PL-012** — reward-oracle and delegated-wallet authority must remain independently bounded.
 - **KEPT-PL-013** — the current backend/data/verification design is the MVP backend implementation baseline.
+- **KEPT-PL-014** — the saver/verifier journey and screen architecture are the MVP UX baseline while technical substates remain provisional.
+- **KEPT-PL-015** — deploy exactly the ERC-4626 vault, its permanently bound Aave USDC strategy, and the isolated RewardController; no proxy or additional MVP contract.
+- **KEPT-PL-016** — RewardController calculates capped rewards from time-weighted eligible balance, epoch rate, confidence and reward weight; qualification is binary and rewards are claimed as native Monad USDC.
 
 Newer accepted decisions in the decision log override this README summary.
 

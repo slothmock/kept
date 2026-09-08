@@ -22,11 +22,11 @@ This file is the root implementation constitution for AI agents working in this 
 
 When repository documents conflict, use this order:
 
-1. `docs/01 - Product Lead/Product Lead Decision Log.txt`
+1. `docs/decisions/Product Lead Decision Log.txt`
 2. `docs/Product-Outline.txt`
-3. Current accepted implementation specifications under `docs/`
-4. Current specialist deliverables/specifications
-5. Specialist handoffs
+3. Current accepted implementation specifications under `docs/specs/`
+4. Current specialist deliverables/specifications under `docs/specs/`
+5. Specialist handoffs under `docs/handoffs/`
 6. Historical research/reference material
 7. General knowledge
 8. New ideas
@@ -172,9 +172,9 @@ Refund/recovery handling must not casually route user funds through a Kept treas
 
 ## 8. Backend authority and implementation baseline
 
-The accepted MVP backend baseline is the current backend/data/verification specification under:
+The accepted MVP backend baseline is:
 
-`docs/05 - Backend, Data, Verification Engineer/`
+`docs/specs/MVP Backend - Data - Verification Specification.md`
 
 Backend implementation may proceed where interfaces are stable.
 
@@ -295,7 +295,10 @@ Current repository layout:
 - `packages/proof-adapters` — normalized external proof-adapter interfaces/implementations.
 - `packages/shared` — shared types/utilities that are genuinely cross-package.
 - `packages/trust-engine` — MVP trust/confidence logic.
-- `docs` — product decisions, specifications, handoffs, research.
+- `docs/decisions` — accepted Product Lead decisions.
+- `docs/specs` — current accepted implementation specifications.
+- `docs/handoffs` — historical specialist handoffs and supporting evidence.
+- `docs/Product-Outline.txt` — product outline below the decision log in authority.
 
 Do not create new top-level services/packages unless there is a concrete need.
 
@@ -480,5 +483,8 @@ The root agent must respect all accepted decisions in the Product Lead decision 
 - KEPT-PL-011 — Consumer Products & Payments is the primary intended track.
 - KEPT-PL-012 — bounded reward-oracle and delegated-authority security acceptance criteria.
 - KEPT-PL-013 — Wave 2 backend/data/verification design is the MVP backend implementation baseline.
+- KEPT-PL-014 — Wave 2 saver/verifier journeys and screen architecture are the MVP UX baseline; technical substates remain provisional.
+- KEPT-PL-015 — exactly three Kept contracts are deployed: ERC-4626 `KeptSavingsVault`, one permanently bound `AaveUSDCStrategy`, and isolated `RewardController`.
+- KEPT-PL-016 — `RewardController` calculates bounded rewards from capped time-weighted eligible balance, epoch rate, confidence, and reward weight; qualification is binary and rewards are claimed as native Monad USDC.
 
 The decision log itself outranks this summary if newer accepted decisions exist.
