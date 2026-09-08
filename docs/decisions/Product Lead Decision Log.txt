@@ -1,0 +1,179 @@
+DECISION ID: KEPT-PL-001
+Date: 08-Sep-2026
+Title: MVP verification breadth
+Status: ACCEPTED
+Decision: MVP supports exactly three reward-bearing commitment types representing objective/onchain, external-adapter and social verification.
+Reason: This proves Kept's central proof architecture rather than presenting social verification as the whole product.
+Alternatives: Social-only MVP; objective + social only.
+Affected teams: All.
+Implementation consequence: Catalogue/backend/UX/tests must implement all three paths.
+Context file to update: Kept-Product-Outline.txt.
+
+DECISION ID: KEPT-PL-002
+Date: 08-Sep-2026
+Title: Privy delegated automation in MVP
+Status: ACCEPTED
+Decision: Restrictive delegated automatic saving plus an intentionally rejected unsafe action are MVP/hackathon requirements.
+Reason: Establishes Privy as account/security/authorization infrastructure, not login. The bounty explicitly rejects login-only integrations.
+Alternatives: Gas sponsorship only; move delegation to V1.
+Affected teams: Wallet/Intents, Product/UX, Backend, Security, QA.
+Implementation consequence: Policy configuration, backend scheduler/action path and revoke UX are required.
+Context file to update: Kept-Product-Outline.txt.
+
+DECISION ID: KEPT-PL-003
+Date: 08-Sep-2026
+Title: MVP cross-chain architecture
+Status: ACCEPTED
+Decision: Use the two-stage Aurora/NEAR Intents flow before attempting deposit-and-execute.
+Reason: Lower integration and recovery risk while genuinely proving both sponsor integrations.
+Alternatives: Intents Connect directly into vault.
+Affected teams: Wallet/Intents, Contracts, UX, Backend, QA.
+Implementation consequence: Destination USDC lands in the user's Monad wallet before the sponsored vault deposit.
+Context file to update: None; technical specs already reflect this.
+
+DECISION ID: KEPT-PL-004
+Date: 08-Sep-2026
+Title: MVP yield strategy
+Status: ACCEPTED
+Decision: Native Monad USDC supplied to Aave V3 through a replaceable strategy abstraction.
+Reason: Prioritizes understandable, relatively simple infrastructure over maximizing APY.
+Alternatives: Morpho/curated vaults; structured yield; optimizer.
+Affected teams: Contracts, UX, Economics, QA.
+Implementation consequence: One active Aave strategy only; no strategy marketplace/optimizer.
+Context file to update: None.
+
+DECISION ID: KEPT-PL-005
+Date: 08-Sep-2026
+Title: MVP behavioural reward funding
+Status: ACCEPTED
+Decision: Rewards come from a bounded pre-funded USDC treasury. No token.
+Reason: Solvent, understandable and honest for an MVP without pretending the long-term reward business model has been solved.
+Alternatives: Token emissions; yield spread; loser-funded pools.
+Affected teams: Contracts, Backend, Economics, UX, QA.
+Implementation consequence: RewardController must enforce budgeted distribution separately from vault yield.
+Context file to update: None.
+
+DECISION ID: KEPT-PL-006
+Date: 08-Sep-2026
+Title: Remove MVP CommitmentRegistry
+Status: ACCEPTED
+Decision: Kept will not deploy a standalone CommitmentRegistry for MVP. Private commitment definitions, lifecycle, proof context and social verification remain offchain. Only minimal financially relevant qualification state is recorded through RewardController.
+Reason: A separate registry duplicates backend state, increases synchronization and contract surface, and exposes additional behavioural metadata without being necessary for settlement.
+Alternatives: Minimal onchain registry; complete onchain commitment catalogue.
+Affected teams: Contracts, Backend, Privacy/Security, QA, Product/UX.
+Implementation consequence: Contract graph is reduced to vault + strategy + reward controller. Backend owns commitment lifecycle.
+Context file to update: Kept-MVP-Technical-Architecture-07-Sep-2026.txt.
+
+DECISION ID: KEPT-PL-007
+Date: 08-Sep-2026
+Title: Separate qualification authority from reward economics
+Status: ACCEPTED
+Decision: Backend/trust services submit bounded qualification inputs; RewardController remains the authoritative onchain enforcement point for reward budgets, caps, replay protection and final settlement.
+Reason: Prevents the backend reward oracle from having effectively arbitrary treasury payout authority and preserves Kept's verification-versus-economics separation.
+Alternatives: Backend submits final arbitrary entitlement; fully onchain verification.
+Affected teams: Contracts, Backend, Privacy/Security, Economics, QA.
+Implementation consequence: RewardController interface must encode bounded financial rules rather than merely accepting arbitrary payout amounts.
+Context file to update: Kept-MVP-Technical-Architecture-07-Sep-2026.txt and potentially Kept-Behavioural-Reward-Economics-Framework-07-Sep-2026.txt.
+
+DECISION ID: KEPT-PL-008
+Date: 08-Sep-2026
+Title: MVP yield-strategy switching
+Status: ACCEPTED
+Decision: Runtime strategy switching is not required in MVP. Kept retains IYieldStrategy as the abstraction boundary, but the initial deployment has one Aave USDC strategy.
+Reason: Runtime strategy management introduces admin and migration complexity with no MVP user value.
+Alternatives: Admin-selectable strategies; multiple live strategies.
+Affected teams: Contracts, Security, QA.
+Implementation consequence: No strategy selector/optimizer/admin switching UX in MVP. Exact immutable-vs-controlled address mechanism remains with Contracts/Security.
+Context file to update: Kept-MVP-Technical-Architecture-07-Sep-2026.txt.
+
+DECISION ID: KEPT-PL-009
+Date: 08-Sep-2026
+Title: Layered enforcement for delegated automatic saving
+Status: ACCEPTED
+Decision: Kept's MVP will enforce delegated automatic saving through layered controls. Privy policy will restrict chain, destination, function, receiver and per-transaction amount. KeptSavingsVault will strictly enforce no more than one delegated automatic deposit per wallet every rolling seven days. The backend scheduler remains a trigger only and is never an authorization boundary.
+Reason: Current public Privy stateful-policy windows are limited to 72 hours and are explicitly not strict against concurrent requests, so Privy alone cannot currently provide Kept's accepted weekly authorization guarantee.
+Alternatives: Scheduler-enforced weekly rule; 72-hour rule presented as weekly; dynamically rotating policies; separate automation contract; weakening the MVP claim.
+Affected teams: Contracts, Wallet/Intents, Backend, Privacy/Security, Product/UX, QA.
+Implementation consequence: Add a minimal automation-specific vault entry point with strict seven-day cadence state. No fourth deployed MVP contract.
+Context file to update: Kept-Privy-Implementation-Spec-07-Sep-2026.txt, Kept-MVP-Technical-Architecture-07-Sep-2026.txt, Product-Outline.txt.
+
+DECISION ID: KEPT-PL-010
+Date: 08-Sep-2026
+Title: Opaque onchain behavioural identity
+Status: ACCEPTED
+Decision: Behavioural commitment types, verification classes and other semantic behavioural labels remain offchain by default. Monad receives only an opaque/versioned commitment or qualification identifier plus the minimum financially relevant settlement fields required by RewardController.
+Reason: Cleartext commitment types can reveal wallet-linked behavioural information without being necessary for financial settlement, conflicting with Kept's minimum-disclosure privacy principle.
+Alternatives: Publish exact commitment type; publish coarse verification class; opaque identifier/hash.
+Affected teams: Contracts, Backend, Privacy/Security, QA.
+Implementation consequence: RewardController storage/events and backend mappings must use non-semantic identifiers; no cleartext behavioural type or verifier identity is emitted onchain by default.
+Context file to update: Product-Outline.txt, Kept-MVP-Technical-Architecture-07-Sep-2026.txt, Kept-MVP-Commitments-Verification-Spec-07-Sep-2026.txt.
+
+DECISION ID: KEPT-PL-011
+Date: 08-Sep-2026
+Title: Metropolis primary track
+Status: ACCEPTED
+Decision: Kept will target Consumer Products & Payments as its primary Monad Metropolis track. Social, Attention & Culture is no longer the intended primary submission track. Privy and Aurora/NEAR Intents remain targeted sponsor bounties, subject to final submission-form eligibility verification.
+Reason: Kept's core user value is behavioural savings delivered through invisible blockchain infrastructure, not social connection or cultural participation. Current Metropolis materials describe Consumer Products & Payments as consumer crypto experiences that do not feel like crypto, making it materially better aligned with Kept.
+Alternatives: Retain Social/Attention/Culture; reposition Kept as social-first; Onchain Finance & Trading.
+Affected teams: Product/UX, QA/Release, Wallet/Intents, Product Lead.
+Implementation consequence: No MVP architecture change. Submission narrative and demo framing change; social verification remains one of three proof paths rather than the main-track thesis.
+Context file to update: Product-Outline.txt hackathon context; QA submission plan/demo storyboard.
+
+
+DECISION ID: KEPT-PL-012
+Date: 08-Sep-2026
+Title: Mandatory bounded-authority security acceptance criteria
+Status: ACCEPTED
+Decision: Kept's MVP must independently bound both reward-oracle and delegated automatic-saving authority. RewardController may distribute only bounded pre-funded behavioural rewards and has no authority over saver principal or vault shares. Privy delegated policies must pin the authorized vault, function, amount, asset and user-controlled receiver/spender semantics so delegated actions cannot redirect funds.
+Reason: Backend compromise or authorization-key compromise must have bounded consequences. Offchain services may request financial actions but must not themselves constitute the final permission boundary.
+Alternatives: Backend-only checks; broad hackathon admin/oracle authority; contract/wallet-policy enforcement.
+Affected teams: Contracts, Wallet/Intents, Backend, Privacy/Security, Economics, QA.
+Implementation consequence: Reward caps and role isolation become contract requirements; delegated transaction policy must bind receiver/spender; corresponding adversarial tests are required before MVP acceptance.
+Context file to update: Kept-Privy-Implementation-Spec-07-Sep-2026.txt, Kept-MVP-Technical-Architecture-07-Sep-2026.txt, smart-contract acceptance criteria.
+
+DECISION ID: KEPT-PL-013
+Date: 08-Sep-2026
+Title: MVP backend implementation baseline
+Status: ACCEPTED
+Decision: Adopt the Wave 2 backend architecture, relational model, API/state-machine direction and authority boundaries as Kept’s MVP backend implementation baseline. Backend implementation may proceed independently where interfaces are stable, while contract-facing and cryptographic fields remain behind explicit interfaces until Contracts and Privacy/Security finalize them.
+Reason: The design implements the accepted three verification paths without reintroducing superseded onchain commitment state or offchain financial authority, while allowing substantial implementation progress before external interfaces are frozen.
+Alternatives: Delay all backend work; prematurely freeze provisional ABI/signature schemas; retain obsolete CommitmentRegistry assumptions.
+Affected teams: Backend, Contracts, Privacy/Security, Wallet/Intents, Product/UX, QA.
+Implementation consequence: Database/catalogue/state-machine/indexing/adapter work begins now; RewardController/Vault/EIP-712 boundaries remain provisional until specialist review.
+Context file to update: Create Kept-MVP-Backend-Data-Verification-Spec-08-Sep-2026.txt.
+
+DECISION ID: KEPT-PL-014
+Date: 08-Sep-2026
+Title: MVP UX journey baseline
+Status: ACCEPTED
+Decision: Adopt the Wave 2 saver/verifier journey and screen architecture as Kept’s MVP UX baseline. Product-level flows may proceed to wireframes and implementation now, while exact transaction, signing, settlement, privacy-disclosure and technical-error substates remain behind specialist-owned mappings until Contracts, Wallet/Intents, Privacy/Security and Economics/Regulatory finalize them.
+Reason: The core user journey is already stable under accepted product decisions, and waiting for ABI/SDK details would unnecessarily block design. At the same time, exposing or prematurely freezing protocol-specific states would create avoidable redesign and undermine the invisible-blockchain experience.
+Alternatives: Delay UX until all integrations freeze; expose protocol states directly; freeze speculative technical-state mappings.
+Affected teams: Product/UX, Wallet/Intents, Contracts, Backend, Privacy/Security, Economics/Regulatory, QA.
+Implementation consequence: Screen map, wireframes, copy structure and journey-level acceptance testing proceed immediately; technical state adapters remain provisional.
+Context file to update: Create Kept-MVP-UX-Journey-Spec-08-Sep-2026.txt.
+
+KEPT-PL-015 — Freeze MVP smart-contract topology
+
+Date: 08-Sep-2026
+Title: MVP smart-contract topology and yield binding
+Status: ACCEPTED
+Decision: Kept's MVP will deploy exactly three Kept contracts: ERC-4626 KeptSavingsVault, one AaveUSDCStrategy permanently bound to that vault deployment behind the IYieldStrategy code abstraction, and financially isolated RewardController. No CommitmentRegistry, proxy, runtime strategy manager, separate treasury, verifier contract or automation contract will be deployed.
+Reason: This is the smallest architecture satisfying real saver accounting, Aave integration, delegated-savings enforcement, reward settlement and accepted privacy/security boundaries while minimizing admin and synchronization surface.
+Alternatives: Custom vault; direct Aave integration; runtime strategy switching; additional commitment/treasury/automation contracts.
+Affected teams: Contracts, Wallet/Intents, Backend, Privacy/Security, QA.
+Implementation consequence: Contracts may proceed to concrete Solidity implementation and ABI/event freeze. depositAutomatically remains part of the vault and must credit only the calling user's position.
+Context file to update: Kept-MVP-Technical-Architecture-07-Sep-2026.txt, smart-contract acceptance criteria.
+
+KEPT-PL-016 — MVP behavioural reward formula and settlement
+
+Date: 08-Sep-2026
+Title: Behavioural reward calculation and payout destination
+Status: ACCEPTED
+Decision: For qualified MVP commitments, RewardController calculates rewards from capped time-weighted eligible balance × epoch-specific reward rate × verification confidence × reward weight, then applies per-qualification, per-user-per-epoch and total-epoch caps. Qualification is binary for MVP; no partial completion scalar is introduced. Deployment-wide immutable hard ceilings bound all configurable epoch values. Rewards are claimable as native Monad USDC to the user's pre-bound Privy Monad wallet and are not automatically converted into vault shares.
+Reason: This preserves the Product Outline's time-weighted/confidence-based economics while keeping the backend from specifying arbitrary payouts, bounding oracle compromise and maintaining strict financial separation between saver principal and behavioural treasury.
+Alternatives: Backend-specified payout; continuous partial-completion rewards; automatic vault-share rewards; fixed flat reward.
+Affected teams: Contracts, Backend, Economics, Privacy/Security, Product/UX, QA.
+Implementation consequence: RewardController performs bounded fixed-point calculation; Backend submits qualification inputs rather than payout amounts; UX treats earned reward as separate USDC reward; Economics must supply concrete hard ceilings and epoch values.
+Context file to update: Kept-MVP-Technical-Architecture-07-Sep-2026.txt, Kept-Behavioural-Reward-Economics-Framework-07-Sep-2026.txt, backend contract-facing spec, smart-contract acceptance criteria.
+

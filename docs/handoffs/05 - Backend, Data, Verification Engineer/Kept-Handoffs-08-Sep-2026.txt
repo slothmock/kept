@@ -1,0 +1,74 @@
+KEPT HANDOFF #1
+From: QA / Hackathon / Release Lead
+To: Product Lead
+Type: RISK
+Priority: HIGH
+
+Summary:
+The supplied Social, Attention & Culture track description says projects belong when the core user value is social connection, cultural participation, or community. Kept's current source-of-truth thesis makes the core value behavioural savings, with social verification only one of three verification paths. That creates a genuine track-fit risk.
+
+Recommendation:
+Do not distort Kept into a social-first product merely to fit the track. Product Lead should verify whether another primary hackathon track is available/better aligned while retaining the Aurora and Privy bounties. If Social, Attention & Culture remains the chosen primary track, submission copy must make an evidence-based case for accountability/community as core user value without falsely rewriting Kept's thesis.
+
+Why:
+The hackathon track's own stated inclusion test and Kept's product thesis do not cleanly match. Quietly reframing Kept would violate project change control and weaken the product.
+
+Alternatives considered:
+
+Reposition Kept as social-first — rejected as inconsistent with current product thesis.
+Ignore the track language and submit unchanged — unnecessarily exposes the project to eligibility/judging risk.
+Select a better-fitting primary track while retaining sponsor bounties — preferred if hackathon rules permit.
+
+Cross-team impact:
+
+Product/UX: Do not artificially increase public/social functionality.
+Contracts: None.
+Wallet/Intents: None.
+Backend: None.
+Privacy/Security: Avoid weakening privacy to make social features more visible.
+Economics/Regulatory: None immediate.
+QA/Release: Submission narrative and judging strategy may change.
+
+Decision required from Product Lead:
+Confirm the intended primary hackathon track and whether Social, Attention & Culture remains the submission target.
+
+Project-context update required:
+Hackathon/submission plan and, if necessary, Product Outline hackathon-context section.
+
+OPEN QUESTIONS
+
+Decisions made within role authority
+
+Every MVP-critical feature now has an integration-level acceptance gate.
+Sponsor integration cannot be marked passed from SDK/config screenshots alone.
+Aurora proof requires a real external-chain → Monad transfer.
+Privy proof requires real sponsorship, real restricted delegation and a genuine rejected action.
+Small-value mainnet testing is mandatory for Intents.
+Every fragile live demonstration requires recorded real-execution backup.
+
+Assumptions
+
+Two-stage Aurora flow remains the MVP: origin chain → user's Monad USDC → sponsored Kept deposit.
+Demo automation uses the current 25 USDC/week policy fixture; that value is a demo configuration, not new product economics.
+Controlled seeded histories may be used to compress time for verification and collusion demonstrations, but sponsor transfers, signatures, transactions and reward settlement represented as real remain real.
+
+Blockers
+
+None proven from implementation yet because implementation evidence has not been supplied.
+Any inability to produce a real Aurora transfer, real policy rejection, safe withdrawal, or matching deployed contract configuration becomes CRITICAL immediately.
+
+Dependencies
+
+Wallet/Intents: executable sponsor integration + hashes/logs.
+Contracts: deployed addresses, fork suite and live-small-value path.
+Backend: three verification paths, idempotency and demo fixtures.
+Privacy/Security: final external-adapter data review, attestation replay/domain review and delegation review.
+UX: all required failure states and privacy disclosures.
+Economics: bounded reward-epoch configuration sufficient for deterministic QA.
+
+Items requiring Product Lead approval
+
+Primary hackathon-track choice due to the Social, Attention & Culture fit issue.
+No other product-scope change is required by this QA baseline.
+
+This becomes the QA definition of done unless the Product Lead changes an underlying product decision.

@@ -1,0 +1,89 @@
+KEPT HANDOFF #1
+
+From: Privacy, Trust & Security Lead
+To: Product Lead
+Type: RISK
+Priority: HIGH
+
+Summary:
+The current technical planning permits commitmentType as possible onchain CommitmentRegistry state. For the fitness and study commitments, the type itself is behavioural information. Publishing it would allow wallet-linked observers to infer that a user participates in fitness or study commitments even though raw evidence and verifier identities remain private.
+
+Recommendation:
+Use an opaque/versioned commitment identifier or configuration hash onchain. Keep the human-readable behavioural type offchain unless there is a specific contract requirement and an explicit privacy decision to disclose it.
+
+Why:
+The product's privacy thesis is minimum disclosure, and the chain only needs enough information to settle rewards. Public behavioural categorization is not obviously necessary.
+
+Alternatives considered:
+
+Publish cleartext type for simpler indexing.
+Publish a coarse generic verification class rather than exact type.
+Keep only an opaque ID/hash onchain.
+
+Cross-team impact:
+
+Product/UX: None visible to normal users.
+Contracts: CommitmentRegistry storage/event fields may change.
+Wallet/Intents: None.
+Backend: Must map opaque IDs to private definitions.
+Privacy/Security: Reduces wallet-linked behavioural disclosure.
+Economics/Regulatory: Reduces unnecessary behavioural-data exposure.
+QA/Release: Verify events do not leak type or verifier information.
+
+Decision required from Product Lead:
+Yes/no: approve opaque behavioural commitment identity onchain by default.
+
+Project-context update required:
+Kept-Product-Outline.txt, Kept-MVP-Technical-Architecture-07-Sep-2026.txt, Kept-MVP-Commitments-Verification-Spec-07-Sep-2026.txt.
+
+
+
+KEPT HANDOFF #2
+
+From: Privacy, Trust & Security Lead
+To: Product Lead
+Type: RISK
+Priority: HIGH
+
+Summary:
+The MVP architecture allows an authorized Kept signer/oracle to submit reward qualifications. This is acceptable for a hackathon only if the contract, rather than backend convention, limits the damage that signer can cause. Privy delegation has the same principle: the backend may request an action, but policy must independently bound what it can authorize.
+
+Recommendation:
+Make two controls explicit MVP acceptance criteria: RewardController must cap the oracle to a pre-funded bounded reward treasury with no authority over saver principal, and Privy delegated policies must constrain the actual vault receiver/spender as well as chain/function/amount/period.
+
+Why:
+A compromised backend or authorization key should cause, at worst, bounded unwanted reward allocation or a bounded deposit into the user's own savings position. It must not create a path to redirect user funds or vault shares.
+
+Alternatives considered:
+
+Rely on backend checks only.
+Give the oracle/admin broad authority for hackathon convenience.
+Enforce the critical limits at the contract/wallet-policy boundaries.
+
+Cross-team impact:
+
+Product/UX: Pause/revoke remains required; no extra crypto UX.
+Contracts: Reward caps, duplicate protection and role boundaries become acceptance criteria.
+Wallet/Intents: Policy must match the exact deposit/approval ABI and receiver.
+Backend: Scheduler/oracle stays request authority, never final permission authority.
+Privacy/Security: Limits consequences of infrastructure compromise.
+Economics/Regulatory: Keeps behavioural treasury exposure bounded.
+QA/Release: Add receiver-redirection, arbitrary-approval, duplicate-reward and over-cap tests.
+
+Decision required from Product Lead:
+Yes/no: accept these as mandatory MVP security acceptance criteria.
+
+Project-context update required:
+Kept-Privy-Implementation-Spec-07-Sep-2026.txt, Kept-MVP-Technical-Architecture-07-Sep-2026.txt, and the smart-contract acceptance criteria.
+
+Open questions
+
+Decisions made within role authority: The MVP social score, hard-invalidity rules, challenge behavior, privacy-minimal trust inputs, and false-positive policy above.
+
+Assumptions: Social verification remains study sessions; two approvals are required; reward exposure remains small and pre-funded.
+
+Blockers: None for backend implementation. Contract interface freeze should wait on the two Product Lead decisions above.
+
+Dependencies: Backend attestation/schema work, Privy policy implementation, RewardController access-control/cap design, and QA fixtures.
+
+Items requiring Product Lead approval: Opaque onchain behavioural commitment identity; bounded reward-oracle and delegated-signer controls as explicit MVP acceptance criteria.
