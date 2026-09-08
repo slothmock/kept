@@ -2,5 +2,10 @@
   "name": "@kept/api",
   "private": true,
   "version": "0.0.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@kept/commitment-catalogue": "0.0.0",
+    "drizzle-orm": "0.45.2",
+    "pg": "8.23.0"
+  }
 }
