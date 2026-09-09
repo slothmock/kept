@@ -12,6 +12,8 @@
     "db:migrate": "tsx apps/api/src/db/migrate.ts",
     "db:up": "docker compose up -d --wait",
     "test": "vitest run",
+    "test:contracts": "forge test --root packages/contracts",
+    "test:contracts:fork": "forge test --root packages/contracts --match-contract MonadAaveForkTest --network monad",
     "test:db:reset": "docker compose down -v && docker compose up -d --wait",
     "test:integration": "vitest run apps/api/test/persistence.integration.test.ts",
     "typecheck": "tsc -b"
@@ -22,7 +24,7 @@
     "drizzle-kit": "0.31.10",
     "tsx": "4.23.13",
     "typescript": "5.9.2",
-    "vitest": "3.2.7"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "@esbuild-kit/core-utils": {

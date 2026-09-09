@@ -486,5 +486,9 @@ The root agent must respect all accepted decisions in the Product Lead decision 
 - KEPT-PL-014 — Wave 2 saver/verifier journeys and screen architecture are the MVP UX baseline; technical substates remain provisional.
 - KEPT-PL-015 — exactly three Kept contracts are deployed: ERC-4626 `KeptSavingsVault`, one permanently bound `AaveUSDCStrategy`, and isolated `RewardController`.
 - KEPT-PL-016 — `RewardController` calculates bounded rewards from capped time-weighted eligible balance, epoch rate, confidence, and reward weight; qualification is binary and rewards are claimed as native Monad USDC.
+- KEPT-PL-017 — the vault binds its immutable-vault strategy once before inflows; pause blocks inflows only, never withdraw or redeem.
+- KEPT-PL-018 — `RewardController` uses separate qualification, epoch-management, and pause roles with immutable funded seven-day epochs and no treasury withdrawal.
+- KEPT-PL-019 — only positive opaque qualifications create immutable recipient-bound, full-claim entitlements with no expiry or backend-supplied payout amount.
+- KEPT-PL-020 — reward units, staged floor arithmetic, immutable hard ceilings, and initial demo parameters are fixed by the accepted contract/reward specification.
 
 The decision log itself outranks this summary if newer accepted decisions exist.

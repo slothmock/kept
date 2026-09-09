@@ -177,3 +177,51 @@ Affected teams: Contracts, Backend, Economics, Privacy/Security, Product/UX, QA.
 Implementation consequence: RewardController performs bounded fixed-point calculation; Backend submits qualification inputs rather than payout amounts; UX treats earned reward as separate USDC reward; Economics must supply concrete hard ceilings and epoch values.
 Context file to update: Kept-MVP-Technical-Architecture-07-Sep-2026.txt, Kept-Behavioural-Reward-Economics-Framework-07-Sep-2026.txt, backend contract-facing spec, smart-contract acceptance criteria.
 
+DECISION ID: KEPT-PL-017
+
+Date: 08-Sep-2026
+Title: Vault, strategy binding and emergency pause semantics
+Status: ACCEPTED
+Decision: KeptSavingsVault retains the standard ERC-4626 deposit, mint, withdraw and redeem paths. The vault is deployed before the strategy, the AaveUSDCStrategy is deployed with the vault as its immutable sole asset-moving caller, and the vault then binds that strategy exactly once before accepting deposits. The strategy address cannot subsequently be changed. Kept-level pausing blocks new deposits, mints and automatic deposits but never blocks withdraw or redeem.
+Reason: This avoids CREATE2/predicted-address deployment complexity while still giving the final deployment a permanently bound strategy. Preserving withdrawal during Kept pause enforces the requirement that saver principal not be trapped by an operational control.
+Alternatives: Constructor-time cyclic deployment; runtime-switchable strategy; globally paused ERC-4626; disabled mint/redeem functions.
+Affected teams: Contracts, Security, Wallet/Intents, QA.
+Implementation consequence: Vault has one write-once strategy binding operation; strategy has immutable vault authority; deposit paths require the strategy to be bound; withdrawal remains available during Kept pause.
+Context file to update: docs/specs/MVP Contract & Reward Specification.md; Product Lead Decision Log.
+
+DECISION ID: KEPT-PL-018
+
+Date: 08-Sep-2026
+Title: RewardController roles and weekly epoch model
+Status: ACCEPTED
+Decision: RewardController uses OpenZeppelin AccessControl with separate qualification, epoch-configuration and pause roles. Reward epochs are sequential, non-overlapping seven-day periods opened by the epoch manager. Epoch configuration is immutable once opened. Reward USDC must already be available before an epoch opens. Anyone may add reward USDC; no role can withdraw reward USDC or rescue arbitrary tokens in the MVP.
+Reason: Separate roles preserve bounded authority while seven-day epochs align directly with the three weekly MVP commitment paths and eliminate unnecessary annualized/epoch-duration arithmetic. A no-withdraw reward treasury provides the simplest solvency guarantee for the small MVP budget.
+Alternatives: Ownable-only RewardController; 28-day reward epochs; mutable active epochs; treasury withdrawal/recovery authority; role-gated funding.
+Affected teams: Contracts, Backend, Security, Economics, QA.
+Implementation consequence: One current reward epoch at a time; fixed seven-day duration; pre-funding check at epoch creation; no treasury recovery function.
+Context file to update: docs/specs/MVP Contract & Reward Specification.md; Product Lead Decision Log; reward economics spec.
+
+DECISION ID: KEPT-PL-019
+
+Date: 08-Sep-2026
+Title: Qualification registration and reward-claim semantics
+Status: ACCEPTED
+Decision: The onchain replay key is a non-semantic bytes32 qualificationId. Only qualified outcomes are submitted onchain; absence of a qualification record represents no onchain reward qualification. The qualification service supplies recipient, epoch, TWAB, confidence and reward weight but never a payout amount. Registrations are immutable and cannot be corrected/replaced. Rewards become discrete claimable entitlements. Only the pre-bound recipient may claim, with no arbitrary receiver argument and no partial claim. Claims do not expire in the MVP.
+Reason: This minimizes public behavioural data and removes correction/clawback authority while keeping duplicate protection and payout destination deterministic.
+Alternatives: Publish NOT_QUALIFIED results; arbitrary receiver claims; backend payout amount; mutable qualification records; automatic push payouts.
+Affected teams: Contracts, Backend, Privacy/Security, Product/UX, QA.
+Implementation consequence: Qualification ID is both the opaque result identifier and replay key. Claim destination is fixed at registration.
+Context file to update: docs/specs/MVP Contract & Reward Specification.md; Product Lead Decision Log; backend contract-facing specification.
+
+DECISION ID: KEPT-PL-020
+
+Date: 08-Sep-2026
+Title: MVP reward precision, hard ceilings and demo parameters
+Status: ACCEPTED
+Decision: USDC uses native 6-decimal units; period rate uses parts-per-million with denominator 1,000,000; confidence and reward weight use basis points with denominator 10,000. All reward arithmetic rounds down. Deployment-wide immutable ceilings are: 1,000 USDC eligible balance, 1,000 ppm seven-day period rate, 0.50 USDC per qualification, 1.00 USDC per user per epoch, and 10 USDC total allocation per epoch. Initial demo configuration is: 25 USDC controller prefunding, four sequential seven-day demo epochs, 6.25 USDC epoch budget, 500 USDC eligible-balance cap, 384 ppm period rate, 0.25 USDC qualification cap, and 0.75 USDC user cap.
+Reason: These figures make oracle compromise economically small, support the intended demo comfortably, and encode the previously proposed approximately 2% annualized-equivalent behavioural rate as a direct weekly rate rather than putting annualization into contract logic.
+Alternatives: 28-day settlement epoch; larger limits; bps rate precision; arbitrary backend payout; annualized onchain rate calculation.
+Affected teams: Contracts, Backend, Economics, Product/UX, Security, QA.
+Implementation consequence: Constants and epoch validation are deterministic; no product/economic constant remains for Hermes to invent.
+Context file to update: docs/specs/MVP Contract & Reward Specification.md; Product Lead Decision Log; reward economics spec.
+

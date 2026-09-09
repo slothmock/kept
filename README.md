@@ -326,6 +326,10 @@ As of 08-Sep-2026, accepted decisions include:
 - **KEPT-PL-014** — the saver/verifier journey and screen architecture are the MVP UX baseline while technical substates remain provisional.
 - **KEPT-PL-015** — deploy exactly the ERC-4626 vault, its permanently bound Aave USDC strategy, and the isolated RewardController; no proxy or additional MVP contract.
 - **KEPT-PL-016** — RewardController calculates capped rewards from time-weighted eligible balance, epoch rate, confidence and reward weight; qualification is binary and rewards are claimed as native Monad USDC.
+- **KEPT-PL-017** — bind the vault strategy once before inflows and let Kept-level pause block inflows without blocking withdraw or redeem.
+- **KEPT-PL-018** — use separate qualification, epoch-management and pause roles with immutable funded seven-day reward epochs and no treasury withdrawal.
+- **KEPT-PL-019** — register only positive opaque qualifications as immutable recipient-bound, full-claim entitlements with no expiry or backend-supplied payout amount.
+- **KEPT-PL-020** — use the accepted reward units, staged floor arithmetic, immutable hard ceilings and fixed initial demo parameters.
 
 Newer accepted decisions in the decision log override this README summary.
 
