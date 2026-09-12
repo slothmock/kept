@@ -2,10 +2,15 @@
   "name": "@kept/api",
   "private": true,
   "version": "0.0.0",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "dependencies": {
     "@kept/commitment-catalogue": "0.0.0",
+    "@privy-io/node": "^0.34.0",
     "drizzle-orm": "0.45.2",
+    "fastify": "^5.12.4",
     "pg": "8.23.0"
   }
 }

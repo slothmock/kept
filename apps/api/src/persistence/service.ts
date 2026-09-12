@@ -373,6 +373,11 @@ export class KeptPersistenceService {
     return goal ? mapGoal(goal) : null;
   }
 
+  async listGoals(userId: string): Promise<readonly GoalDto[]> {
+    const goals = await new KeptRepository(this.db).listGoalsForOwner(userId);
+    return goals.map(mapGoal);
+  }
+
   async createCommitmentDraft(input: {
     readonly userId: string;
     readonly idempotencyKey: string;
@@ -453,6 +458,11 @@ export class KeptPersistenceService {
   async getCommitment(userId: string, id: string): Promise<CommitmentDto | null> {
     const commitment = await new KeptRepository(this.db).findCommitmentForOwner(userId, id);
     return commitment ? mapCommitment(commitment) : null;
+  }
+
+  async listCommitments(userId: string): Promise<readonly CommitmentDto[]> {
+    const commitments = await new KeptRepository(this.db).listCommitmentsForOwner(userId);
+    return commitments.map(mapCommitment);
   }
 
   async activateCommitment(input: {

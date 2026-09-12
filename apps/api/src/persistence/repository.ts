@@ -1,4 +1,4 @@
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 
 import type { CommitmentState, JsonValue } from "../domain/commitments/index.js";
 import type { KeptDatabase } from "../db/client.js";
@@ -98,6 +98,14 @@ export class KeptRepository {
     return goal ?? null;
   }
 
+  async listGoalsForOwner(userId: string) {
+    return this.db
+      .select()
+      .from(savingsGoals)
+      .where(eq(savingsGoals.userId, userId))
+      .orderBy(desc(savingsGoals.createdAt), desc(savingsGoals.id));
+  }
+
   async findActiveDefinition(code: string, version: number) {
     const [definition] = await this.db
       .select()
@@ -147,6 +155,35 @@ export class KeptRepository {
       .limit(1);
 
     return record ?? null;
+  }
+
+  async listCommitmentsForOwner(userId: string): Promise<readonly CommitmentRecord[]> {
+    return this.db
+      .select({
+        id: userCommitments.id,
+        userId: userCommitments.userId,
+        savingsGoalId: userCommitments.savingsGoalId,
+        definitionId: userCommitments.definitionId,
+        definitionCode: commitmentDefinitions.code,
+        definitionVersion: commitmentDefinitions.version,
+        parameters: userCommitments.parameters,
+        epochStart: userCommitments.epochStart,
+        epochEnd: userCommitments.epochEnd,
+        verificationDeadline: userCommitments.verificationDeadline,
+        state: userCommitments.state,
+        stateVersion: userCommitments.stateVersion,
+        activatedAt: userCommitments.activatedAt,
+        finalizedAt: userCommitments.finalizedAt,
+        createdAt: userCommitments.createdAt,
+        updatedAt: userCommitments.updatedAt,
+      })
+      .from(userCommitments)
+      .innerJoin(
+        commitmentDefinitions,
+        eq(userCommitments.definitionId, commitmentDefinitions.id),
+      )
+      .where(eq(userCommitments.userId, userId))
+      .orderBy(desc(userCommitments.createdAt), desc(userCommitments.id));
   }
 
   async findCommitmentForOwnerForUpdate(

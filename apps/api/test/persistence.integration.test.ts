@@ -238,6 +238,17 @@ describe.sequential("private users, wallet references, and goals", () => {
     expect(goal).not.toHaveProperty("principal");
     expect(goal).not.toHaveProperty("vaultShares");
   });
+
+  it("lists only the requesting user's private goals in newest-first order", async () => {
+    const owner = await createUser("owner");
+    const other = await createUser("other");
+    const first = await createGoal(owner.id);
+    const second = await createGoal(owner.id);
+    await createGoal(other.id);
+
+    await expect(service.listGoals(owner.id)).resolves.toEqual([second, first]);
+    await expect(service.listGoals(other.id)).resolves.toHaveLength(1);
+  });
 });
 
 describe.sequential("commitment persistence and lifecycle", () => {
@@ -257,6 +268,19 @@ describe.sequential("commitment persistence and lifecycle", () => {
     await expect(service.getCommitment(owner.id, draft.id)).resolves.toEqual(draft);
     await expect(service.getCommitment(other.id, draft.id)).resolves.toBeNull();
     await expect(createDraft(other.id, goal.id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("lists only the requesting user's commitments in newest-first order", async () => {
+    const owner = await createUser("owner");
+    const other = await createUser("other");
+    const goal = await createGoal(owner.id);
+    const otherGoal = await createGoal(other.id);
+    const first = await createDraft(owner.id, goal.id);
+    const second = await createDraft(owner.id, goal.id);
+    await createDraft(other.id, otherGoal.id);
+
+    await expect(service.listCommitments(owner.id)).resolves.toEqual([second, first]);
+    await expect(service.listCommitments(other.id)).resolves.toHaveLength(1);
   });
 
   it("activates through the domain lifecycle and persists the incremented version", async () => {
