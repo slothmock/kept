@@ -9,7 +9,6 @@ export type {
   CommitmentCode,
   CommitmentDefinition,
   CommitmentParameters,
-  StudySessionsSocialParameters,
   ValidationResult,
   VerificationClass,
   WeeklySavingsParameters,

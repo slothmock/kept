@@ -11,15 +11,11 @@ import type {
 } from "./types.js";
 
 const ALLOWED_TRANSITIONS = {
-  DRAFT: ["ACTIVE"],
-  ACTIVE: ["AWAITING_PROOF"],
-  AWAITING_PROOF: ["VERIFYING", "EXPIRED"],
-  VERIFYING: ["QUALIFIED", "NOT_QUALIFIED", "CHALLENGED", "EXPIRED"],
-  CHALLENGED: ["VERIFYING", "NOT_QUALIFIED", "EXPIRED"],
-  QUALIFIED: ["SETTLED"],
-  NOT_QUALIFIED: [],
-  EXPIRED: [],
-  SETTLED: [],
+  DRAFT: ["ACTIVE", "CANCELLED"],
+  ACTIVE: ["COMPLETED", "FAILED", "CANCELLED"],
+  COMPLETED: [],
+  FAILED: [],
+  CANCELLED: [],
 } as const satisfies Record<CommitmentState, readonly CommitmentState[]>;
 
 function cloneAndFreeze<T>(value: T): Readonly<T> {
@@ -34,7 +30,6 @@ function deepFreeze<T>(value: T): Readonly<T> {
     }
     Object.freeze(value);
   }
-
   return value;
 }
 
@@ -63,7 +58,6 @@ export function transitionCommitment(input: {
   if (commitment.version !== expectedVersion) {
     throw new StaleCommitmentVersionError(expectedVersion, commitment.version);
   }
-
   if (commitment.state !== expectedState) {
     throw new CommitmentStateMismatchError(expectedState, commitment.state);
   }

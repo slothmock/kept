@@ -1,14 +1,13 @@
 export const COMMITMENT_CODES = [
   "WEEKLY_SAVINGS_V1",
   "ACTIVITY_COUNT_V1",
-  "STUDY_SESSIONS_SOCIAL_V1",
 ] as const;
 
 export type CommitmentCode = (typeof COMMITMENT_CODES)[number];
-export type VerificationClass = "ONCHAIN" | "EXTERNAL" | "SOCIAL";
+export type VerificationClass = "ONCHAIN" | "EXTERNAL";
 
 export interface ParameterRule {
-  readonly kind: "positive-atomic-units" | "positive-integer" | "fixed-integer" | "verifier-requirement";
+  readonly kind: "positive-atomic-units" | "positive-integer" | "fixed-integer";
   readonly value?: number;
 }
 
@@ -29,19 +28,9 @@ export interface ActivityCountParameters {
   readonly periodDays: 7;
 }
 
-export interface StudySessionsSocialParameters {
-  readonly targetSessions: number;
-  readonly periodDays: 7;
-  readonly verifierRequirement: {
-    readonly recommendedVerifierCount: 3;
-    readonly minimumYesCount: 2;
-  };
-}
-
 export type CommitmentParameters =
   | WeeklySavingsParameters
-  | ActivityCountParameters
-  | StudySessionsSocialParameters;
+  | ActivityCountParameters;
 
 export type ValidationResult =
   | { readonly valid: true; readonly value: CommitmentParameters }

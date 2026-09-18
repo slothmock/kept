@@ -20,10 +20,21 @@ contract WrongAssetStrategy is IYieldStrategy {
         asset = asset_;
     }
 
-    function deposit(uint256 assets) external pure returns (uint256) { return assets; }
-    function withdraw(uint256 assets) external pure returns (uint256) { return assets; }
-    function totalAssets() external pure returns (uint256) { return 0; }
-    function availableLiquidity() external pure returns (uint256) { return 0; }
+    function deposit(uint256 assets) external pure returns (uint256) {
+        return assets;
+    }
+
+    function withdraw(uint256 assets) external pure returns (uint256) {
+        return assets;
+    }
+
+    function totalAssets() external pure returns (uint256) {
+        return 0;
+    }
+
+    function availableLiquidity() external pure returns (uint256) {
+        return 0;
+    }
 }
 
 contract VaultAndStrategyTest is Test {
@@ -314,9 +325,8 @@ contract VaultAndStrategyTest is Test {
         vm.prank(alice);
         vault.deposit(10 * USDC, alice);
         vm.prank(owner);
-        (bool ok,) = address(vault).call(
-            abi.encodeWithSignature("rescueTokens(address,address,uint256)", address(token), owner, 10 * USDC)
-        );
+        (bool ok,) = address(vault)
+            .call(abi.encodeWithSignature("rescueTokens(address,address,uint256)", address(token), owner, 10 * USDC));
         assertFalse(ok);
     }
 

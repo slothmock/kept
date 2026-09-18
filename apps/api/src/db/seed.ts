@@ -8,7 +8,6 @@ import { commitmentDefinitions } from "./schema.js";
 
 const proofAdapterKeys = {
   ACTIVITY_COUNT_V1: "activity-count-v1",
-  STUDY_SESSIONS_SOCIAL_V1: null,
   WEEKLY_SAVINGS_V1: null,
 } as const;
 

@@ -30,14 +30,4 @@ export const COMMITMENT_DEFINITIONS = deepFreeze([
       periodDays: { kind: "fixed-integer", value: 7 },
     },
   },
-  {
-    code: "STUDY_SESSIONS_SOCIAL_V1",
-    version: 1,
-    verificationClass: "SOCIAL",
-    parameterSchema: {
-      targetSessions: { kind: "positive-integer" },
-      periodDays: { kind: "fixed-integer", value: 7 },
-      verifierRequirement: { kind: "verifier-requirement" },
-    },
-  },
 ] as const satisfies readonly CommitmentDefinition[]);

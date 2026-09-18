@@ -530,6 +530,7 @@ export class KeptPersistenceService {
           expectedVersion: input.expectedVersion,
           targetState: transitioned.state,
           activatedAt: now,
+          finalizedAt: null,
           updatedAt: now,
         });
         if (!updated) {
@@ -551,6 +552,76 @@ export class KeptPersistenceService {
           throw new Error("Activated commitment could not be reloaded");
         }
         return mapCommitment(active);
+      },
+    );
+  }
+
+
+  async cancelCommitment(input: {
+    readonly userId: string;
+    readonly commitmentId: string;
+    readonly expectedVersion: number;
+    readonly idempotencyKey: string;
+  }): Promise<CommitmentDto> {
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      throw new PersistenceValidationError("expectedVersion must be a positive safe integer");
+    }
+    const { idempotencyKey, ...request } = input;
+    return this.executeIdempotent(
+      input.userId,
+      "commitment:cancel",
+      idempotencyKey,
+      request,
+      async (repository) => {
+        const current = await repository.findCommitmentForOwnerForUpdate(
+          input.userId,
+          input.commitmentId,
+        );
+        if (!current) {
+          throw new NotFoundError("Commitment");
+        }
+        if (current.state !== "DRAFT" && current.state !== "ACTIVE") {
+          throw new PersistenceValidationError("Only draft or active commitments can be cancelled");
+        }
+
+        const transitioned = transitionCommitment({
+          commitment: {
+            id: current.id,
+            definition: { code: current.definitionCode, version: current.definitionVersion },
+            parameters: current.parameters,
+            state: current.state,
+            version: current.stateVersion,
+          },
+          expectedState: current.state,
+          expectedVersion: input.expectedVersion,
+          targetState: "CANCELLED",
+        });
+        const now = new Date();
+        const updated = await repository.updateCommitmentState({
+          userId: input.userId,
+          id: input.commitmentId,
+          expectedState: current.state,
+          expectedVersion: input.expectedVersion,
+          targetState: transitioned.state,
+          activatedAt: current.activatedAt,
+          finalizedAt: now,
+          updatedAt: now,
+        });
+        if (!updated) {
+          const latest = await repository.findCommitmentForOwner(
+            input.userId,
+            input.commitmentId,
+          );
+          if (!latest) throw new NotFoundError("Commitment");
+          throw new StaleCommitmentVersionError(input.expectedVersion, latest.stateVersion);
+        }
+
+        const cancelled = await repository.findCommitmentForOwner(
+          input.userId,
+          input.commitmentId,
+        );
+        if (!cancelled) throw new Error("Cancelled commitment could not be reloaded");
+        return mapCommitment(cancelled);
       },
     );
   }

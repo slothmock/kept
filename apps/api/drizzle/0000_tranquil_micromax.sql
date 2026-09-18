@@ -1,6 +1,6 @@
-CREATE TYPE "public"."commitment_state" AS ENUM('DRAFT', 'ACTIVE', 'AWAITING_PROOF', 'VERIFYING', 'CHALLENGED', 'QUALIFIED', 'NOT_QUALIFIED', 'EXPIRED', 'SETTLED');--> statement-breakpoint
+CREATE TYPE "public"."commitment_state" AS ENUM('DRAFT', 'ACTIVE', 'COMPLETED', 'FAILED', 'CANCELLED');--> statement-breakpoint
 CREATE TYPE "public"."goal_status" AS ENUM('ACTIVE', 'COMPLETED', 'ARCHIVED');--> statement-breakpoint
-CREATE TYPE "public"."verification_class" AS ENUM('ONCHAIN', 'EXTERNAL', 'SOCIAL');--> statement-breakpoint
+CREATE TYPE "public"."verification_class" AS ENUM('ONCHAIN', 'EXTERNAL');--> statement-breakpoint
 CREATE TABLE "commitment_definitions" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"code" text NOT NULL,

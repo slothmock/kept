@@ -9,19 +9,17 @@ import {
 const expectedCodes = [
   "WEEKLY_SAVINGS_V1",
   "ACTIVITY_COUNT_V1",
-  "STUDY_SESSIONS_SOCIAL_V1",
 ] as const;
 
 describe("MVP commitment catalogue", () => {
-  it("contains exactly the three accepted reward-bearing definitions", () => {
+  it("contains exactly the accepted financial and health activity definitions", () => {
     expect(COMMITMENT_DEFINITIONS.map(({ code }) => code)).toEqual(expectedCodes);
   });
 
-  it("contains exactly one definition for each accepted verification class", () => {
+  it("contains exactly the onchain and external verification classes", () => {
     expect(COMMITMENT_DEFINITIONS.map(({ verificationClass }) => verificationClass).sort()).toEqual([
       "EXTERNAL",
       "ONCHAIN",
-      "SOCIAL",
     ]);
   });
 
@@ -35,7 +33,8 @@ describe("MVP commitment catalogue", () => {
     expect(COMMITMENT_DEFINITIONS.every(({ parameterSchema }) => Object.isFrozen(parameterSchema))).toBe(true);
   });
 
-  it("does not return a definition for arbitrary reward-bearing codes", () => {
+  it("does not return a definition for unsupported commitment codes", () => {
+    expect(getCommitmentDefinition("STUDY_SESSIONS_SOCIAL_V1")).toBeUndefined();
     expect(getCommitmentDefinition("CUSTOM_REWARD_V1")).toBeUndefined();
   });
 });
@@ -44,14 +43,6 @@ describe("commitment parameter validation", () => {
   it.each([
     ["WEEKLY_SAVINGS_V1", { targetAmountAtomic: "25000000", periodDays: 7 }],
     ["ACTIVITY_COUNT_V1", { targetCount: 3, periodDays: 7 }],
-    [
-      "STUDY_SESSIONS_SOCIAL_V1",
-      {
-        targetSessions: 3,
-        periodDays: 7,
-        verifierRequirement: { recommendedVerifierCount: 3, minimumYesCount: 2 },
-      },
-    ],
   ] as const)("accepts valid parameters for %s", (code, parameters) => {
     expect(validateCommitmentParameters(code, parameters)).toEqual({ valid: true, value: parameters });
   });
@@ -59,25 +50,13 @@ describe("commitment parameter validation", () => {
   it.each([
     ["WEEKLY_SAVINGS_V1", { targetAmountAtomic: "0", periodDays: 7 }],
     ["WEEKLY_SAVINGS_V1", { targetAmountAtomic: "25.0", periodDays: 7 }],
+    ["WEEKLY_SAVINGS_V1", { targetAmountAtomic: "25000000", periodDays: 14 }],
     ["ACTIVITY_COUNT_V1", { targetCount: 0, periodDays: 7 }],
     ["ACTIVITY_COUNT_V1", { targetCount: 1.5, periodDays: 7 }],
     ["ACTIVITY_COUNT_V1", { targetCount: Number.MAX_SAFE_INTEGER + 1, periodDays: 7 }],
     ["ACTIVITY_COUNT_V1", { targetCount: 3, periodDays: 14 }],
-    ["ACTIVITY_COUNT_V1", null],
-    [
-      "STUDY_SESSIONS_SOCIAL_V1",
-      {
-        targetSessions: 3,
-        periodDays: 7,
-        verifierRequirement: {
-          recommendedVerifierCount: 3,
-          minimumYesCount: 2,
-          unexpected: true,
-        },
-      },
-    ],
-    ["STUDY_SESSIONS_SOCIAL_V1", { targetSessions: 3, periodDays: 7 }],
     ["ACTIVITY_COUNT_V1", { targetCount: 3, periodDays: 7, customRewardWeight: 10 }],
+    ["ACTIVITY_COUNT_V1", null],
   ] as const)("rejects invalid parameters for %s", (code, parameters) => {
     const result = validateCommitmentParameters(code, parameters);
 
@@ -87,7 +66,12 @@ describe("commitment parameter validation", () => {
     }
   });
 
-  it("rejects parameters for an unknown definition", () => {
+  it("rejects parameters for removed or unknown definitions", () => {
+    expect(validateCommitmentParameters("STUDY_SESSIONS_SOCIAL_V1", {})).toEqual({
+      valid: false,
+      issues: ["Unknown commitment definition: STUDY_SESSIONS_SOCIAL_V1"],
+    });
+
     expect(validateCommitmentParameters("CUSTOM_REWARD_V1", {})).toEqual({
       valid: false,
       issues: ["Unknown commitment definition: CUSTOM_REWARD_V1"],

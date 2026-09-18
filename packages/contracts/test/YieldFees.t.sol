@@ -262,72 +262,36 @@ contract YieldFeesTest is Test {
 
     function test_EmptyVaultCanResetHwmAfterAllOwnersRedeem() public {
         vm.prank(alice);
-        vault.deposit(
-            1_000 * USDC,
-            alice
-        );
+        vault.deposit(1_000 * USDC, alice);
 
-        aToken.accrueYield(
-            address(strategy),
-            100 * USDC
-        );
+        aToken.accrueYield(address(strategy), 100 * USDC);
 
         vault.crystallizeYieldFee();
 
-        uint256 aliceShares =
-            vault.balanceOf(alice);
+        uint256 aliceShares = vault.balanceOf(alice);
 
         vm.prank(alice);
-        vault.redeem(
-            aliceShares,
-            alice,
-            alice
-        );
+        vault.redeem(aliceShares, alice, alice);
 
-        uint256 feeRecipientShares =
-            vault.balanceOf(feeRecipient);
+        uint256 feeRecipientShares = vault.balanceOf(feeRecipient);
 
         vm.prank(feeRecipient);
-        vault.redeem(
-            feeRecipientShares,
-            feeRecipient,
-            feeRecipient
-        );
+        vault.redeem(feeRecipientShares, feeRecipient, feeRecipient);
 
-        assertEq(
-            vault.totalSupply(),
-            0
-        );
+        assertEq(vault.totalSupply(), 0);
 
-        assertEq(
-            vault.highWaterMarkAssets(),
-            0
-        );
+        assertEq(vault.highWaterMarkAssets(), 0);
 
         vm.prank(bob);
-        vault.deposit(
-            1_000 * USDC,
-            bob
-        );
+        vault.deposit(1_000 * USDC, bob);
 
-        assertEq(
-            vault.highWaterMarkAssets(),
-            vault.totalAssets()
-        );
+        assertEq(vault.highWaterMarkAssets(), vault.totalAssets());
 
-        assertApproxEqAbs(
-            vault.totalAssets(),
-            1_000 * USDC,
-            1
-        );
+        assertApproxEqAbs(vault.totalAssets(), 1_000 * USDC, 1);
 
-        (uint256 feeAssets,) =
-            vault.crystallizeYieldFee();
+        (uint256 feeAssets,) = vault.crystallizeYieldFee();
 
-        assertEq(
-            feeAssets,
-            0
-        );
+        assertEq(feeAssets, 0);
     }
 
     function test_NoCallerCanMintArbitraryFeeOrMoveStrategyPrincipal() public {

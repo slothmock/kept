@@ -39,24 +39,19 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     event StrategyBound(address indexed strategy);
     event YieldFeeCrystallized(uint256 feeAssets, uint256 feeShares, uint256 highWaterMarkAssets);
     event DepositFeeSharesMinted(address indexed receiver, uint256 assets, uint256 feeShares);
-    
+
     IYieldStrategy public strategy;
     address public immutable feeRecipient;
     uint256 public highWaterMarkAssets;
 
-    constructor(
-        IERC20 asset_,
-        address initialOwner,
-        address feeRecipient_
-    )
+    constructor(IERC20 asset_, address initialOwner, address feeRecipient_)
         ERC20("Kept Savings USDC", "ksUSDC")
         ERC4626(asset_)
         Ownable(initialOwner)
     {
         if (
-            address(asset_) == address(0) ||
-            address(asset_).code.length == 0 ||
-            IERC20Metadata(address(asset_)).decimals() != 6
+            address(asset_) == address(0) || address(asset_).code.length == 0
+                || IERC20Metadata(address(asset_)).decimals() != 6
         ) {
             revert InvalidAsset();
         }
@@ -73,16 +68,11 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
             revert StrategyAlreadyBound();
         }
 
-        if (
-            strategy_ == address(0) ||
-            strategy_.code.length == 0 ||
-            totalSupply() != 0
-        ) {
+        if (strategy_ == address(0) || strategy_.code.length == 0 || totalSupply() != 0) {
             revert InvalidStrategy();
         }
 
-        IYieldStrategy candidate =
-            IYieldStrategy(strategy_);
+        IYieldStrategy candidate = IYieldStrategy(strategy_);
 
         if (candidate.asset() != asset()) {
             revert StrategyAssetMismatch();
@@ -113,10 +103,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         _checkpointAfterDeposit(assetsBeforeDeposit);
     }
 
-    function mint(
-        uint256,
-        address
-    ) public pure override returns (uint256) {
+    function mint(uint256, address) public pure override returns (uint256) {
         revert MintDisabled();
     }
 
@@ -162,21 +149,10 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         return _convertToAssetsAfterPendingFee(shares, Math.Rounding.Floor);
     }
 
-    function previewDeposit(
-        uint256 assets
-    ) public view override returns (uint256) {
-        uint256 grossShares =
-            _convertToSharesAfterPendingFee(
-                assets,
-                Math.Rounding.Floor
-            );
+    function previewDeposit(uint256 assets) public view override returns (uint256) {
+        uint256 grossShares = _convertToSharesAfterPendingFee(assets, Math.Rounding.Floor);
 
-        uint256 feeShares = Math.mulDiv(
-            grossShares,
-            DEPOSIT_FEE_BPS,
-            BPS_DENOMINATOR,
-            Math.Rounding.Floor
-        );
+        uint256 feeShares = Math.mulDiv(grossShares, DEPOSIT_FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Floor);
 
         return grossShares - feeShares;
     }
@@ -216,60 +192,36 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         return ownedShares < liquidShares ? ownedShares : liquidShares;
     }
 
-    function _deposit(
-        address caller,
-        address receiver,
-        uint256 assets,
-        uint256 shares
-    ) internal override {
+    function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
         _requireInflowsAllowed(assets);
 
         if (shares == 0) revert ZeroShares();
 
         // Gross entitlement before Kept's deposit fee.
-        uint256 grossShares =
-            _convertToSharesAfterPendingFee(
-                assets,
-                Math.Rounding.Floor
-            );
+        uint256 grossShares = _convertToSharesAfterPendingFee(assets, Math.Rounding.Floor);
 
         uint256 feeShares = grossShares - shares;
 
         // Transfers ALL assets into the vault and
         // mints the net shares to the user.
-        super._deposit(
-            caller,
-            receiver,
-            assets,
-            shares
-        );
+        super._deposit(caller, receiver, assets, shares);
 
         // Kept receives ownership rather than removing assets.
         if (feeShares != 0) {
             _mint(feeRecipient, feeShares);
 
-            emit DepositFeeSharesMinted(
-                receiver,
-                assets,
-                feeShares
-            );
+            emit DepositFeeSharesMinted(receiver, assets, feeShares);
         }
 
         // All deposited USDC remains productive.
         IYieldStrategy bound = strategy;
 
-        IERC20(asset()).safeTransfer(
-            address(bound),
-            assets
-        );
+        IERC20(asset()).safeTransfer(address(bound), assets);
 
         uint256 deposited = bound.deposit(assets);
 
         if (deposited != assets) {
-            revert InsufficientStrategyLiquidity(
-                assets,
-                deposited
-            );
+            revert InsufficientStrategyLiquidity(assets, deposited);
         }
     }
 
@@ -288,15 +240,8 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         super._withdraw(caller, receiver, owner_, assets, shares);
     }
 
-    function _update(
-        address from,
-        address to,
-        uint256 value
-    ) internal override {
-        if (
-            from != address(0) &&
-            to != address(0)
-        ) {
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) {
             revert ShareTransfersDisabled();
         }
 
@@ -315,13 +260,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         return address(bound) == address(0) ? idle : idle + bound.availableLiquidity();
     }
 
-    function _crystallizeYieldFee()
-        internal
-        returns (
-            uint256 feeAssets,
-            uint256 feeShares
-        )
-    {
+    function _crystallizeYieldFee() internal returns (uint256 feeAssets, uint256 feeShares) {
         uint256 supply = totalSupply();
 
         if (supply == 0) {
@@ -335,73 +274,40 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
             return (0, 0);
         }
 
-        uint256 profit =
-            assets - highWaterMarkAssets;
+        uint256 profit = assets - highWaterMarkAssets;
 
-        feeAssets = Math.mulDiv(
-            profit,
-            PROFIT_FEE_BPS,
-            BPS_DENOMINATOR,
-            Math.Rounding.Floor
-        );
+        feeAssets = Math.mulDiv(profit, PROFIT_FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Floor);
 
         if (feeAssets == 0) {
             return (0, 0);
         }
 
-        feeShares = Math.mulDiv(
-            feeAssets,
-            supply + VIRTUAL_SHARES,
-            assets + 1 - feeAssets,
-            Math.Rounding.Floor
-        );
+        feeShares = Math.mulDiv(feeAssets, supply + VIRTUAL_SHARES, assets + 1 - feeAssets, Math.Rounding.Floor);
 
         if (feeShares == 0) {
             return (0, 0);
         }
 
-        _mint(
-            feeRecipient,
-            feeShares
-        );
+        _mint(feeRecipient, feeShares);
 
         highWaterMarkAssets = assets;
 
-        emit YieldFeeCrystallized(
-            feeAssets,
-            feeShares,
-            highWaterMarkAssets
-        );
+        emit YieldFeeCrystallized(feeAssets, feeShares, highWaterMarkAssets);
     }
 
-    function _checkpointAfterDeposit(
-        uint256 assetsBeforeDeposit
-    ) internal {
-        uint256 assetsAfterDeposit =
-            totalAssets();
+    function _checkpointAfterDeposit(uint256 assetsBeforeDeposit) internal {
+        uint256 assetsAfterDeposit = totalAssets();
 
-        uint256 creditedAssets =
-            assetsAfterDeposit > assetsBeforeDeposit
-                ? assetsAfterDeposit - assetsBeforeDeposit
-                : 0;
+        uint256 creditedAssets = assetsAfterDeposit > assetsBeforeDeposit ? assetsAfterDeposit - assetsBeforeDeposit : 0;
 
-        if (
-            assetsBeforeDeposit >
-            highWaterMarkAssets
-        ) {
-            highWaterMarkAssets =
-                assetsBeforeDeposit;
+        if (assetsBeforeDeposit > highWaterMarkAssets) {
+            highWaterMarkAssets = assetsBeforeDeposit;
         }
 
-        highWaterMarkAssets +=
-            creditedAssets;
+        highWaterMarkAssets += creditedAssets;
     }
 
-    function _previewPendingFeeShares()
-        internal
-        view
-        returns (uint256 feeShares)
-    {
+    function _previewPendingFeeShares() internal view returns (uint256 feeShares) {
         uint256 supply = totalSupply();
 
         if (supply == 0) {
@@ -414,26 +320,15 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
             return 0;
         }
 
-        uint256 profit =
-            assets - highWaterMarkAssets;
+        uint256 profit = assets - highWaterMarkAssets;
 
-        uint256 feeAssets = Math.mulDiv(
-            profit,
-            PROFIT_FEE_BPS,
-            BPS_DENOMINATOR,
-            Math.Rounding.Floor
-        );
+        uint256 feeAssets = Math.mulDiv(profit, PROFIT_FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Floor);
 
         if (feeAssets == 0) {
             return 0;
         }
 
-        return Math.mulDiv(
-            feeAssets,
-            supply + VIRTUAL_SHARES,
-            assets + 1 - feeAssets,
-            Math.Rounding.Floor
-        );
+        return Math.mulDiv(feeAssets, supply + VIRTUAL_SHARES, assets + 1 - feeAssets, Math.Rounding.Floor);
     }
 
     function _sharesAvailableToOwner(address owner_) internal view returns (uint256) {
@@ -455,24 +350,15 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
             );
     }
 
-    function _checkpointAfterWithdrawal(
-        uint256 supplyBefore
-    ) internal {
-        uint256 supplyAfter =
-            totalSupply();
+    function _checkpointAfterWithdrawal(uint256 supplyBefore) internal {
+        uint256 supplyAfter = totalSupply();
 
         if (supplyAfter == 0) {
             highWaterMarkAssets = 0;
             return;
         }
 
-        highWaterMarkAssets =
-            Math.mulDiv(
-                highWaterMarkAssets,
-                supplyAfter,
-                supplyBefore,
-                Math.Rounding.Ceil
-            );
+        highWaterMarkAssets = Math.mulDiv(highWaterMarkAssets, supplyAfter, supplyBefore, Math.Rounding.Ceil);
     }
 
     function _decimalsOffset() internal pure override returns (uint8) {

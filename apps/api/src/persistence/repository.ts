@@ -30,6 +30,7 @@ export interface CommitmentRecord {
   readonly finalizedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly opaqueSettlementRef: Uint8Array | null;
 }
 
 export class KeptRepository {
@@ -145,6 +146,7 @@ export class KeptRepository {
         finalizedAt: userCommitments.finalizedAt,
         createdAt: userCommitments.createdAt,
         updatedAt: userCommitments.updatedAt,
+        opaqueSettlementRef: userCommitments.opaqueSettlementRef,
       })
       .from(userCommitments)
       .innerJoin(
@@ -176,6 +178,7 @@ export class KeptRepository {
         finalizedAt: userCommitments.finalizedAt,
         createdAt: userCommitments.createdAt,
         updatedAt: userCommitments.updatedAt,
+        opaqueSettlementRef: userCommitments.opaqueSettlementRef,
       })
       .from(userCommitments)
       .innerJoin(
@@ -208,6 +211,7 @@ export class KeptRepository {
         finalizedAt: userCommitments.finalizedAt,
         createdAt: userCommitments.createdAt,
         updatedAt: userCommitments.updatedAt,
+        opaqueSettlementRef: userCommitments.opaqueSettlementRef,
       })
       .from(userCommitments)
       .innerJoin(
@@ -228,6 +232,7 @@ export class KeptRepository {
     readonly expectedVersion: number;
     readonly targetState: CommitmentState;
     readonly activatedAt: Date | null;
+    readonly finalizedAt: Date | null;
     readonly updatedAt: Date;
   }): Promise<boolean> {
     const updated = await this.db
@@ -236,12 +241,73 @@ export class KeptRepository {
         state: input.targetState,
         stateVersion: sql`${userCommitments.stateVersion} + 1`,
         activatedAt: input.activatedAt,
+        finalizedAt: input.finalizedAt,
         updatedAt: input.updatedAt,
       })
       .where(
         and(
           eq(userCommitments.id, input.id),
           eq(userCommitments.userId, input.userId),
+          eq(userCommitments.state, input.expectedState),
+          eq(userCommitments.stateVersion, input.expectedVersion),
+        ),
+      )
+      .returning({ id: userCommitments.id });
+
+    return updated.length === 1;
+  }
+
+  async findCommitment(id: string): Promise<CommitmentRecord | null> {
+    const [record] = await this.db
+      .select({
+        id: userCommitments.id,
+        userId: userCommitments.userId,
+        savingsGoalId: userCommitments.savingsGoalId,
+        definitionId: userCommitments.definitionId,
+        definitionCode: commitmentDefinitions.code,
+        definitionVersion: commitmentDefinitions.version,
+        parameters: userCommitments.parameters,
+        epochStart: userCommitments.epochStart,
+        epochEnd: userCommitments.epochEnd,
+        verificationDeadline: userCommitments.verificationDeadline,
+        state: userCommitments.state,
+        stateVersion: userCommitments.stateVersion,
+        activatedAt: userCommitments.activatedAt,
+        finalizedAt: userCommitments.finalizedAt,
+        createdAt: userCommitments.createdAt,
+        updatedAt: userCommitments.updatedAt,
+        opaqueSettlementRef: userCommitments.opaqueSettlementRef,
+      })
+      .from(userCommitments)
+      .innerJoin(
+        commitmentDefinitions,
+        eq(userCommitments.definitionId, commitmentDefinitions.id),
+      )
+      .where(eq(userCommitments.id, id))
+      .limit(1);
+
+    return record ?? null;
+  }
+
+  async updateCommitmentStateInternal(input: {
+    readonly id: string;
+    readonly expectedState: CommitmentState;
+    readonly expectedVersion: number;
+    readonly targetState: CommitmentState;
+    readonly finalizedAt: Date;
+    readonly updatedAt: Date;
+  }): Promise<boolean> {
+    const updated = await this.db
+      .update(userCommitments)
+      .set({
+        state: input.targetState,
+        stateVersion: sql`${userCommitments.stateVersion} + 1`,
+        finalizedAt: input.finalizedAt,
+        updatedAt: input.updatedAt,
+      })
+      .where(
+        and(
+          eq(userCommitments.id, input.id),
           eq(userCommitments.state, input.expectedState),
           eq(userCommitments.stateVersion, input.expectedVersion),
         ),

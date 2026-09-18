@@ -11,6 +11,7 @@ import type {
   KeptPersistenceService,
   UserDto,
 } from "./persistence/index.js";
+import type { JsonValue } from "./domain/commitments/index.js";
 
 export interface AuthenticatedIdentity {
   readonly privyUserId: string;
@@ -22,7 +23,15 @@ export interface ApiDependencies {
   ) => Promise<AuthenticatedIdentity | null>;
   readonly persistence: Pick<
     KeptPersistenceService,
-    "createUser"
+    | "createUser"
+    | "createGoal"
+    | "getGoal"
+    | "listGoals"
+    | "createCommitmentDraft"
+    | "getCommitment"
+    | "listCommitments"
+    | "activateCommitment"
+    | "cancelCommitment"
   >;
 }
 
@@ -35,7 +44,6 @@ function allowedWebOrigins(webOrigin: string): string[] {
   if (webOrigin === "http://localhost:5173") {
     return [webOrigin, "http://127.0.0.1:5173"];
   }
-
   return [webOrigin];
 }
 
@@ -72,6 +80,50 @@ function sendError(
   return { statusCode: 500, body: { error: { code: "INTERNAL_ERROR" } } };
 }
 
+function requireObject(body: unknown): Record<string, unknown> {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new PersistenceValidationError("request body must be an object");
+  }
+  return body as Record<string, unknown>;
+}
+
+function requireString(body: Record<string, unknown>, key: string): string {
+  const value = body[key];
+  if (typeof value !== "string") {
+    throw new PersistenceValidationError(`${key} must be a string`);
+  }
+  return value;
+}
+
+function requireInteger(body: Record<string, unknown>, key: string): number {
+  const value = body[key];
+  if (!Number.isSafeInteger(value)) {
+    throw new PersistenceValidationError(`${key} must be a safe integer`);
+  }
+  return value as number;
+}
+
+function requireIdempotencyKey(request: FastifyRequest): string {
+  const value = request.headers["idempotency-key"];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new PersistenceValidationError("idempotency-key header is required");
+  }
+  return value;
+}
+
+async function handle<T>(
+  request: FastifyRequest,
+  reply: { code(statusCode: number): { send(body: unknown): unknown } },
+  operation: () => Promise<T>,
+): Promise<T | unknown> {
+  try {
+    return await operation();
+  } catch (error) {
+    const result = sendError(request, error);
+    return reply.code(result.statusCode).send(result.body);
+  }
+}
+
 export function buildApp(
   dependencies: ApiDependencies,
   options: BuildAppOptions = {},
@@ -85,8 +137,8 @@ export function buildApp(
   const webOrigin = options.webOrigin ?? "http://localhost:5173";
   app.register(cors, {
     origin: allowedWebOrigins(webOrigin),
-    methods: ["GET"],
-    allowedHeaders: ["authorization"],
+    methods: ["GET", "POST"],
+    allowedHeaders: ["authorization", "content-type", "idempotency-key"],
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -119,13 +171,9 @@ export function buildApp(
   app.get("/health", async () => ({ status: "ok" }));
 
   app.addHook("onRequest", async (request, reply) => {
-    if (request.routeOptions.url === "/health") {
-      return;
-    }
+    if (request.routeOptions.url === "/health") return;
 
-    const identity = await dependencies.authenticate(
-      request.headers.authorization,
-    );
+    const identity = await dependencies.authenticate(request.headers.authorization);
     if (!identity) {
       await reply.code(401).send({ error: { code: "UNAUTHENTICATED" } });
       return reply;
@@ -142,8 +190,108 @@ export function buildApp(
     }
   });
 
-  app.get("/v1/me", async (request) =>
-    asAuthenticatedRequest(request).user,
+  app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+
+  app.get("/v1/goals", async (request, reply) =>
+    handle(request, reply, () =>
+      dependencies.persistence.listGoals(asAuthenticatedRequest(request).user.id),
+    ),
+  );
+
+  app.get<{ Params: { id: string } }>("/v1/goals/:id", async (request, reply) =>
+    handle(request, reply, async () => {
+      const goal = await dependencies.persistence.getGoal(
+        asAuthenticatedRequest(request).user.id,
+        request.params.id,
+      );
+      if (!goal) throw new NotFoundError("Savings goal");
+      return goal;
+    }),
+  );
+
+  app.post("/v1/goals", async (request, reply) =>
+    handle(request, reply, async () => {
+      const body = requireObject(request.body);
+      const targetDateValue = body.targetDate;
+      if (
+        targetDateValue !== undefined &&
+        targetDateValue !== null &&
+        typeof targetDateValue !== "string"
+      ) {
+        throw new PersistenceValidationError("targetDate must be a string or null");
+      }
+      const targetDate: string | null =
+        typeof targetDateValue === "string" ? targetDateValue : null;
+      return dependencies.persistence.createGoal({
+        userId: asAuthenticatedRequest(request).user.id,
+        idempotencyKey: requireIdempotencyKey(request),
+        name: requireString(body, "name"),
+        targetAmountAtomic: requireString(body, "targetAmountAtomic"),
+        targetDate,
+      });
+    }),
+  );
+
+  app.get("/v1/commitments", async (request, reply) =>
+    handle(request, reply, () =>
+      dependencies.persistence.listCommitments(asAuthenticatedRequest(request).user.id),
+    ),
+  );
+
+  app.get<{ Params: { id: string } }>("/v1/commitments/:id", async (request, reply) =>
+    handle(request, reply, async () => {
+      const commitment = await dependencies.persistence.getCommitment(
+        asAuthenticatedRequest(request).user.id,
+        request.params.id,
+      );
+      if (!commitment) throw new NotFoundError("Commitment");
+      return commitment;
+    }),
+  );
+
+  app.post("/v1/commitments", async (request, reply) =>
+    handle(request, reply, async () => {
+      const body = requireObject(request.body);
+      const definition = requireObject(body.definition);
+      const parameters = requireObject(body.parameters) as Record<string, JsonValue>;
+      return dependencies.persistence.createCommitmentDraft({
+        userId: asAuthenticatedRequest(request).user.id,
+        idempotencyKey: requireIdempotencyKey(request),
+        goalId: requireString(body, "goalId"),
+        definition: {
+          code: requireString(definition, "code"),
+          version: requireInteger(definition, "version"),
+        },
+        parameters,
+        epochStart: requireString(body, "epochStart"),
+        epochEnd: requireString(body, "epochEnd"),
+        verificationDeadline: requireString(body, "verificationDeadline"),
+      });
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/v1/commitments/:id/activate", async (request, reply) =>
+    handle(request, reply, async () => {
+      const body = requireObject(request.body);
+      return dependencies.persistence.activateCommitment({
+        userId: asAuthenticatedRequest(request).user.id,
+        commitmentId: request.params.id,
+        expectedVersion: requireInteger(body, "expectedVersion"),
+        idempotencyKey: requireIdempotencyKey(request),
+      });
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/v1/commitments/:id/cancel", async (request, reply) =>
+    handle(request, reply, async () => {
+      const body = requireObject(request.body);
+      return dependencies.persistence.cancelCommitment({
+        userId: asAuthenticatedRequest(request).user.id,
+        commitmentId: request.params.id,
+        expectedVersion: requireInteger(body, "expectedVersion"),
+        idempotencyKey: requireIdempotencyKey(request),
+      });
+    }),
   );
 
   return app;

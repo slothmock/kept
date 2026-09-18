@@ -96,7 +96,7 @@ afterAll(async () => {
 });
 
 describe.sequential("PostgreSQL migrations and schema constraints", () => {
-  it("applies all migrations to an empty database and seeds exactly three definitions", async () => {
+  it("applies all migrations to an empty database and seeds exactly two definitions", async () => {
     const tables = await connection.pool.query<{ table_name: string }>(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
     );
@@ -116,7 +116,6 @@ describe.sequential("PostgreSQL migrations and schema constraints", () => {
     );
     expect(definitions.rows).toEqual([
       { code: "ACTIVITY_COUNT_V1", version: 1 },
-      { code: "STUDY_SESSIONS_SOCIAL_V1", version: 1 },
       { code: "WEEKLY_SAVINGS_V1", version: 1 },
     ]);
   });
@@ -297,6 +296,28 @@ describe.sequential("commitment persistence and lifecycle", () => {
     expect(active).toMatchObject({ state: "ACTIVE", stateVersion: 2 });
     expect(active.activatedAt).not.toBeNull();
     await expect(service.getCommitment(owner.id, draft.id)).resolves.toEqual(active);
+  });
+
+  it("cancels an active commitment without touching financial state", async () => {
+    const owner = await createUser("owner");
+    const goal = await createGoal(owner.id);
+    const draft = await createDraft(owner.id, goal.id);
+    const active = await service.activateCommitment({
+      userId: owner.id,
+      commitmentId: draft.id,
+      expectedVersion: 1,
+      idempotencyKey: randomUUID(),
+    });
+
+    const cancelled = await service.cancelCommitment({
+      userId: owner.id,
+      commitmentId: draft.id,
+      expectedVersion: active.stateVersion,
+      idempotencyKey: randomUUID(),
+    });
+
+    expect(cancelled).toMatchObject({ state: "CANCELLED", stateVersion: 3 });
+    expect(cancelled.finalizedAt).not.toBeNull();
   });
 
   it("rejects a commitment window that contradicts the catalogue period", async () => {

@@ -39,24 +39,6 @@ function validActivityCount(value: Record<string, unknown>): boolean {
   );
 }
 
-function validVerifierRequirement(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    hasExactKeys(value, ["recommendedVerifierCount", "minimumYesCount"]) &&
-    value.recommendedVerifierCount === 3 &&
-    value.minimumYesCount === 2
-  );
-}
-
-function validStudySessions(value: Record<string, unknown>): boolean {
-  return (
-    hasExactKeys(value, ["targetSessions", "periodDays", "verifierRequirement"]) &&
-    isPositiveInteger(value.targetSessions) &&
-    value.periodDays === 7 &&
-    validVerifierRequirement(value.verifierRequirement)
-  );
-}
-
 export function getCommitmentDefinition(code: string) {
   return COMMITMENT_DEFINITIONS.find((definition) => definition.code === code);
 }
@@ -72,8 +54,7 @@ export function validateCommitmentParameters(code: string, parameters: unknown):
 
   const valid =
     (code === "WEEKLY_SAVINGS_V1" && validWeeklySavings(parameters)) ||
-    (code === "ACTIVITY_COUNT_V1" && validActivityCount(parameters)) ||
-    (code === "STUDY_SESSIONS_SOCIAL_V1" && validStudySessions(parameters));
+    (code === "ACTIVITY_COUNT_V1" && validActivityCount(parameters));
 
   if (!valid) {
     return { valid: false, issues: [`Invalid parameters for ${code}`] };

@@ -32,7 +32,6 @@ const bytea = customType<{ data: Buffer }>({
 export const verificationClassEnum = pgEnum("verification_class", [
   "ONCHAIN",
   "EXTERNAL",
-  "SOCIAL",
 ]);
 
 export const commitmentStateEnum = pgEnum("commitment_state", COMMITMENT_STATES);

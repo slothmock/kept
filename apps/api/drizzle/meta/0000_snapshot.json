@@ -647,13 +647,9 @@
       "values": [
         "DRAFT",
         "ACTIVE",
-        "AWAITING_PROOF",
-        "VERIFYING",
-        "CHALLENGED",
-        "QUALIFIED",
-        "NOT_QUALIFIED",
-        "EXPIRED",
-        "SETTLED"
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED"
       ]
     },
     "public.goal_status": {
@@ -670,8 +666,7 @@
       "schema": "public",
       "values": [
         "ONCHAIN",
-        "EXTERNAL",
-        "SOCIAL"
+        "EXTERNAL"
       ]
     }
   },

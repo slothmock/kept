@@ -1,13 +1,9 @@
 export const COMMITMENT_STATES = [
   "DRAFT",
   "ACTIVE",
-  "AWAITING_PROOF",
-  "VERIFYING",
-  "CHALLENGED",
-  "QUALIFIED",
-  "NOT_QUALIFIED",
-  "EXPIRED",
-  "SETTLED",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
 ] as const;
 
 export type CommitmentState = (typeof COMMITMENT_STATES)[number];
