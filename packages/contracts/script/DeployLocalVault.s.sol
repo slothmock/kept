@@ -31,7 +31,7 @@ contract DeployLocalVault is Script {
         usdc = new MockUSDC();
         aToken = new MockAToken(address(usdc));
         pool = new MockAavePool(usdc, aToken);
-        vault = new KeptSavingsVault(IERC20(address(usdc)), owner, owner, 100, 2_500);
+        vault = new KeptSavingsVault(IERC20(address(usdc)), owner, owner);
         strategy = new AaveUSDCStrategy(address(vault), address(usdc), address(pool), address(aToken));
         vault.bindStrategy(address(strategy));
         vm.stopBroadcast();
