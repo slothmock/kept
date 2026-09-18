@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
+import { Target } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 interface AppShellProps {
   readonly children: ReactNode;
@@ -8,17 +11,34 @@ interface AppShellProps {
 
 export function AppShell({ children, headerAction }: AppShellProps) {
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header__inner">
-          <Link className="brand" to="/" aria-label="Kept home">Kept</Link>
-          <nav className="app-header__nav" aria-label="Primary navigation">
-            <Link className="button button--quiet" to="/dashboard">Dashboard</Link>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6 lg:px-8">
+          <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight" aria-label="Kept home">
+            <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <Target className="size-4" />
+            </span>
+            <span>Kept</span>
+          </Link>
+
+          <nav className="ml-auto flex items-center gap-1" aria-label="Primary navigation">
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) => cn(
+                "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground",
+                isActive && "bg-muted text-foreground",
+              )}
+            >
+              Dashboard
+            </NavLink>
+            {headerAction}
           </nav>
-          {headerAction}
         </div>
       </header>
-      <main className="app-content">{children}</main>
+
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        {children}
+      </main>
     </div>
   );
 }

@@ -1,0 +1,1 @@
+npm install tailwindcss @tailwindcss/vite shadcn class-variance-authority cn lucide-react tw-animate-css @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-progress @radix-ui/react-slot

@@ -1,31 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPublicClient, getAddress, http, isAddress } from "viem";
 
-import { createKeptApi, readApiBaseUrl, type CommitmentDto, type GoalDto } from "./api/kept-api.js";
-import { AppShell } from "./components/AppShell.js";
-import { useKeptEvmWallet } from "./chain/evm-wallet.js";
-import { useKeptTransactionSender } from "./chain/transaction-sender.js";
-import { DashboardScreen, type ProductDataState } from "./screens/DashboardScreen.js";
-import type { Session } from "./auth/session.js";
-import { readVaultConfig } from "./vault/config.js";
-import { parseUsdcDepositAmount } from "./vault/deposit-input.js";
-import { submitVaultDeposit, submitVaultWithdrawal } from "./vault/executor.js";
-import { readVaultPosition, type VaultPosition } from "./vault/position.js";
-import { buildVaultDepositTransactions, buildVaultWithdrawTransaction } from "./vault/transactions.js";
-
-type PositionState =
-  | { readonly kind: "unavailable" }
-  | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly position: VaultPosition }
-  | { readonly kind: "error"; readonly message: string };
+import { createKeptApi, readApiBaseUrl, type GoalDto } from "@/api/kept-api";
+import { type Session } from "@/auth/session";
+import { useKeptEvmWallet } from "@/chain/evm-wallet";
+import { useKeptTransactionSender } from "@/chain/transaction-sender";
+import { AccountMenu } from "@/components/AccountMenu";
+import { AppShell } from "@/components/AppShell";
+import type { CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
+import type { PositionState } from "@/features/savings/BalanceCard";
+import { DashboardPage, type ProductDataState } from "@/pages/DashboardPage";
+import { readVaultConfig } from "@/vault/config";
+import { parseUsdcDepositAmount } from "@/vault/deposit-input";
+import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
+import { readVaultPosition } from "@/vault/position";
+import { buildVaultDepositTransactions, buildVaultWithdrawTransaction } from "@/vault/transactions";
 
 function displayError(error: unknown): string {
   return error instanceof Error ? error.message : "We could not complete that request.";
 }
 
 export function DashboardApp({ session }: { readonly session: Session }) {
-  const [fundingOpen, setFundingOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
@@ -42,10 +37,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const wallet = useKeptEvmWallet();
   const sender = useKeptTransactionSender();
   const config = useMemo(() => readVaultConfig(import.meta.env), []);
-  const api = useMemo(() => createKeptApi({
-    baseUrl: readApiBaseUrl(import.meta.env),
-    getAccessToken: session.getAccessToken,
-  }), [session.getAccessToken]);
+  const api = useMemo(
+    () => createKeptApi({
+      baseUrl: readApiBaseUrl(import.meta.env),
+      getAccessToken: session.getAccessToken,
+    }),
+    [session.getAccessToken],
+  );
   const publicClient = useMemo(
     () => config ? createPublicClient({ transport: http(config.rpcUrl) }) : null,
     [config],
@@ -99,7 +97,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const submitDeposit = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
-      setDepositError("Your local Kept account is not ready yet.");
+      setDepositError("Your Kept account is not ready yet.");
       return;
     }
 
@@ -109,7 +107,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       return;
     }
     if (parsedAmount.assets > positionState.position.usdcBalance) {
-      setDepositError("Enter an amount no greater than your available test USDC.");
+      setDepositError("Enter an amount no greater than your available USDC.");
       return;
     }
 
@@ -138,8 +136,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         },
       });
       setDepositStatus(result.approvalHash
-        ? "Test USDC approved and added. Refreshing your balance…"
-        : "Test USDC added. Refreshing your balance…");
+        ? "USDC approved and added. Refreshing your balance…"
+        : "USDC added. Refreshing your balance…");
       setDepositAmount("");
       await refreshPosition();
       setDepositStatus("Deposit confirmed.");
@@ -151,7 +149,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const submitWithdrawal = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
-      setWithdrawError("Your local Kept account is not ready yet.");
+      setWithdrawError("Your Kept account is not ready yet.");
       return;
     }
 
@@ -196,12 +194,17 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [account, config, positionState, publicClient, refreshPosition, sender, withdrawAmount]);
 
-  const createGoal = useCallback(async (input: { readonly name: string; readonly targetAmount: string; readonly targetDate: string | null }) => {
+  const createGoal = useCallback(async (input: {
+    readonly name: string;
+    readonly targetAmount: string;
+    readonly targetDate: string | null;
+  }) => {
     const name = input.name.trim();
     if (!name) {
       setGoalError("Give your goal a name.");
       return false;
     }
+
     const parsed = parseUsdcDepositAmount(input.targetAmount);
     if ("error" in parsed || parsed.assets <= 0n) {
       setGoalError("Enter a valid target amount greater than zero.");
@@ -226,17 +229,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [api, refreshProductData]);
 
-  const createCommitment = useCallback(async (
-    goal: GoalDto,
-    input: {
-      readonly code: "WEEKLY_SAVINGS_V1" | "ACTIVITY_COUNT_V1";
-      readonly target: string;
-      readonly startAt: Date;
-      readonly endAt: Date;
-      readonly verificationDeadline: Date;
-    },
-  ) => {
+  const createCommitment = useCallback(async (goal: GoalDto, input: CreateCommitmentInput) => {
     let parameters: Readonly<Record<string, unknown>>;
+
     if (input.code === "WEEKLY_SAVINGS_V1") {
       const parsed = parseUsdcDepositAmount(input.target);
       if ("error" in parsed || parsed.assets <= 0n) {
@@ -276,20 +271,14 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [api, refreshProductData]);
 
   if (!session.isReady) {
-    return <main><p aria-live="polite">Preparing your account…</p></main>;
+    return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground" aria-live="polite">Preparing your account…</main>;
   }
 
   return (
     <AppShell
-      headerAction={wallet.address ? (
-        <button className="button button--quiet" type="button" onClick={() => setAccountOpen(true)}>
-          My Account
-        </button>
-      ) : undefined}
+      headerAction={wallet.address ? <AccountMenu address={wallet.address} onSignOut={session.logout} /> : undefined}
     >
-      <DashboardScreen
-        fundingOpen={fundingOpen}
-        accountOpen={accountOpen}
+      <DashboardPage
         walletAddress={wallet.address}
         positionState={positionState}
         productState={productState}
@@ -303,10 +292,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         goalError={goalError}
         creatingCommitment={creatingCommitment}
         commitmentError={commitmentError}
-        onAddMoney={() => setFundingOpen(true)}
-        onCloseFunding={() => setFundingOpen(false)}
-        onCloseAccount={() => setAccountOpen(false)}
-        onSignOut={session.logout}
         onDepositAmountChange={setDepositAmount}
         onSubmitDeposit={() => void submitDeposit()}
         onWithdrawAmountChange={setWithdrawAmount}
