@@ -171,38 +171,31 @@ Social relationships provide accountability only. They never provide custody or 
 
 ## Accounts and authorization — Privy
 
-Privy is a core account, authorization, security, transaction, and automation dependency.
+Privy is a core account, authorization, security, and transaction dependency.
 
 The MVP is intended to demonstrate Privy beyond authentication through:
 
 - embedded Monad accounts;
 - sponsored Monad transactions;
-- restrictive delegated automatic saving;
 - wallet policy controls;
-- a deliberately rejected out-of-policy action.
+- explicit user authorization for deposits.
 
 Removing Privy should materially break important product functionality.
 
-### Delegated automatic saving
+### Explicit savings authorization
 
-Authority is layered.
+Delegated and scheduled automatic saving is not part of the MVP.
 
-Privy policy should restrict:
+Every savings deposit must be explicitly authorized by the user. Wallet policy and transaction construction must bind:
 
 - chain;
 - authorized vault;
-- authorized function;
+- authorized `deposit` or `mint` function;
 - asset;
 - per-transaction amount;
 - receiver/spender semantics.
 
-`KeptSavingsVault` additionally enforces:
-
-- no more than one delegated automatic deposit per wallet every rolling seven days.
-
-The backend scheduler only decides **when to request** an action.
-
-It is never the authorization boundary.
+Kept does not retain delegated saving authority or run a backend automatic-savings scheduler. Privy may sponsor gas, but sponsorship must not change the authorized transaction.
 
 ---
 
@@ -308,20 +301,20 @@ See [`AGENTS.md`](./AGENTS.md) for the full implementation rules.
 
 The repository decision log is authoritative.
 
-As of 08-Sep-2026, accepted decisions include:
+As of 14-Sep-2026, accepted decisions include:
 
 - **KEPT-PL-001** — exactly three MVP reward-bearing verification paths.
-- **KEPT-PL-002** — restrictive delegated automatic saving is MVP scope.
+- **KEPT-PL-002** — superseded by KEPT-PL-023.
 - **KEPT-PL-003** — use the two-stage Aurora / NEAR Intents flow.
 - **KEPT-PL-004** — native Monad USDC supplied to Aave V3 through a strategy abstraction.
 - **KEPT-PL-005** — bounded pre-funded USDC behavioural reward treasury; no token.
 - **KEPT-PL-006** — no standalone MVP `CommitmentRegistry`.
 - **KEPT-PL-007** — qualification authority is separated from reward economics.
 - **KEPT-PL-008** — no runtime strategy switching required in MVP.
-- **KEPT-PL-009** — delegated saving uses layered authorization, including vault-enforced rolling seven-day cadence.
+- **KEPT-PL-009** — superseded by KEPT-PL-023.
 - **KEPT-PL-010** — onchain behavioural identity is opaque by default.
 - **KEPT-PL-011** — Consumer Products & Payments is the intended primary Metropolis track.
-- **KEPT-PL-012** — reward-oracle and delegated-wallet authority must remain independently bounded.
+- **KEPT-PL-012** — bounded reward-oracle criteria remain accepted; its delegated-saving portion is superseded by KEPT-PL-023.
 - **KEPT-PL-013** — the current backend/data/verification design is the MVP backend implementation baseline.
 - **KEPT-PL-014** — the saver/verifier journey and screen architecture are the MVP UX baseline while technical substates remain provisional.
 - **KEPT-PL-015** — deploy exactly the ERC-4626 vault, its permanently bound Aave USDC strategy, and the isolated RewardController; no proxy or additional MVP contract.
@@ -330,6 +323,9 @@ As of 08-Sep-2026, accepted decisions include:
 - **KEPT-PL-018** — use separate qualification, epoch-management and pause roles with immutable funded seven-day reward epochs and no treasury withdrawal.
 - **KEPT-PL-019** — register only positive opaque qualifications as immutable recipient-bound, full-claim entitlements with no expiry or backend-supplied payout amount.
 - **KEPT-PL-020** — use the accepted reward units, staged floor arithmetic, immutable hard ceilings and fixed initial demo parameters.
+- **KEPT-PL-021** — separate standard Aave and future enhanced stablecoin-LP vaults; the enhanced strategy remains unselected.
+- **KEPT-PL-022** — bounded platform fees may be taken only from positive yield through deterministic fee-share minting.
+- **KEPT-PL-023** — delegated automatic saving is removed from the MVP; deposits require explicit user authorization.
 
 Newer accepted decisions in the decision log override this README summary.
 
@@ -393,14 +389,14 @@ MVP-critical functionality should include:
 - privacy checks;
 - authorization-boundary tests;
 - adversarial reward tests;
-- delegated-saving out-of-policy rejection tests.
+- user-authorization and receiver/spender boundary tests.
 
 Important security acceptance criteria include:
 
 - compromised backend qualification authority cannot access saver principal;
 - reward settlement cannot exceed bounded pre-funded reward authority;
-- delegated wallet permissions cannot redirect funds;
-- backend scheduling alone cannot bypass wallet/vault authorization;
+- transaction sponsorship cannot redirect funds or alter an authorized deposit;
+- backend requests cannot bypass user authorization;
 - replay or duplicate reward settlement is rejected.
 
 ---

@@ -76,6 +76,7 @@ contract MockAavePool {
     MockAToken public immutable aToken;
     bool public failSupply;
     bool public returnWrongWithdrawAmount;
+    uint256 public supplyCreditShortfall;
 
     constructor(MockUSDC asset_, MockAToken aToken_) {
         asset = asset_;
@@ -91,11 +92,15 @@ contract MockAavePool {
         returnWrongWithdrawAmount = value;
     }
 
+    function setSupplyCreditShortfall(uint256 value) external {
+        supplyCreditShortfall = value;
+    }
+
     function supply(address suppliedAsset, uint256 amount, address onBehalfOf, uint16) external {
         require(!failSupply, "SUPPLY_FAILED");
         require(suppliedAsset == address(asset), "WRONG_ASSET");
         IERC20(suppliedAsset).safeTransferFrom(msg.sender, address(aToken), amount);
-        aToken.mintPosition(onBehalfOf, amount);
+        aToken.mintPosition(onBehalfOf, amount - supplyCreditShortfall);
     }
 
     function withdraw(address withdrawnAsset, uint256 amount, address to) external returns (uint256) {

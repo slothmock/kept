@@ -4,14 +4,16 @@
 
 This document freezes the MVP contract and reward design required for Milestone 3.
 
-The existing accepted architecture requires bounded reward authority, no standalone CommitmentRegistry, a single Aave strategy, opaque behavioural identifiers, layered delegated-saving controls, and strict separation between saver principal and the behavioural treasury. The Product Outline also requires user-controlled withdrawals, time-weighted eligible capital, a bounded pre-funded behavioural reward, and minimum-disclosure onchain state.
+The existing accepted architecture requires bounded reward authority, no standalone CommitmentRegistry, opaque behavioural identifiers, explicit user authorization for savings deposits, and strict separation between saver principal, platform yield fees and the behavioural treasury. The Product Outline also requires user-controlled withdrawals, time-weighted eligible capital, a bounded pre-funded behavioural reward, and minimum-disclosure onchain state.
+
+> **Post-Milestone 3 governance update:** KEPT-PL-021 supersedes the single-vault topology with separate standard Aave and enhanced stablecoin-LP vaults. KEPT-PL-022 adds bounded positive-yield fee accounting. KEPT-PL-023 removes delegated and scheduled automatic saving from the MVP and supersedes every automation-specific requirement retained in the historical Milestone 3 sections below. The standard Aave vault may now implement the accepted fee model. The enhanced strategy, pair, liquidity and withdrawal mechanics remain unselected and are not authorized for implementation by this specification.
 
 | ItemStatusResolution                           |                 |                                                                                                                                                                     |
 | ---------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Contract topology                              | **FROZEN**      | Exactly three deployed Kept contracts.                                                                                                                              |
 | ERC-4626 saver accounting                      | **FROZEN**      | Standard deposit/mint/withdraw/redeem retained.                                                                                                                     |
 | Vault ↔ strategy binding                       | **FROZEN**      | Strategy is permanently bound after a one-time pre-deposit bind.                                                                                                    |
-| Automatic-saving contract semantics            | **FROZEN**      | Dedicated `depositAutomatically(uint256)` path; 7-day rolling cadence.                                                                                              |
+| Savings authorization                           | **SUPERSEDED**  | KEPT-PL-023 removes `depositAutomatically` and requires explicit user-authorized ERC-4626 deposits.                                                                  |
 | Saver withdrawal availability under Kept pause | **FROZEN**      | Kept pause never disables withdraw/redeem.                                                                                                                          |
 | `IYieldStrategy` semantics                     | **FROZEN**      | Exact minimal interface defined below.                                                                                                                              |
 | Aave strategy authority                        | **FROZEN**      | Vault-only asset-moving caller; no rescue/admin withdrawal.                                                                                                         |
@@ -43,7 +45,7 @@ The design-freeze prompt establishes KEPT-PL-016 as the latest already-accepted 
 **Date:** 08-Sep-2026
 **Title:** Vault, strategy binding and emergency pause semantics
 **Status:** ACCEPTED
-**Decision:** KeptSavingsVault retains the standard ERC-4626 deposit, mint, withdraw and redeem paths. The vault is deployed before the strategy, the AaveUSDCStrategy is deployed with the vault as its immutable sole asset-moving caller, and the vault then binds that strategy exactly once before accepting deposits. The strategy address cannot subsequently be changed. Kept-level pausing blocks new deposits, mints and automatic deposits but never blocks withdraw or redeem.
+**Decision:** KeptSavingsVault retains the standard ERC-4626 deposit, mint, withdraw and redeem paths. The vault is deployed before the strategy, the AaveUSDCStrategy is deployed with the vault as its immutable sole asset-moving caller, and the vault then binds that strategy exactly once before accepting deposits. The strategy address cannot subsequently be changed. Kept-level pausing blocks new deposits and mints but never blocks withdraw or redeem.
 **Reason:** This avoids CREATE2/predicted-address deployment complexity while still giving the final deployment a permanently bound strategy. Preserving withdrawal during Kept pause enforces the requirement that saver principal not be trapped by an operational control.
 **Alternatives:** Constructor-time cyclic deployment; runtime-switchable strategy; globally paused ERC-4626; disabled mint/redeem functions.
 **Affected teams:** Contracts, Security, Wallet/Intents, QA.
@@ -116,7 +118,7 @@ RewardController
 - transfer deposited USDC to the bound strategy;
 - request strategy withdrawals;
 - mint/burn its own ERC-4626 shares;
-- enforce automatic-deposit cadence.
+- crystallize bounded positive-yield fees before share-changing operations.
 
 **Authority it does not have:**
 
@@ -470,7 +472,7 @@ Manual/user-authorized path.
 
 Receiver remains a standard ERC-4626 receiver and may differ from caller.
 
-Delegated Privy policy must not whitelist this selector.
+The user must explicitly authorize this transaction, including its receiver.
 
 #### `mint(uint256 shares, address receiver)`
 
@@ -494,7 +496,9 @@ Not blocked by Kept pause.
 
 Disabling standard ERC-4626 functions is rejected for MVP.
 
-### Delegated automatic-saving path
+### Historical delegated automatic-saving path — superseded
+
+> **Not current scope:** KEPT-PL-023 removes the entry point, cadence state, scheduler and delegated authorization described in this historical section. `depositAutomatically(uint256)` must remain unavailable in the MVP.
 
 Frozen entry point:
 
@@ -597,7 +601,7 @@ Vault constructor does **not** require the strategy address.
 Deployment sequence:
 
 ```text
-1. deploy KeptSavingsVault(asset, owner)
+1. deploy KeptSavingsVault(asset, owner, feeRecipient, annualFeeCapBps, profitFeeCapBps)
 2. deploy AaveUSDCStrategy(vault, asset, pool, aToken)
 3. owner calls vault.bindStrategy(strategy)
 4. vault validates matching asset
@@ -619,7 +623,7 @@ The strategy address is therefore **write-once permanent**, not a Solidity `immu
 
 ### Immediate strategy deployment
 
-Every successful standard or automatic deposit immediately deploys the newly received USDC into the strategy in the same transaction.
+Every successful standard deposit or mint immediately deploys the newly received USDC into the strategy in the same transaction.
 
 If strategy deployment fails, the deposit/mint operation reverts.
 
@@ -1701,9 +1705,9 @@ Do not persist:
 3. **Qualification authority cannot bypass immutable hard ceilings.**
 4. **Epoch configuration cannot exceed immutable hard ceilings.**
 5. **Reward payout cannot exceed available pre-funded reward USDC.**
-6. **A delegated automatic deposit cannot credit another receiver.** Shares always go to `msg.sender`.
-7. **A delegated automatic deposit cannot occur more frequently than once per rolling 604,800 seconds per wallet.**
-8. **Backend scheduler state cannot authorize a transfer by itself.** Wallet delegation and vault cadence remain independent authorization boundaries.
+6. **No automation-specific savings entry point exists in the MVP.**
+7. **A sponsored transaction cannot change the user-authorized asset, amount, vault or receiver.**
+8. **Backend request state cannot authorize a transfer by itself.** Explicit user authorization remains required.
 9. **Withdrawal of saver funds is independent of behavioural reward qualification.**
 10. **RewardController pause cannot freeze saver principal.**
 11. **Kept-level vault pause cannot disable withdraw/redeem.**
@@ -1713,8 +1717,8 @@ Do not persist:
 15. **AaveUSDCStrategy cannot transfer saver assets to an arbitrary unauthorized recipient.**
 16. **No Kept admin has a general-purpose saver-fund seizure path.**
 17. **No Kept admin can switch the active yield strategy after initial binding.**
-18. **A failed automatic deposit cannot advance its seven-day cadence timestamp.**
-19. **Manual deposits cannot reset or bypass automatic-saving cadence.**
+18. **A failed deposit cannot create shares or advance fee-accounting state.**
+19. **No owner or backend path can transfer user assets without the user's ERC-20 authorization.**
 20. **Reward epoch configuration is immutable after epoch opening.**
 21. **A new reward epoch cannot overlap the preceding epoch.**
 22. **Outstanding claim liabilities remain covered when a new epoch is opened.**
@@ -1743,7 +1747,7 @@ Do not persist:
 | Direct donation             | Does not create exploitable first-depositor share extraction.                               |
 | Inflation attack            | Seed/virtual-share behavior tested under adversarial donation patterns.                     |
 | 6-decimal USDC              | Share/asset conversion correct.                                                             |
-| Strategy not bound          | Deposit/mint/automation reject.                                                             |
+| Strategy not bound          | Deposit and mint reject.                                                                    |
 | One-time bind               | Second strategy bind rejects.                                                               |
 | Wrong strategy asset        | Bind rejects.                                                                               |
 | Aave insufficient liquidity | `maxWithdraw/maxRedeem` lower where observable; excessive actual withdrawal reverts safely. |
@@ -1752,28 +1756,15 @@ Do not persist:
 | Vault paused withdrawal     | `withdraw`/`redeem` remain available.                                                       |
 | No admin seizure            | Owner cannot transfer arbitrary user principal.                                             |
 
-### Delegated saving
+### Savings authorization
 
-| TestExpected result                         |                                                               |
-| ------------------------------------------- | ------------------------------------------------------------- |
-| First automatic deposit                     | Succeeds immediately.                                         |
-| Second one second later                     | Rejects.                                                      |
-| Second at 71 hours                          | Rejects.                                                      |
-| Second at six days                          | Rejects.                                                      |
-| Call at exactly seven days                  | Succeeds.                                                     |
-| Call after seven days                       | Succeeds.                                                     |
-| Failed USDC transfer                        | Cadence not consumed.                                         |
-| Failed Aave supply                          | Cadence not consumed.                                         |
-| Receiver redirection                        | Impossible because function has no receiver parameter.        |
-| Share recipient                             | Always caller wallet.                                         |
-| Manual deposit during cadence lock          | Succeeds.                                                     |
-| Manual deposit cadence impact               | Does not alter automatic timestamp.                           |
-| Withdrawal during cadence lock              | Succeeds.                                                     |
-| Withdrawal cadence impact                   | Does not alter timestamp.                                     |
-| Automatic deposit then immediate withdrawal | Withdrawal remains allowed.                                   |
-| Privy unsafe function attempt               | Rejected by wallet policy; not treated as vault success.      |
-| Privy arbitrary receiver/spender attempt    | Rejected by wallet policy.                                    |
-| Concurrent auto calls                       | At most one succeeds because timestamp is atomically updated. |
+| TestExpected result                              |                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| Automation-specific selector                     | Unavailable.                                               |
+| Explicit user-authorized deposit                 | Executes with the authorized asset, amount and receiver.   |
+| Sponsored transaction with altered receiver      | Rejected before signing or execution.                      |
+| Sponsored transaction with altered amount/asset  | Rejected before signing or execution.                      |
+| Failed transfer or strategy supply                | No shares or fee-accounting changes persist.               |
 
 ### AaveUSDCStrategy
 
@@ -2124,3 +2115,80 @@ to include all accepted Product Lead decisions through KEPT-PL-020 before Milest
 - External deployment addresses/config: **VERIFY BEFORE DEPLOYMENT**
 
 **MILESTONE 3 IMPLEMENTATION MAY BEGIN**
+
+---
+
+## 21. Accepted post-Milestone 3 standard-vault yield-fee addendum
+
+This section is controlled by KEPT-PL-022 and supersedes earlier no-fee assumptions only where they conflict with the requirements below. It does not authorize the still-unselected enhanced stablecoin-LP strategy.
+
+### Economic limits
+
+For the standard Aave vault:
+
+```text
+annualized fee ceiling = 100 basis points
+positive-yield fee ceiling = 2,500 basis points
+eligible fee = min(time-weighted annualized ceiling, positive-yield ceiling)
+```
+
+The current Aave-backed `KeptSavingsVault` must reject configuration above 100 annual basis points or 2,500 positive-yield basis points. The future enhanced profile must not be enabled by passing higher values to this standard-vault implementation.
+
+The fee is zero when there is no eligible positive yield. It may never consume deposited principal. All division rounds down so rounding benefits savers.
+
+For a future enhanced vault, the accepted ceilings are 200 basis points annualized and 2,000 basis points of eligible positive yield, but no enhanced contract may be deployed until KEPT-PL-021's remaining strategy and security decisions are accepted.
+
+### Eligible positive yield and high-water mark
+
+Eligible positive yield is the increase in total vault assets above a flow-adjusted post-fee high-water benchmark. Deposits and mints increase the benchmark by the capital added. Withdrawals and redemptions reduce it in proportion to the shares burned. This preserves the existing loss hurdle without treating capital flows as profit. The calculation includes strategy return and canonical-USDC donations because both increase assets available to shareholders.
+
+If total assets fall below the flow-adjusted high-water benchmark:
+
+- no fee is created;
+- recovery back to the previous high-water mark is not new eligible yield;
+- only value above that mark may subsequently create a fee.
+
+When the vault has no issued user or fee shares, pending fee capacity and the flow-adjusted high-water benchmark return to zero. A later depositor must not inherit fee liability from a previous empty vault.
+
+### Time-weighted annualized ceiling
+
+The vault checkpoints elapsed time and a flow-adjusted fee basis around every share-changing operation. A deposit or mint first crystallizes any currently eligible fee, then clears previously accrued annual-fee capacity and moves any remaining above-water but unchargeable gain into the high-water benchmark before adding the new capital. A new depositor therefore cannot inherit historical fee time or an existing uncrystallized gain. Deposits during a loss still add to, rather than erase, the existing recovery hurdle. Capacity associated with redeemed capital must not remain available to charge the remaining shareholders. The accounting may conservatively forgo platform revenue, but it must not overcharge savers.
+
+This saver-favouring reset means repeated small successful inflows can reduce or forgo platform fee revenue. That is an accepted revenue-only trade-off for this standard-vault design: it cannot increase a saver charge, create fee authority over principal or move saver assets. Kept should monitor the behavior and revisit the fee architecture through a new accepted decision if it becomes economically material.
+
+The annual ceiling uses the lower of the prior checkpoint basis and the currently observed asset balance for the elapsed interval. It does not claim to reconstruct an unobserved intra-interval Aave balance path. This lower-endpoint rule is saver-conservative when a loss is visible at settlement, and the current observed balance becomes the next interval's basis. The separate high-water mark continues to exclude loss recovery from eligible positive yield.
+
+### Crystallization and settlement
+
+Any account may call the explicit crystallization function. The vault also crystallizes before calculating shares or assets for every `deposit`, `mint`, `withdraw` and `redeem` operation.
+
+ERC-4626 conversion and preview views must include shares that would be minted by an immediately pending crystallization, so a same-block state-changing operation does not return a worse result than its preview merely because the operation crystallizes fees first.
+
+An eligible fee is settled only by minting the deterministic number of vault shares required to represent no more than the calculated fee assets. Those shares are minted directly to the immutable fee recipient and dilute existing shares only by the bounded fee amount. The fee recipient redeems through the ordinary ERC-4626 path and remains subject to current strategy liquidity.
+
+There is no:
+
+- direct transfer of saver USDC to the fee recipient;
+- owner-set fee amount;
+- mutable fee rate;
+- mutable fee recipient;
+- fee-recipient strategy authority;
+- principal or aToken rescue function;
+- use of uncrystallized or realized platform fees as an unfunded behavioural-reward promise.
+
+### Required tests
+
+Deterministic, fuzz and stateful tests must establish at minimum:
+
+1. a 4.5% annualized standard-vault return cannot create more than a 1-percentage-point annualized fee;
+2. the fee cannot exceed 25% of eligible positive yield;
+3. zero yield, loss and recovery to the previous high-water mark create zero fee;
+4. deposits, mints, withdrawals and redemptions do not themselves create fees;
+5. a new depositor does not pay a retroactive annualized fee;
+6. withdrawing capital cannot leave fee capacity that overcharges remaining savers;
+7. donations cannot let the donor extract value or give an administrator arbitrary mint authority;
+8. fee-share rounding never exceeds the calculated fee assets;
+9. fee crystallization cannot block withdrawal merely because the vault is paused;
+10. fee-recipient shares have no strategy or principal-seizure authority;
+11. empty-vault reset removes prior fee liability;
+12. existing donation, reentrancy, liquidity and principal-isolation properties remain true.

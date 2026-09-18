@@ -32,7 +32,8 @@ contract MonadAaveForkTest is Test {
         assertEq(IPoolAddressesProviderView(POOL_ADDRESSES_PROVIDER).getPool(), POOL);
         assertEq(IAaveAToken(A_USDC).UNDERLYING_ASSET_ADDRESS(), USDC);
 
-        KeptSavingsVault vault = new KeptSavingsVault(IERC20(USDC), address(this));
+        address feeRecipient = makeAddr("monadFeeRecipient");
+        KeptSavingsVault vault = new KeptSavingsVault(IERC20(USDC), address(this), feeRecipient, 100, 2_500);
         AaveUSDCStrategy strategy = new AaveUSDCStrategy(address(vault), USDC, POOL, A_USDC);
         vault.bindStrategy(address(strategy));
 
@@ -44,10 +45,21 @@ contract MonadAaveForkTest is Test {
         assertEq(IERC20(USDC).balanceOf(A_USDC) - reserveCashBefore, amount);
         assertApproxEqAbs(IERC20(A_USDC).balanceOf(address(strategy)), amount, 1);
 
+        vm.warp(block.timestamp + 365 days);
+        uint256 grossAssets = vault.totalAssets();
+        assertGt(grossAssets, amount);
+        (uint256 feeAssets, uint256 feeShares) = vault.crystallizeYieldFee();
+        assertGt(feeAssets, 0);
+        assertGt(feeShares, 0);
+        assertEq(vault.balanceOf(feeRecipient), feeShares);
+
         vault.withdraw(4e6, address(this), address(this));
         assertEq(IERC20(USDC).balanceOf(address(this)), 4e6);
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
-        assertApproxEqAbs(IERC20(USDC).balanceOf(address(this)), amount, 5);
+        uint256 feeRecipientShares = vault.balanceOf(feeRecipient);
+        vm.prank(feeRecipient);
+        vault.redeem(feeRecipientShares, feeRecipient, feeRecipient);
+        assertApproxEqAbs(IERC20(USDC).balanceOf(address(this)) + IERC20(USDC).balanceOf(feeRecipient), grossAssets, 10);
         assertEq(vault.balanceOf(address(this)), 0);
         assertGt(shares, 0);
     }

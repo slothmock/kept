@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IYieldStrategy} from "../src/interfaces/IYieldStrategy.sol";
@@ -35,40 +35,6 @@ contract WrongAssetStrategy is IYieldStrategy {
     }
 }
 
-contract ReentrantStrategy is IYieldStrategy {
-    using SafeERC20 for IERC20;
-
-    address public immutable override asset;
-    address public immutable vault;
-    bool public reentered;
-
-    constructor(address vault_, address asset_) {
-        vault = vault_;
-        asset = asset_;
-        IERC20(asset_).forceApprove(vault_, type(uint256).max);
-    }
-
-    function deposit(uint256 assets) external returns (uint256) {
-        require(msg.sender == vault);
-        (reentered,) = vault.call(abi.encodeWithSignature("depositAutomatically(uint256)", 1));
-        return assets;
-    }
-
-    function withdraw(uint256 assets) external returns (uint256) {
-        require(msg.sender == vault);
-        IERC20(asset).safeTransfer(vault, assets);
-        return assets;
-    }
-
-    function totalAssets() external view returns (uint256) {
-        return IERC20(asset).balanceOf(address(this));
-    }
-
-    function availableLiquidity() external view returns (uint256) {
-        return IERC20(asset).balanceOf(address(this));
-    }
-}
-
 contract VaultAndStrategyTest is Test {
     uint256 internal constant USDC = 1e6;
     MockUSDC internal token;
@@ -84,7 +50,7 @@ contract VaultAndStrategyTest is Test {
         token = new MockUSDC();
         aToken = new MockAToken(address(token));
         pool = new MockAavePool(token, aToken);
-        vault = new KeptSavingsVault(IERC20(address(token)), owner);
+        vault = new KeptSavingsVault(IERC20(address(token)), owner, owner, 100, 2_500);
         strategy = new AaveUSDCStrategy(address(vault), address(token), address(pool), address(aToken));
         vm.prank(owner);
         vault.bindStrategy(address(strategy));
@@ -194,44 +160,8 @@ contract VaultAndStrategyTest is Test {
         assertLe(token.balanceOf(attacker), attackerBefore);
     }
 
-    function test_DonationFrontRunCannotConsumeZeroShareAutomaticDeposit() public {
-        vm.warp(1 days);
-        vm.prank(alice);
-        vault.deposit(1, alice);
-        vm.prank(alice);
-        token.transfer(address(vault), 3 * USDC);
-
-        uint256 bobBalanceBefore = token.balanceOf(bob);
-        vm.prank(bob);
-        vm.expectRevert(KeptSavingsVault.ZeroShares.selector);
-        vault.depositAutomatically(1);
-
-        assertEq(token.balanceOf(bob), bobBalanceBefore);
-        assertEq(vault.balanceOf(bob), 0);
-        assertEq(vault.lastAutomaticDepositAt(bob), 0);
-    }
-
-    function test_DonationFrontRunStillCreditsMeaningfulAutomaticDeposit() public {
-        vm.warp(1 days);
-        uint256 attackerBefore = token.balanceOf(alice);
-        vm.prank(alice);
-        vault.deposit(1, alice);
-        vm.prank(alice);
-        token.transfer(address(vault), 100 * USDC);
-
-        vm.prank(bob);
-        uint256 shares = vault.depositAutomatically(50 * USDC);
-
-        assertGt(shares, 0);
-        assertGt(vault.convertToAssets(shares), 49 * USDC);
-        uint256 attackerShares = vault.balanceOf(alice);
-        vm.prank(alice);
-        vault.redeem(attackerShares, alice, alice);
-        assertLe(token.balanceOf(alice), attackerBefore);
-    }
-
     function test_DepositRejectsBeforeStrategyBinding() public {
-        KeptSavingsVault unbound = new KeptSavingsVault(IERC20(address(token)), owner);
+        KeptSavingsVault unbound = new KeptSavingsVault(IERC20(address(token)), owner, owner, 100, 2_500);
         vm.prank(alice);
         token.approve(address(unbound), type(uint256).max);
         vm.prank(alice);
@@ -240,9 +170,6 @@ contract VaultAndStrategyTest is Test {
         vm.prank(alice);
         vm.expectRevert(KeptSavingsVault.StrategyNotBound.selector);
         unbound.mint(1, alice);
-        vm.prank(alice);
-        vm.expectRevert(KeptSavingsVault.StrategyNotBound.selector);
-        unbound.depositAutomatically(1);
     }
 
     function test_StrategyBindingIsOwnerOnlyOneTimeAndMatchingAsset() public {
@@ -253,7 +180,7 @@ contract VaultAndStrategyTest is Test {
         vm.expectRevert(KeptSavingsVault.StrategyAlreadyBound.selector);
         vault.bindStrategy(address(strategy));
 
-        KeptSavingsVault otherVault = new KeptSavingsVault(IERC20(address(token)), owner);
+        KeptSavingsVault otherVault = new KeptSavingsVault(IERC20(address(token)), owner, owner, 100, 2_500);
         MockUSDC other = new MockUSDC();
         WrongAssetStrategy wrong = new WrongAssetStrategy(address(other));
         vm.prank(owner);
@@ -262,8 +189,8 @@ contract VaultAndStrategyTest is Test {
     }
 
     function test_StrategyConstructedForAnotherVaultCannotBeBound() public {
-        KeptSavingsVault intendedVault = new KeptSavingsVault(IERC20(address(token)), owner);
-        KeptSavingsVault wrongVault = new KeptSavingsVault(IERC20(address(token)), owner);
+        KeptSavingsVault intendedVault = new KeptSavingsVault(IERC20(address(token)), owner, owner, 100, 2_500);
+        KeptSavingsVault wrongVault = new KeptSavingsVault(IERC20(address(token)), owner, owner, 100, 2_500);
         AaveUSDCStrategy wrongVaultStrategy =
             new AaveUSDCStrategy(address(wrongVault), address(token), address(pool), address(aToken));
 
@@ -274,7 +201,7 @@ contract VaultAndStrategyTest is Test {
 
     function test_ConstructorValidationRejectsInvalidComponents() public {
         vm.expectRevert(KeptSavingsVault.InvalidAsset.selector);
-        new KeptSavingsVault(IERC20(address(0)), owner);
+        new KeptSavingsVault(IERC20(address(0)), owner, owner, 100, 2_500);
 
         vm.expectRevert(AaveUSDCStrategy.InvalidAsset.selector);
         new AaveUSDCStrategy(address(vault), address(0), address(pool), address(aToken));
@@ -294,7 +221,7 @@ contract VaultAndStrategyTest is Test {
         MockAToken wrongDecimalsAToken = new MockAToken(address(wrongDecimals));
 
         vm.expectRevert(KeptSavingsVault.InvalidAsset.selector);
-        new KeptSavingsVault(IERC20(address(wrongDecimals)), owner);
+        new KeptSavingsVault(IERC20(address(wrongDecimals)), owner, owner, 100, 2_500);
 
         vm.expectRevert(AaveUSDCStrategy.InvalidAsset.selector);
         new AaveUSDCStrategy(address(vault), address(wrongDecimals), address(pool), address(wrongDecimalsAToken));
@@ -311,9 +238,7 @@ contract VaultAndStrategyTest is Test {
         vm.prank(bob);
         vm.expectRevert(Pausable.EnforcedPause.selector);
         vault.mint(1, bob);
-        vm.prank(bob);
-        vm.expectRevert(Pausable.EnforcedPause.selector);
-        vault.depositAutomatically(1);
+
         vm.prank(alice);
         vault.withdraw(40 * USDC, alice, alice);
         uint256 pausedShares = vault.balanceOf(alice);
@@ -331,110 +256,6 @@ contract VaultAndStrategyTest is Test {
         vm.prank(owner);
         vault.unpause();
         assertFalse(vault.paused());
-    }
-
-    function test_AutomaticDepositCreditsCallerAndEnforcesExactCadence() public {
-        vm.warp(1 days);
-        vm.prank(alice);
-        uint256 shares = vault.depositAutomatically(10 * USDC);
-        assertEq(vault.balanceOf(alice), shares);
-        assertEq(vault.lastAutomaticDepositAt(alice), block.timestamp);
-        vm.warp(block.timestamp + 7 days - 1);
-        vm.prank(alice);
-        vm.expectRevert();
-        vault.depositAutomatically(1);
-        vm.warp(block.timestamp + 1);
-        vm.prank(alice);
-        vault.depositAutomatically(1);
-    }
-
-    function test_AutomaticDepositSucceedsAfterSevenDays() public {
-        vm.warp(100);
-        vm.prank(alice);
-        vault.depositAutomatically(1 * USDC);
-        vm.warp(block.timestamp + 7 days + 1);
-        vm.prank(alice);
-        vault.depositAutomatically(1 * USDC);
-    }
-
-    function test_AutomaticDepositRejectsNamedPreBoundaryTimes() public {
-        address afterOneSecond = makeAddr("afterOneSecond");
-        address afterSeventyOneHours = makeAddr("afterSeventyOneHours");
-        address afterSixDays = makeAddr("afterSixDays");
-        address[3] memory accounts = [afterOneSecond, afterSeventyOneHours, afterSixDays];
-        uint256[3] memory elapsed = [uint256(1), 71 hours, 6 days];
-
-        for (uint256 i; i < accounts.length; ++i) {
-            uint256 firstDepositAt = 100 days + i * 20 days;
-            token.mint(accounts[i], 2);
-            vm.prank(accounts[i]);
-            token.approve(address(vault), type(uint256).max);
-            vm.warp(firstDepositAt);
-            vm.prank(accounts[i]);
-            vault.depositAutomatically(1);
-            vm.warp(firstDepositAt + elapsed[i]);
-            vm.prank(accounts[i]);
-            vm.expectRevert(
-                abi.encodeWithSelector(
-                    KeptSavingsVault.AutomaticDepositTooSoon.selector, uint64(firstDepositAt + 7 days)
-                )
-            );
-            vault.depositAutomatically(1);
-        }
-    }
-
-    function test_FailedTransferDoesNotConsumeCadence() public {
-        address empty = makeAddr("empty");
-        vm.warp(100);
-        vm.prank(empty);
-        vm.expectRevert();
-        vault.depositAutomatically(1 * USDC);
-        assertEq(vault.lastAutomaticDepositAt(empty), 0);
-    }
-
-    function test_FailedStrategySupplyDoesNotConsumeCadence() public {
-        vm.warp(100);
-        pool.setFailSupply(true);
-        vm.prank(alice);
-        vm.expectRevert();
-        vault.depositAutomatically(1 * USDC);
-        assertEq(vault.lastAutomaticDepositAt(alice), 0);
-    }
-
-    function test_StrategyCannotReenterAutomaticDepositBeforeCadenceUpdate() public {
-        KeptSavingsVault guardedVault = new KeptSavingsVault(IERC20(address(token)), owner);
-        ReentrantStrategy reentrant = new ReentrantStrategy(address(guardedVault), address(token));
-        vm.prank(owner);
-        guardedVault.bindStrategy(address(reentrant));
-        vm.prank(alice);
-        token.approve(address(guardedVault), 10 * USDC);
-        vm.prank(alice);
-        guardedVault.depositAutomatically(10 * USDC);
-
-        assertFalse(reentrant.reentered());
-        assertEq(guardedVault.lastAutomaticDepositAt(alice), block.timestamp);
-        assertEq(guardedVault.lastAutomaticDepositAt(address(reentrant)), 0);
-    }
-
-    function test_ManualDepositAndWithdrawalDoNotChangeCadence() public {
-        vm.warp(100);
-        vm.prank(alice);
-        vault.depositAutomatically(10 * USDC);
-        uint64 timestamp = vault.lastAutomaticDepositAt(alice);
-        vm.prank(alice);
-        vault.deposit(10 * USDC, alice);
-        vm.prank(alice);
-        vault.withdraw(5 * USDC, alice, alice);
-        assertEq(vault.lastAutomaticDepositAt(alice), timestamp);
-    }
-
-    function test_AutomaticDepositCanBeWithdrawnImmediately() public {
-        vm.prank(alice);
-        vault.depositAutomatically(10 * USDC);
-        uint256 shares = vault.balanceOf(alice);
-        vm.prank(alice);
-        vault.redeem(shares, alice, alice);
-        assertEq(vault.balanceOf(alice), 0);
     }
 
     function test_OnlyVaultCanMoveStrategyAssets() public {
@@ -502,21 +323,6 @@ contract VaultAndStrategyTest is Test {
         assertEq(vault.convertToAssets(vault.balanceOf(alice)), 10 * USDC);
     }
 
-    function testFuzz_AutomaticCadenceBoundary(uint32 elapsed) public {
-        elapsed = uint32(bound(elapsed, 0, 14 days));
-        vm.warp(100);
-        vm.prank(alice);
-        vault.depositAutomatically(1);
-        vm.warp(100 + elapsed);
-        vm.prank(alice);
-        if (elapsed < 7 days) {
-            vm.expectRevert();
-            vault.depositAutomatically(1);
-        } else {
-            vault.depositAutomatically(1);
-        }
-    }
-
     function testFuzz_DepositThenRedeemPreservesAssets(uint96 rawAmount) public {
         uint256 amount = bound(uint256(rawAmount), 1, 1_000 * USDC);
         vm.prank(alice);
@@ -564,10 +370,9 @@ contract VaultAndStrategyTest is Test {
         assertLe(token.balanceOf(alice), attackerBefore);
     }
 
-    function testFuzz_DonationBeforeFirstDepositCannotCreateDepositorProfit(
-        uint64 rawDonation,
-        uint64 rawVictimDeposit
-    ) public {
+    function testFuzz_DonationBeforeFirstDepositCannotCreateDepositorProfit(uint64 rawDonation, uint64 rawVictimDeposit)
+        public
+    {
         uint256 donation = bound(uint256(rawDonation), 1, 1_000 * USDC);
         uint256 victimDeposit = bound(uint256(rawVictimDeposit), 1, 1_000 * USDC);
         uint256 attackerBefore = token.balanceOf(alice);

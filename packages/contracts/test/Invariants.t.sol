@@ -11,15 +11,17 @@ import {MockUSDC, MockAToken, MockAavePool} from "./mocks/MockAave.sol";
 
 contract VaultHandler is Test {
     MockUSDC public immutable token;
+    MockAToken public immutable aToken;
     KeptSavingsVault public immutable vault;
     AaveUSDCStrategy public immutable strategy;
-    uint64 public previousAutomaticDepositAt;
-    bool public cadenceViolation;
+
     bool public strategyAuthorityViolation;
     bool public ownerPrincipalViolation;
+    bool public feeCeilingViolation;
 
-    constructor(MockUSDC token_, KeptSavingsVault vault_, AaveUSDCStrategy strategy_) {
+    constructor(MockUSDC token_, MockAToken aToken_, KeptSavingsVault vault_, AaveUSDCStrategy strategy_) {
         token = token_;
+        aToken = aToken_;
         vault = vault_;
         strategy = strategy_;
         token_.approve(address(vault_), type(uint256).max);
@@ -56,18 +58,28 @@ contract VaultHandler is Test {
         token.transfer(address(vault), amount);
     }
 
-    function automaticDeposit(uint32 elapsed, uint96 rawAmount) external {
-        uint64 last = vault.lastAutomaticDepositAt(address(this));
-        uint256 amount = bound(uint256(rawAmount), 1, 10e6);
-        token.mint(address(this), amount);
-        if (last != 0) vm.warp(uint256(last) + bound(uint256(elapsed), 0, 14 days));
-        try vault.depositAutomatically(amount) {
-            uint64 nowAt = vault.lastAutomaticDepositAt(address(this));
-            if (previousAutomaticDepositAt != 0 && nowAt < previousAutomaticDepositAt + 7 days) {
-                cadenceViolation = true;
-            }
-            previousAutomaticDepositAt = nowAt;
-        } catch {}
+    function accrueYieldAndCrystallize(uint96 rawYield, uint32 rawElapsed) external {
+        uint256 amount = bound(uint256(rawYield), 1, 100e6);
+        uint256 elapsed = bound(uint256(rawElapsed), 1 hours, 30 days);
+        vm.warp(block.timestamp + elapsed);
+        aToken.accrueYield(address(strategy), amount);
+
+        uint256 assets = vault.totalAssets();
+        uint256 profit = assets > vault.highWaterMarkAssets() ? assets - vault.highWaterMarkAssets() : 0;
+        uint256 profitCap = profit * vault.profitFeeCapBps() / vault.BPS_DENOMINATOR();
+        uint256 checkpointAssets = vault.feeCheckpointAssets();
+        uint256 conservativeAssets = checkpointAssets < assets ? checkpointAssets : assets;
+        uint256 assetSeconds =
+            vault.accruedFeeAssetSeconds() + conservativeAssets * (block.timestamp - vault.lastFeeCheckpointAt());
+        uint256 annualCap = assetSeconds * vault.annualFeeCapBps() / (vault.BPS_DENOMINATOR() * vault.FEE_YEAR());
+        uint256 expectedMaximum = profitCap < annualCap ? profitCap : annualCap;
+
+        (uint256 feeAssets,) = vault.crystallizeYieldFee();
+        if (feeAssets > expectedMaximum) feeCeilingViolation = true;
+    }
+
+    function crystallize() external {
+        vault.crystallizeYieldFee();
     }
 
     function callStrategyDirectly(uint96 rawAmount) external {
@@ -104,19 +116,15 @@ contract VaultInvariantTest is StdInvariant, Test {
         token = new MockUSDC();
         aToken = new MockAToken(address(token));
         MockAavePool pool = new MockAavePool(token, aToken);
-        vault = new KeptSavingsVault(IERC20(address(token)), address(this));
+        vault = new KeptSavingsVault(IERC20(address(token)), address(this), address(this), 100, 2_500);
         strategy = new AaveUSDCStrategy(address(vault), address(token), address(pool), address(aToken));
         vault.bindStrategy(address(strategy));
-        handler = new VaultHandler(token, vault, strategy);
+        handler = new VaultHandler(token, aToken, vault, strategy);
         targetContract(address(handler));
     }
 
     function invariant_TotalAssetsEqualsIdlePlusStrategy() public view {
         assertEq(vault.totalAssets(), token.balanceOf(address(vault)) + strategy.totalAssets());
-    }
-
-    function invariant_AutomaticCadenceNeverAdvancesTooSoon() public view {
-        assertFalse(handler.cadenceViolation());
     }
 
     function invariant_StrategyPositionCannotExceedVaultAssets() public view {
@@ -129,6 +137,10 @@ contract VaultInvariantTest is StdInvariant, Test {
 
     function invariant_OwnerOperationsCannotReduceUserShares() public view {
         assertFalse(handler.ownerPrincipalViolation());
+    }
+
+    function invariant_YieldFeesNeverExceedEitherCeiling() public view {
+        assertFalse(handler.feeCeilingViolation());
     }
 }
 

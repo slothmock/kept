@@ -106,25 +106,14 @@ Privy should provide:
 - Monad gas sponsorship.
 - MFA/passkey authorization for sensitive actions.
 - Wallet policies.
-- Delegated signers.
-- Automated account actions.
 - External wallet linking where useful.
 - Recovery/security functionality.
 
-Removing Privy should materially break major product functionality. It is the account, authorization, security, transaction and automation layer.
+Removing Privy should materially break major product functionality. It is the account, authorization, security and transaction layer.
 
-Example automation:
+MVP savings deposits require an explicit user-authorized transaction. Privy may sponsor that Monad transaction, but Kept does not retain delegated saving authority or schedule account actions.
 
-"Save $25 every Friday."
-
-A Privy policy could constrain the delegated signer to:
-
-Maximum amount: $25
-Frequency: once per week
-Asset: approved savings asset
-Destination: Kept savings contract only
-
-The application should never receive unrestricted authority over the user's wallet merely because automation is enabled.
+The application must never receive unrestricted authority over the user's wallet. Deposit authorization must bind the asset, amount, destination vault and receiver.
 
 6. FUNDING KEPT
 
@@ -910,26 +899,9 @@ Target saver flow:
 13. Privy sponsors the relevant Monad transaction.
 14. User sees updated savings and reward progress.
 
-Privy delegated automation is also an MVP/hackathon requirement, not a V1-only feature.
+KEPT-PL-023 removes delegated and scheduled automatic saving from the MVP.
 
-The MVP must demonstrate:
-
-1. The user explicitly enables a narrowly scoped automatic-savings permission.
-2. Kept's backend scheduler decides when to request the configured savings action.
-3. Privy's wallet policy determines whether the requested action is permitted.
-4. The delegated signer is restricted by approved chain, destination, function and amount/period limits.
-5. The user can pause or revoke the automatic-savings permission.
-6. A deliberately unsafe or out-of-policy action is attempted and rejected.
-
-The delegated automatic-saving permission is enforced by layered controls.
-
-Privy wallet policy restricts the permitted chain, destination,
-function, receiver and per-transaction amount.
-
-Kept's savings contract strictly enforces the automatic-saving period.
-
-The backend scheduler decides only when to request an action
-and is never an authorization boundary.
+MVP savings deposits require an explicit user-authorized transaction. Privy may provide the embedded account and sponsor the Monad transaction, but Kept does not retain a delegated savings permission, run an automatic-savings scheduler or expose an automation-specific vault function.
 
 42. HACKATHON ANTI-ABUSE DEMO
 
@@ -984,10 +956,6 @@ MVP:
 - Offchain attestations.
 - Simplified trust/confidence scoring.
 - Behavioural reward from a bounded pre-funded USDC treasury.
-- Restrictive automatic saving with a Privy delegated signer/policy.
-- Backend-triggered scheduled automatic-saving action.
-- User pause/revoke controls for delegated automatic saving.
-- Demonstration that an unsafe or out-of-policy delegated action is rejected.
 - Withdrawal.
 
 V1:

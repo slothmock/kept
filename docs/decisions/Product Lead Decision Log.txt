@@ -225,3 +225,39 @@ Affected teams: Contracts, Backend, Economics, Product/UX, Security, QA.
 Implementation consequence: Constants and epoch validation are deterministic; no product/economic constant remains for Hermes to invent.
 Context file to update: docs/specs/MVP Contract & Reward Specification.md; Product Lead Decision Log; reward economics spec.
 
+DECISION ID: KEPT-PL-021
+
+Date: 13-Sep-2026
+Title: Two risk-differentiated savings vaults
+Status: ACCEPTED
+Decision: Kept will offer two distinct USDC savings vaults. The low-risk vault deploys through the Aave protocol. The high-risk vault deploys into a stablecoin liquidity-provider position intended to provide higher variable yield. Users must choose a vault explicitly; neither vault may represent its return as fixed or guaranteed.
+Reason: Users should be able to select a risk/return profile rather than being placed into one yield source by default.
+Alternatives: One Aave-only vault; runtime strategy switching within one vault; strategy marketplace.
+Affected teams: Contracts, Product/UX, Economics, Security, Wallet/Intents, QA.
+Implementation consequence: This supersedes the single-vault/single-Aave-strategy assumptions in KEPT-PL-004, KEPT-PL-008 and KEPT-PL-015. The current local Aave rail is the low-risk implementation path. The high-risk LP protocol, asset pair, custody/withdrawal mechanics, liquidity constraints, loss disclosure, fee model, and contract topology remain planned and unselected; they must be explicitly specified and security-reviewed before implementation or user-facing funding is enabled.
+Context file to update: docs/specs/MVP Contract & Reward Specification.md; product scope and UX specifications.
+
+DECISION ID: KEPT-PL-022
+
+Date: 14-Sep-2026
+Title: Bounded platform yield fees
+Status: ACCEPTED
+Decision: Each Kept savings vault may retain a transparent fee only from positive strategy yield by minting vault shares to an immutable Kept fee recipient. The standard Aave vault fee is the lesser of a 100-basis-point annualized charge on its checkpointed, flow-adjusted fee basis or 2,500 basis points of eligible positive yield. The enhanced stablecoin-LP vault fee is the lesser of a 200-basis-point annualized charge on its checkpointed, flow-adjusted fee basis or 2,000 basis points of eligible positive yield. For each elapsed interval, the annualized limit uses the lower of the prior checkpoint basis and the currently observed asset balance rather than claiming to reconstruct an unobservable continuous balance path. High-water-mark accounting prevents fees during losses or recovery. Deposits, employer or sponsor contributions, withdrawals and transfers are not yield. Direct unsolicited asset donations are eligible positive yield because the current strategy boundary cannot distinguish them safely. No fee may be taken from principal, no administrator may mint an arbitrary fee or sweep saver assets, and behavioural rewards remain separately pre-funded through RewardController.
+Reason: Kept needs recurring vault revenue while preserving user principal, aligning platform revenue with realized performance and presenting users with a simple net variable rate.
+Alternatives: No vault revenue; an uncapped AUM management fee; a pure percentage-of-performance fee; Kept administrator withdrawal authority; using saver yield directly for behavioural rewards.
+Affected teams: Contracts, Product/UX, Economics, Security, Backend/Indexing, Wallet/Intents, QA.
+Implementation consequence: Fee recipient and fee ceilings are immutable per deployment. The current Aave-backed KeptSavingsVault is the standard profile and must hard-cap configuration at 100 annual basis points and 2,500 positive-yield basis points. Fee shares are created only by deterministic vault accounting, explicit fee crystallization is permissionless, and every deposit, mint, withdrawal and redemption crystallizes any eligible fee before its ERC-4626 share conversion. Fee accounting must be neutral to capital flows, round in savers' favour, reset safely when the vault becomes empty, and receive unit, fuzz, invariant and Monad-fork coverage. The selected enhanced strategy, its 200/2,000 fee profile and its final topology remain blocked on the additional specification and review required by KEPT-PL-021.
+Context file to update: docs/specs/MVP Contract & Reward Specification.md; product scope and UX specifications; deployment configuration and consumer fee disclosures.
+
+DECISION ID: KEPT-PL-023
+
+Date: 14-Sep-2026
+Title: Remove delegated automatic saving from MVP
+Status: ACCEPTED
+Decision: Kept will not expose delegated or scheduled automatic saving in the MVP. Savings deposits remain explicit user-authorized ERC-4626 deposit or mint transactions. There is no automation-specific vault entry point, rolling seven-day deposit cadence, backend savings scheduler, delegated saving permission or unsafe delegated-action demonstration. Privy may still provide embedded accounts and sponsor user-authorized Monad transactions.
+Reason: The MVP will prioritize explicit saver authorization and reduce delegated-key, scheduler and contract-state complexity while the savings, verification, reward and Intents paths are established.
+Alternatives: Retain the layered delegated policy and onchain seven-day cadence; scheduler-only automation; defer only the UI while retaining the contract entry point.
+Affected teams: Contracts, Wallet/Privy, Backend, Product/UX, Privacy/Security, QA, Hackathon submission.
+Implementation consequence: This supersedes KEPT-PL-002 and KEPT-PL-009 and the delegated-automatic-saving portion of KEPT-PL-012. Remove `depositAutomatically`, cadence state/events/tests, scheduler scope and claims that delegated automation is an MVP requirement. Do not weaken explicit authorization or receiver/spender controls for remaining user-authorized and sponsored transactions. Historical specialist handoffs remain unchanged as historical evidence.
+Context file to update: AGENTS.md; docs/Product-Outline.txt; current contract, backend, wallet, UX and privacy/security specifications.
+

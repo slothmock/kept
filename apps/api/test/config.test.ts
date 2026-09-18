@@ -10,12 +10,14 @@ describe("API configuration", () => {
         PRIVY_APP_ID: "privy-app-id",
         PRIVY_JWT_VERIFICATION_KEY: "public-verification-key",
         PORT: "3100",
+        WEB_ORIGIN: "http://localhost:5173",
       }),
     ).toEqual({
       databaseUrl: "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test",
       privyAppId: "privy-app-id",
       privyJwtVerificationKey: "public-verification-key",
       port: 3100,
+      webOrigin: "http://localhost:5173",
     });
   });
 

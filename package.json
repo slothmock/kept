@@ -10,11 +10,14 @@
     "packages/*"
   ],
   "scripts": {
+    "dev:local": "scripts\\dev.bat",
+    "dev:stop": "scripts\\stop.bat",
+    "dev:restart": "npm run dev:stop && npm run dev:local",
     "db:down": "docker compose down -v",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx apps/api/src/db/migrate.ts",
+    "db:migrate": "node --env-file=.env --import tsx apps/api/src/db/migrate.ts",
     "db:up": "docker compose up -d --wait",
-    "api:dev": "tsx apps/api/src/server.ts",
+    "api:dev": "node --env-file=.env --import tsx apps/api/src/server.ts",
     "test": "vitest run",
     "test:contracts": "forge test --root packages/contracts",
     "test:contracts:fork": "forge test --root packages/contracts --match-contract MonadAaveForkTest --network monad",

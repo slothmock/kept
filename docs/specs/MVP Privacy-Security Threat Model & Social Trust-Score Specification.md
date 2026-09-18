@@ -5,6 +5,8 @@
 **Status:** MVP implementation specification  
 **Scope:** Current hackathon MVP only
 
+> **Governance update (KEPT-PL-023):** Delegated automatic saving is removed from the MVP. The delegated-policy threat scenarios below are retained as design history, not current implementation requirements. MVP deposits require explicit user authorization.
+
 ## 1. Security objective
 
 Kept is allowed to make verified behaviour financially consequential.
@@ -501,13 +503,9 @@ not:
 
 ---
 
-# 11. PRIVY DELEGATED-SIGNER SECURITY REQUIREMENT
+# 11. PRIVY USER-AUTHORIZATION SECURITY REQUIREMENT
 
-The Product Lead has already made restrictive delegated automatic saving an MVP requirement.
-
-The security model must assume the Kept scheduler or authorization key could fail or be compromised.
-
-Policy therefore must constrain authorization independently.
+KEPT-PL-023 removes delegated and scheduled automatic saving from the MVP. Every savings deposit requires an explicit user-authorized transaction. Privy may sponsor gas, but sponsorship and application transaction construction must not broaden or alter the user's authorization.
 
 At minimum:
 
@@ -515,19 +513,17 @@ At minimum:
 
 `destination == approved Kept savings flow`
 
-`function == approved deposit function`
+`function == deposit or mint`
 
 `asset == native Monad USDC`
 
-`amount <= user-approved maximum`
-
-`rolling-period amount <= user-approved cap`
+`amount == user-authorized amount`
 
 `receiver == user's own Kept wallet`
 
 `all unrelated actions == denied`
 
-If a separate ERC-20 approval is performed through delegation:
+If a separate ERC-20 approval is required:
 
 `spender == KeptSavingsVault`
 
@@ -535,19 +531,19 @@ and approval amount must itself be bounded.
 
 This detail matters.
 
-A policy that merely permits:
+A transaction authorization that merely displays:
 
-`deposit <= 25 USDC`
+`deposit 25 USDC`
 
-is **not sufficient** when the vault function accepts a freely selectable `receiver`.
+is **not sufficient** unless the vault and receiver are also bound and shown accurately.
 
-A compromised backend could potentially deposit the user's funds while minting vault shares to an attacker.
+Incorrect or compromised transaction construction could otherwise deposit the user's funds while minting vault shares to an attacker.
 
 The receiver argument must therefore also be policy-bound.
 
 Likewise, a policy permitting arbitrary calls to USDC `approve()` would defeat the intended safety model even if the subsequent vault deposit were constrained.
 
-The intentionally rejected hackathon action should test one of these meaningful boundaries, not merely an obviously unrelated RPC call.
+Tests should cover these meaningful receiver, spender, asset and amount boundaries.
 
 ---
 
@@ -633,9 +629,7 @@ QA/backend should seed at least these deterministic cases:
 | Subject signs own attestation | Rejected |
 | Valid YES + valid conflicting NO | CHALLENGED |
 | Replayed previous-epoch attestation | Rejected |
-| Out-of-policy delegated transfer | Privy rejects |
-| Allowed automatic savings deposit | Executes |
-| Allowed amount but attacker-controlled vault receiver | Privy policy rejects |
+| Sponsored transaction differs from user-authorized asset, amount, vault or receiver | Rejected before signing or execution |
 | Reward qualification submitted twice | Second settlement rejected |
 
 ---

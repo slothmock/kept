@@ -3,6 +3,7 @@ export interface ApiConfig {
   readonly privyAppId: string;
   readonly privyJwtVerificationKey: string;
   readonly port: number;
+  readonly webOrigin: string;
 }
 
 function requireValue(environment: NodeJS.ProcessEnv, key: string): string {
@@ -33,5 +34,6 @@ export function loadApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     privyAppId: requireValue(environment, "PRIVY_APP_ID"),
     privyJwtVerificationKey: requireValue(environment, "PRIVY_JWT_VERIFICATION_KEY"),
     port: parsePort(environment.PORT),
+    webOrigin: environment.WEB_ORIGIN?.trim() || "http://localhost:5173",
   };
 }

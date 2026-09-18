@@ -4,6 +4,8 @@
 **Status:** Implementation baseline  
 **Owner:** Backend / Data / Verification Engineer
 
+> **Governance update (KEPT-PL-023):** Delegated and scheduled automatic saving is removed from the MVP. Any automatic-saving scheduler references below are superseded and must not be implemented.
+
 ## 1. Architecture decision
 
 Use a **modular monolith**, not microservices.
@@ -18,7 +20,6 @@ One TypeScript backend owns:
 - social-verification collection;
 - trust-engine integration;
 - Aurora/NEAR Intents persistence;
-- automatic-saving scheduling;
 - RewardController qualification submission;
 - Monad event indexing;
 - background jobs;

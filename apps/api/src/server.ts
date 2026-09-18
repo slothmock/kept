@@ -12,7 +12,7 @@ const app = buildApp({
     verificationKey: config.privyJwtVerificationKey,
   }),
   persistence: new KeptPersistenceService(database.db),
-}, { enableLogging: true });
+}, { enableLogging: true, webOrigin: config.webOrigin });
 
 const close = async () => {
   await app.close();

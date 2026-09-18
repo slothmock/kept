@@ -321,9 +321,8 @@ contract RewardControllerTest is Test {
     function test_PausingRewardControllerDoesNotBlockVaultWithdrawal() public {
         MockAToken aToken = new MockAToken(address(token));
         MockAavePool pool = new MockAavePool(token, aToken);
-        KeptSavingsVault vault = new KeptSavingsVault(IERC20(address(token)), admin);
-        AaveUSDCStrategy strategy =
-            new AaveUSDCStrategy(address(vault), address(token), address(pool), address(aToken));
+        KeptSavingsVault vault = new KeptSavingsVault(IERC20(address(token)), admin, admin, 100, 2_500);
+        AaveUSDCStrategy strategy = new AaveUSDCStrategy(address(vault), address(token), address(pool), address(aToken));
         vm.prank(admin);
         vault.bindStrategy(address(strategy));
         token.mint(alice, 10 * USDC);
@@ -355,11 +354,9 @@ contract RewardControllerTest is Test {
         assertEq(token.balanceOf(address(controller)), 1 * USDC);
     }
 
-    function testFuzz_RewardMatchesIndependentStagedFloorCalculation(
-        uint96 twabRaw,
-        uint16 confidence,
-        uint16 weight
-    ) public {
+    function testFuzz_RewardMatchesIndependentStagedFloorCalculation(uint96 twabRaw, uint16 confidence, uint16 weight)
+        public
+    {
         uint256 twab = bound(uint256(twabRaw), 1, 1_000 * USDC);
         confidence = uint16(bound(uint256(confidence), 1, 10_000));
         weight = uint16(bound(uint256(weight), 1, 10_000));
