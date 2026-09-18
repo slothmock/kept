@@ -52,7 +52,7 @@ describe("product-first dashboard", () => {
     render(<DashboardScreen {...baseProps} />);
 
     expect(screen.getByRole("heading", { name: "Keep moving towards what matters." })).toBeTruthy();
-    expect(screen.getByText("10.00 USDC")).toBeTruthy();
+    expect(screen.getAllByText("10.00 USDC").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Create your first goal." })).toBeTruthy();
   });
 

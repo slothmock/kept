@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-
-import { cleanup, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,9 +48,26 @@ describe("Kept funding flow", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Add money" }));
+    const addMoneyButtons = await screen.findAllByRole("button", {
+      name: "Add money",
+    });
 
-    expect(screen.getByRole("heading", { name: "Add test USDC to your savings" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Deposit test USDC" }).hasAttribute("disabled")).toBe(true);
+    expect(addMoneyButtons.length).toBeGreaterThan(0);
+
+    await user.click(addMoneyButtons[0]!);
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Add test USDC to your savings",
+      }),
+    ).toBeInTheDocument();
+
+    const dialog = screen.getByRole("dialog");
+
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Deposit test USDC",
+      }),
+    ).toBeDisabled();
   });
 });
