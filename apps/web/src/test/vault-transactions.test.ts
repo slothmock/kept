@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildVaultDepositTransactions,
   buildVaultWithdrawTransaction,
-} from "./vault-transactions.js";
+} from "../vault-transactions.js";
 
 const usdc = "0x1111111111111111111111111111111111111111" as const;
 const vault = "0x2222222222222222222222222222222222222222" as const;

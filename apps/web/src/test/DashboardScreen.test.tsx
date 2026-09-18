@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DashboardScreen } from "./screens/DashboardScreen.js";
+import { DashboardScreen } from "../screens/DashboardScreen.js";
 
 const walletAddress = "0x123456789012345678901234567890123456c0de";
 

@@ -17,7 +17,7 @@ vi.mock("@privy-io/react-auth", () => ({
   useLogin: () => ({ login: modalLogin }),
 }));
 
-import { usePrivySession } from "./privy-session.js";
+import { usePrivySession } from "../privy-session.js";
 
 function SessionLoginProbe() {
   const session = usePrivySession();

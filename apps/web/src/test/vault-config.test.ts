@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readVaultConfig } from "./vault-config.js";
+import { readVaultConfig } from "../vault-config.js";
 
 const completeEnvironment = {
   VITE_MONAD_RPC_URL: "https://rpc.example.test",

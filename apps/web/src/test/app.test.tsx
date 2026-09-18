@@ -5,8 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DashboardApp } from "./DashboardApp.js";
-import type { Session } from "./session.js";
+import { DashboardApp } from "../DashboardApp.js";
+import type { Session } from "../session.js";
 
 vi.mock("./kept-evm-wallet.js", () => ({
   useKeptEvmWallet: () => ({ isReady: true, address: null }),

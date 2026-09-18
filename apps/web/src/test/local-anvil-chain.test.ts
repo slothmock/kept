@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localAnvilChain } from "./local-anvil-chain.js";
+import { localAnvilChain } from "../local-anvil-chain.js";
 
 describe("local Anvil chain", () => {
   it("identifies the locally guarded Anvil deployment and its RPC endpoint", () => {

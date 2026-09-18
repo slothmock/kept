@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseUsdcDepositAmount } from "./vault-deposit-input.js";
+import { parseUsdcDepositAmount } from "../vault-deposit-input.js";
 
 describe("USDC deposit input", () => {
   it("converts a whole and fractional USDC amount into six-decimal base units", () => {

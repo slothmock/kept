@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { selectKeptEvmWallet } from "./kept-evm-wallet.js";
+import { selectKeptEvmWallet } from "../kept-evm-wallet.js";
 
 describe("Kept EVM wallet selection", () => {
   it("selects the user's embedded Ethereum wallet instead of a Solana wallet", () => {

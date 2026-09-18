@@ -4,8 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { App } from "./app.js";
-import type { Session } from "./session.js";
+import { App } from "../app.js";
+import type { Session } from "../session.js";
 
 vi.mock("./kept-evm-wallet.js", () => ({
   useKeptEvmWallet: () => ({ isReady: true, address: null }),

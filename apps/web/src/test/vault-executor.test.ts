@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { submitVaultDeposit, submitVaultWithdrawal } from "./vault-executor.js";
+import { submitVaultDeposit, submitVaultWithdrawal } from "../vault-executor.js";
 
 const approval = {
   to: "0x1111111111111111111111111111111111111111" as const,
