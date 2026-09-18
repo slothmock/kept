@@ -7,8 +7,7 @@ import {
 import { DashboardApp } from "./DashboardApp.js";
 import { LandingScreen } from "./screens/LandingScreen.js";
 import { PublicInformationScreen } from "./screens/PublicInformationScreen.js";
-import { VaultsScreen } from "./screens/VaultsScreen.js";
-import type { Session } from "./session.js";
+import type { Session } from "./auth/session.js";
 
 export function App({
   session,
@@ -35,7 +34,6 @@ export function App({
       <Route path="/privacy" element={<PublicInformationScreen page="privacy" />} />
       <Route path="/terms" element={<PublicInformationScreen page="terms" />} />
       <Route path="/verification" element={<PublicInformationScreen page="verification" />} />
-      <Route path="/sponsors" element={<PublicInformationScreen page="sponsors" />} />
 
       <Route
         path="/dashboard"
@@ -51,11 +49,6 @@ export function App({
             />
           )
         }
-      />
-
-      <Route
-        path="/vaults"
-        element={session.isAuthenticated ? <VaultsScreen /> : <Navigate to="/" replace />}
       />
 
       <Route

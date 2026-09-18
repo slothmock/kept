@@ -9,7 +9,6 @@ export function LandingFooter() {
           <Link to="/privacy">Privacy</Link>
           <Link to="/terms">Terms</Link>
           <Link to="/verification">Verification</Link>
-          <Link to="/sponsors">Sponsors</Link>
         </nav>
       </div>
     </footer>

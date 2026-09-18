@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
 import type { Hex } from "viem";
 
-import type { UnsignedVaultTransaction } from "./vault-transactions.js";
+import type { UnsignedVaultTransaction } from "../vault/transactions.js";
 
 export interface KeptTransactionSender {
   sendTransaction(transaction: UnsignedVaultTransaction): Promise<Hex>;

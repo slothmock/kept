@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import type { Session } from "../../session.js";
+import type { Session } from "../../auth/session.js";
 
 export function LandingHero({ session }: { readonly session: Session }) {
   return (

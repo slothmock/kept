@@ -1067,3 +1067,138 @@ h3 {
     margin-left: 0;
   }
 }
+
+/* Product-first dashboard additions */
+.dashboard-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.summary-card__hint {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.goal-progress {
+  margin-top: 18px;
+  display: grid;
+  gap: 7px;
+}
+.goal-progress__track {
+  height: 8px;
+  overflow: hidden;
+  background: var(--neutral);
+  border-radius: 999px;
+}
+.goal-progress__track > span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  border-radius: inherit;
+}
+.goal-progress small {
+  color: var(--muted);
+}
+.commitment-list,
+.goal-detail__commitments {
+  display: grid;
+  gap: 12px;
+}
+.commitment-row {
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.commitment-row h3,
+.commitment-row strong {
+  margin: 0;
+}
+.commitment-row--compact {
+  padding: 15px 16px;
+  background: var(--surface-soft);
+}
+.commitment-row--compact > div {
+  display: grid;
+  gap: 4px;
+}
+.commitment-row--compact span:not(.status-pill) {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.money-panel {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+}
+.money-panel > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.money-panel strong {
+  font-size: 1.65rem;
+  letter-spacing: -0.04em;
+}
+.money-panel span,
+.modal-copy,
+.form-note {
+  color: var(--muted);
+  line-height: 1.55;
+}
+.money-panel__actions {
+  display: flex;
+  gap: 10px;
+}
+.modal-stack {
+  display: grid;
+  gap: 20px;
+}
+.modal-stack h2 {
+  padding-right: 34px;
+}
+.modal-copy,
+.form-note {
+  margin: 8px 0 0;
+}
+.form-note {
+  font-size: 0.88rem;
+}
+.field-label__optional {
+  color: var(--muted);
+  font-weight: 500;
+}
+.choice-card--selected {
+  background: #edf5ee;
+  border-color: #86aa8e;
+  box-shadow: 0 0 0 1px #86aa8e inset;
+}
+.goal-detail {
+  max-height: min(760px, calc(100vh - 48px));
+  overflow-y: auto;
+}
+
+@media (max-width: 680px) {
+  .dashboard-hero__actions,
+  .money-panel__actions {
+    flex-direction: column;
+  }
+  .dashboard-hero__actions .button,
+  .money-panel__actions .button {
+    width: 100%;
+  }
+  .money-panel,
+  .commitment-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

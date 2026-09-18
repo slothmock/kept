@@ -1,5 +1,5 @@
 import { ModalDialog } from "../../components/ModalDialog.js";
-import type { VaultPosition } from "../../vault-position.js";
+import type { VaultPosition } from "../../vault/position.js";
 import { formatUsdc } from "./formatters.js";
 
 interface WithdrawalModalProps {

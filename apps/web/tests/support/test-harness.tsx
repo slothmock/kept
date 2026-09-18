@@ -1,9 +1,9 @@
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
-import { App } from "../app.js";
-import type { Session } from "../session.js";
-import "./styles.css";
+import { App } from "../../src/app.js";
+import type { Session } from "../../src/auth/session.js";
+import "../../src/styles.css";
 
 const session: Session = {
   isReady: true,

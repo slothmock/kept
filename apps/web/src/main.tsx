@@ -7,8 +7,8 @@ import { BrowserRouter } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./app.js";
-import { localAnvilChain } from "./local-anvil-chain.js";
-import { usePrivySession } from "./privy-session.js";
+import { localAnvilChain } from "./chain/local-anvil-chain.js";
+import { usePrivySession } from "./auth/privy-session.js";
 import "./styles.css";
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;

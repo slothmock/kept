@@ -1,4 +1,4 @@
-import type { VaultPosition } from "../../vault-position.js";
+import type { VaultPosition } from "../../vault/position.js";
 
 export type DashboardPositionState =
   | { readonly kind: "unavailable" }

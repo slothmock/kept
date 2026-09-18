@@ -5,15 +5,27 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DashboardApp } from "../DashboardApp.js";
-import type { Session } from "../session.js";
+import { DashboardApp } from "../../src/DashboardApp.js";
+import type { Session } from "../../src/auth/session.js";
 
-vi.mock("./kept-evm-wallet.js", () => ({
+vi.mock("../../src/chain/evm-wallet.js", () => ({
   useKeptEvmWallet: () => ({ isReady: true, address: null }),
 }));
 
-vi.mock("./kept-transaction-sender.js", () => ({
+vi.mock("../../src/chain/transaction-sender.js", () => ({
   useKeptTransactionSender: () => ({ sendTransaction: vi.fn() }),
+}));
+
+vi.mock("../../src/api/kept-api.js", () => ({
+  readApiBaseUrl: () => "http://127.0.0.1:3000",
+  createKeptApi: () => ({
+    listGoals: async () => [],
+    listCommitments: async () => [],
+    createGoal: vi.fn(),
+    createCommitment: vi.fn(),
+    activateCommitment: vi.fn(),
+    cancelCommitment: vi.fn(),
+  }),
 }));
 
 const session: Session = {
@@ -24,7 +36,7 @@ const session: Session = {
   logout: () => undefined,
 };
 
-describe("Kept savings vault funding flow", () => {
+describe("Kept funding flow", () => {
   afterEach(cleanup);
 
   it("keeps the local test deposit control disabled without a configured account", async () => {
