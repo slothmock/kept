@@ -6,7 +6,7 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import {IKeptTreasury} from "interfaces/IKeptTreasury.sol";
+import {IKeptTreasury} from "./interfaces/IKeptTreasury.sol";
 
 contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     enum CommitmentStatus {

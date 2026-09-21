@@ -9,7 +9,7 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import {KeptSavingsVault} from "KeptSavingsVault.sol";
+import {KeptSavingsVault} from "./KeptSavingsVault.sol";
 
 contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
