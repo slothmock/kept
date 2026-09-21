@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Activity, PiggyBank } from "lucide-react";
 
 import type { GoalDto } from "@/api/kept-api";
@@ -61,32 +61,18 @@ export function CreateCommitmentDialog({
 
   const [target, setTarget] = useState("");
 
-  useEffect(() => {
-    if (!open) {
-      setCode(null);
-      setTarget("");
+  function resetForm() {
+    setCode(null);
+    setTarget("");
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      resetForm();
     }
-  }, [open]);
 
-  const dates = useMemo(() => {
-    const startAt = new Date();
-
-    const endAt = new Date(
-      startAt.getTime() +
-      7 * 24 * 60 * 60 * 1000,
-    );
-
-    const verificationDeadline = new Date(
-      endAt.getTime() +
-      24 * 60 * 60 * 1000,
-    );
-
-    return {
-      startAt,
-      endAt,
-      verificationDeadline,
-    };
-  }, [open]);
+    onOpenChange(nextOpen);
+  }
 
   function selectCode(
     nextCode: CommitmentCode,
@@ -104,21 +90,35 @@ export function CreateCommitmentDialog({
       return;
     }
 
+    const startAt = new Date();
+
+    const endAt = new Date(
+      startAt.getTime() +
+      7 * 24 * 60 * 60 * 1000,
+    );
+
+    const verificationDeadline = new Date(
+      endAt.getTime() +
+      24 * 60 * 60 * 1000,
+    );
+
     const created = await onSubmit(goal, {
       code,
       target,
-      ...dates,
+      startAt,
+      endAt,
+      verificationDeadline,
     });
 
     if (created) {
-      onOpenChange(false);
+      handleOpenChange(false);
     }
   }
 
   return (
     <Dialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
     >
       <DialogContent>
         <form

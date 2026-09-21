@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +30,16 @@ export function CreateGoalDialog({ open, submitting, error, onOpenChange, onSubm
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
 
-  useEffect(() => {
-    if (!open) {
-      setName("");
-      setTargetAmount("");
-      setTargetDate("");
-    }
-  }, [open]);
+  function resetForm() {
+    setName("");
+    setTargetAmount("");
+    setTargetDate("");
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) resetForm();
+    onOpenChange(nextOpen);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,11 +48,11 @@ export function CreateGoalDialog({ open, submitting, error, onOpenChange, onSubm
       targetAmount,
       targetDate: targetDate || null,
     });
-    if (created) onOpenChange(false);
+    if (created) handleOpenChange(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <form onSubmit={(event) => void submit(event)} className="space-y-6">
           <DialogHeader>
@@ -101,7 +105,7 @@ export function CreateGoalDialog({ open, submitting, error, onOpenChange, onSubm
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>

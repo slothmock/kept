@@ -2,18 +2,12 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { BrowserRouter } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 
-import { App } from "@/app";
+import { KeptApp } from "@/KeptApp";
 import { localAnvilChain } from "@/chain/local-anvil-chain";
-import { usePrivySession } from "@/auth/privy-session";
 import "@/styles.css";
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 const localAnvilEnabled = import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true";
-
-function KeptApp() {
-  const session = usePrivySession();
-  return <App session={session} />;
-}
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing root element");
