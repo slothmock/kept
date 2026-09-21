@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import type { Session } from "@/auth/session";
 import { DashboardApp } from "@/DashboardApp";
 import { LandingPage } from "@/pages/LandingPage";
-import { PublicInformationScreen } from "@/_legacy/screens/PublicInformationScreen";
+import { PublicInformationScreen } from "@/pages/PublicInformationScreen";
 
 export function App({ session }: { readonly session: Session }) {
   if (!session.isReady) {
