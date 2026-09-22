@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useMemo } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
 import type { Hex } from "viem";
 
@@ -8,13 +8,32 @@ export interface KeptTransactionSender {
   sendTransaction(transaction: UnsignedVaultTransaction): Promise<Hex>;
 }
 
-export function useKeptTransactionSender(): KeptTransactionSender {
+type PrivySendTransaction = (
+  transaction: UnsignedVaultTransaction,
+  options?: { readonly address?: string },
+) => Promise<{ readonly hash: Hex }>;
+
+export function createBoundTransactionSender(
+  sendTransaction: PrivySendTransaction,
+  address: string | null,
+): KeptTransactionSender {
+  return {
+    async sendTransaction(transaction) {
+      if (!address) {
+        throw new Error("Your Kept account is not ready yet.");
+      }
+
+      const result = await sendTransaction(transaction, { address });
+      return result.hash;
+    },
+  };
+}
+
+export function useKeptTransactionSender(address: string | null): KeptTransactionSender {
   const { sendTransaction } = useSendTransaction();
 
-  return {
-    sendTransaction: useCallback(async (transaction) => {
-      const result = await sendTransaction(transaction);
-      return result.hash;
-    }, [sendTransaction]),
-  };
+  return useMemo(
+    () => createBoundTransactionSender(sendTransaction, address),
+    [address, sendTransaction],
+  );
 }

@@ -53,7 +53,7 @@ export function BalanceCard({ positionState, activeGoalCount, transactionPending
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled={transactionPending} onClick={onAddMoney}>
+          <Button disabled={!ready || transactionPending} onClick={onAddMoney}>
             <ArrowDownToLine className="size-4" />
             Add money
           </Button>

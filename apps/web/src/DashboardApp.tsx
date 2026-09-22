@@ -4,6 +4,7 @@ import { createPublicClient, getAddress, http, isAddress } from "viem";
 import { createKeptApi, readApiBaseUrl, type GoalDto } from "@/api/kept-api";
 import { type Session } from "@/auth/session";
 import { useKeptEvmWallet } from "@/chain/evm-wallet";
+import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import { AccountMenu } from "@/components/AccountMenu";
 import { AppShell } from "@/components/AppShell";
@@ -14,7 +15,12 @@ import {
   initialProductDataState,
   type ProductDataState,
 } from "@/features/dashboard/product-data-state";
+import {
+  currentPositionState,
+  type BoundPositionState,
+} from "@/features/dashboard/position-context";
 import type { PositionState } from "@/features/savings/BalanceCard";
+import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
 import { createLatestRequestGate } from "@/lib/latest-request";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { readVaultConfig } from "@/vault/config";
@@ -24,10 +30,6 @@ import { readVaultPosition } from "@/vault/position";
 import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 import { buildVaultDepositTransactions, buildVaultWithdrawTransaction } from "@/vault/transactions";
 
-function displayError(error: unknown): string {
-  return error instanceof Error ? error.message : "We could not complete that request.";
-}
-
 export function DashboardApp({ session }: { readonly session: Session }) {
   const [depositAmount, setDepositAmount] = useState("");
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawStatus, setWithdrawStatus] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [positionState, setPositionState] = useState<PositionState>({ kind: "unavailable" });
+  const [storedPositionState, setStoredPositionState] = useState<BoundPositionState>({ kind: "unavailable" });
   const [productState, setProductState] = useState<ProductDataState>(initialProductDataState);
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [commitmentError, setCommitmentError] = useState<string | null>(null);
 
   const wallet = useKeptEvmWallet();
-  const sender = useKeptTransactionSender();
+  const sender = useKeptTransactionSender(wallet.address);
   const transactionCoordinator = useMemo(() => getVaultTransactionCoordinator(), []);
   const pendingTransaction = useSyncExternalStore(
     transactionCoordinator.subscribe,
@@ -53,30 +55,76 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
   const productRequestGate = useMemo(() => createLatestRequestGate(), []);
   const config = useMemo(() => readVaultConfig(import.meta.env), []);
+  const apiBaseUrl = useMemo(() => readApiBaseUrl(import.meta.env), []);
   const api = useMemo(
-    () => createKeptApi({
-      baseUrl: readApiBaseUrl(import.meta.env),
+    () => apiBaseUrl ? createKeptApi({
+      baseUrl: apiBaseUrl,
       getAccessToken: session.getAccessToken,
-    }),
-    [session.getAccessToken],
+    }) : null,
+    [apiBaseUrl, session.getAccessToken],
   );
   const publicClient = useMemo(
     () => config ? createPublicClient({ transport: http(config.rpcUrl) }) : null,
     [config],
   );
   const account = wallet.address && isAddress(wallet.address) ? getAddress(wallet.address) : null;
+  const positionState: PositionState = currentPositionState(storedPositionState, {
+    account,
+    chainId: wallet.liveChainId,
+  });
+  const getCurrentWalletChainId = wallet.getCurrentChainId;
+  const ensureTransactionNetwork = useCallback(async () => {
+    if (!config || !publicClient) {
+      throw new ConsumerError("Savings are unavailable because Kept is not configured.");
+    }
+
+    const network = await checkNetworkReadiness({
+      expectedChainId: config.chainId,
+      walletChainId: await getCurrentWalletChainId(),
+      rpc: publicClient,
+    });
+    if (!network.ready) throw new ConsumerError(network.message);
+  }, [config, getCurrentWalletChainId, publicClient]);
 
   const refreshPosition = useCallback(async () => {
     const requestId = positionRequestGate.begin();
-    if (!config || !publicClient || !account) {
+    if (!config || !publicClient) {
       if (positionRequestGate.isCurrent(requestId)) {
-        setPositionState({ kind: "unavailable" });
+        setStoredPositionState({ kind: "error", message: "Savings are unavailable because Kept is not configured." });
+      }
+      return;
+    }
+    if (!account) {
+      if (positionRequestGate.isCurrent(requestId)) {
+        setStoredPositionState({ kind: "unavailable" });
       }
       return;
     }
 
-    setPositionState({ kind: "loading" });
+    setStoredPositionState({ kind: "loading" });
     try {
+      const liveWalletChainId = await getCurrentWalletChainId();
+      if (wallet.liveChainId === null || wallet.liveChainId !== liveWalletChainId) {
+        if (positionRequestGate.isCurrent(requestId)) {
+          setStoredPositionState({
+            kind: "error",
+            message: "Your account's network is changing. Try again.",
+          });
+        }
+        return;
+      }
+      const network = await checkNetworkReadiness({
+        expectedChainId: config.chainId,
+        walletChainId: liveWalletChainId,
+        rpc: publicClient,
+      });
+      if (!network.ready) {
+        if (positionRequestGate.isCurrent(requestId)) {
+          setStoredPositionState({ kind: "error", message: network.message });
+        }
+        return;
+      }
+
       const position = await readVaultPosition({
         publicClient: {
           readContract: (input) => publicClient.readContract(input as never) as Promise<bigint>,
@@ -86,18 +134,32 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         account,
       });
       if (positionRequestGate.isCurrent(requestId)) {
-        setPositionState({ kind: "ready", position });
+        setStoredPositionState({
+          kind: "ready",
+          account,
+          chainId: config.chainId,
+          position,
+        });
       }
     } catch (error) {
       if (positionRequestGate.isCurrent(requestId)) {
-        setPositionState({ kind: "error", message: displayError(error) });
+        setStoredPositionState({
+          kind: "error",
+          message: consumerErrorMessage(error, "We could not refresh your savings. Try again."),
+        });
       }
     }
-  }, [account, config, positionRequestGate, publicClient]);
+  }, [account, config, getCurrentWalletChainId, positionRequestGate, publicClient, wallet.liveChainId]);
 
   const refreshProductData = useCallback(async () => {
     const requestId = productRequestGate.begin();
     setProductState(beginProductRefresh);
+    if (!api) {
+      if (productRequestGate.isCurrent(requestId)) {
+        setProductState((current) => failProductRefresh(current, "Kept's service is not configured."));
+      }
+      return;
+    }
     try {
       const [goals, commitments] = await Promise.all([
         api.listGoals(),
@@ -108,7 +170,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       }
     } catch (error) {
       if (productRequestGate.isCurrent(requestId)) {
-        setProductState((current) => failProductRefresh(current, displayError(error)));
+        setProductState((current) => failProductRefresh(
+          current,
+          consumerErrorMessage(error, "We could not refresh your goals and commitments. Try again."),
+        ));
       }
     }
   }, [api, productRequestGate]);
@@ -151,6 +216,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           assets: parsedAmount.assets,
           approval,
           deposit,
+          beforeSend: async () => ensureTransactionNetwork(),
           sender,
           receipts: {
             waitForTransactionReceipt: async ({ hash }) => {
@@ -167,10 +233,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setDepositStatus("Deposit confirmed.");
       } catch (error) {
         setDepositStatus(null);
-        setDepositError(displayError(error));
+        setDepositError(consumerErrorMessage(error, "We could not add your money. Try again."));
       }
     });
-  }, [account, config, depositAmount, positionState, publicClient, refreshPosition, sender, transactionCoordinator]);
+  }, [account, config, depositAmount, ensureTransactionNetwork, positionState, publicClient, refreshPosition, sender, transactionCoordinator]);
 
   const submitWithdrawal = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
@@ -202,6 +268,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       try {
         await submitVaultWithdrawal({
           withdrawal,
+          beforeSend: async () => ensureTransactionNetwork(),
           sender,
           receipts: {
             waitForTransactionReceipt: async ({ hash }) => {
@@ -216,16 +283,21 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setWithdrawStatus("Withdrawal confirmed.");
       } catch (error) {
         setWithdrawStatus(null);
-        setWithdrawError(displayError(error));
+        setWithdrawError(consumerErrorMessage(error, "We could not complete your withdrawal. Try again."));
       }
     });
-  }, [account, config, positionState, publicClient, refreshPosition, sender, transactionCoordinator, withdrawAmount]);
+  }, [account, config, ensureTransactionNetwork, positionState, publicClient, refreshPosition, sender, transactionCoordinator, withdrawAmount]);
 
   const createGoal = useCallback(async (input: {
     readonly name: string;
     readonly targetAmount: string;
     readonly targetDate: string | null;
   }) => {
+    if (!api) {
+      setGoalError("Kept's service is not configured.");
+      return false;
+    }
+
     const name = input.name.trim();
     if (!name) {
       setGoalError("Give your goal a name.");
@@ -249,7 +321,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       await refreshProductData();
       return true;
     } catch (error) {
-      setGoalError(displayError(error));
+      setGoalError(consumerErrorMessage(error, "We could not create your goal. Try again."));
       return false;
     } finally {
       setCreatingGoal(false);
@@ -257,6 +329,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [api, refreshProductData]);
 
   const createCommitment = useCallback(async (goal: GoalDto, input: CreateCommitmentInput) => {
+    if (!api) {
+      setCommitmentError("Kept's service is not configured.");
+      return false;
+    }
+
     const parsed = parseUsdcDepositAmount(input.target);
     if ("error" in parsed || parsed.assets <= 0n) {
       setCommitmentError("Enter a valid weekly savings amount.");
@@ -279,7 +356,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       await refreshProductData();
       return true;
     } catch (error) {
-      setCommitmentError(displayError(error));
+      setCommitmentError(consumerErrorMessage(error, "We could not create your commitment. Try again."));
       return false;
     } finally {
       setCreatingCommitment(false);

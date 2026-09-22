@@ -56,9 +56,17 @@ export interface KeptApi {
 type AccessTokenProvider = () => Promise<string | null>;
 type PublicEnvironment = Readonly<Record<string, string | undefined>>;
 
-export function readApiBaseUrl(environment: PublicEnvironment): string {
+export function readApiBaseUrl(environment: PublicEnvironment): string | null {
   const configured = environment.VITE_KEPT_API_URL?.trim();
-  return configured || "http://127.0.0.1:3000";
+  if (!configured) return null;
+
+  try {
+    const url = new URL(configured);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return configured.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
 }
 
 function idempotencyKey(): string {

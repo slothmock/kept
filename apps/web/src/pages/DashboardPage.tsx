@@ -169,7 +169,6 @@ export function DashboardPage(props: DashboardPageProps) {
       </section>
 
       <div className="flex flex-col gap-2 border-t pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <p>Your savings remain withdrawable regardless of commitment status.</p>
         <button type="button" className="text-left underline-offset-4 hover:underline" onClick={onRefreshPosition}>
           Refresh balance
         </button>

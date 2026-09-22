@@ -17,6 +17,7 @@ export interface SubmitVaultDepositInput {
   readonly assets: bigint;
   readonly approval: UnsignedVaultTransaction;
   readonly deposit: UnsignedVaultTransaction;
+  readonly beforeSend: (transaction: UnsignedVaultTransaction) => Promise<void>;
   readonly sender: TransactionSender;
   readonly receipts: TransactionReceipts;
 }
@@ -28,6 +29,7 @@ export interface SubmittedVaultDeposit {
 
 export interface SubmitVaultWithdrawalInput {
   readonly withdrawal: UnsignedVaultTransaction;
+  readonly beforeSend: (transaction: UnsignedVaultTransaction) => Promise<void>;
   readonly sender: TransactionSender;
   readonly receipts: TransactionReceipts;
 }
@@ -38,9 +40,11 @@ export interface SubmittedVaultWithdrawal {
 
 async function sendAndConfirm(
   transaction: UnsignedVaultTransaction,
+  beforeSend: (transaction: UnsignedVaultTransaction) => Promise<void>,
   sender: TransactionSender,
   receipts: TransactionReceipts,
 ): Promise<Hex> {
+  await beforeSend(transaction);
   const hash = await sender.sendTransaction(transaction);
   const receipt = await receipts.waitForTransactionReceipt({ hash });
 
@@ -56,21 +60,23 @@ export async function submitVaultDeposit({
   assets,
   approval,
   deposit,
+  beforeSend,
   sender,
   receipts,
 }: SubmitVaultDepositInput): Promise<SubmittedVaultDeposit> {
   const approvalHash = allowance < assets
-    ? await sendAndConfirm(approval, sender, receipts)
+    ? await sendAndConfirm(approval, beforeSend, sender, receipts)
     : null;
-  const depositHash = await sendAndConfirm(deposit, sender, receipts);
+  const depositHash = await sendAndConfirm(deposit, beforeSend, sender, receipts);
 
   return { approvalHash, depositHash };
 }
 
 export async function submitVaultWithdrawal({
   withdrawal,
+  beforeSend,
   sender,
   receipts,
 }: SubmitVaultWithdrawalInput): Promise<SubmittedVaultWithdrawal> {
-  return { withdrawalHash: await sendAndConfirm(withdrawal, sender, receipts) };
+  return { withdrawalHash: await sendAndConfirm(withdrawal, beforeSend, sender, receipts) };
 }
