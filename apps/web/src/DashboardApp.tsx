@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPublicClient, getAddress, http, isAddress } from "viem";
 
 import { createKeptApi, readApiBaseUrl, type GoalDto } from "@/api/kept-api";
@@ -9,11 +9,13 @@ import { AccountMenu } from "@/components/AccountMenu";
 import { AppShell } from "@/components/AppShell";
 import type { CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
 import type { PositionState } from "@/features/savings/BalanceCard";
+import { createLatestRequestGate } from "@/lib/latest-request";
 import { DashboardPage, type ProductDataState } from "@/pages/DashboardPage";
 import { readVaultConfig } from "@/vault/config";
 import { parseUsdcDepositAmount } from "@/vault/deposit-input";
 import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
 import { readVaultPosition } from "@/vault/position";
+import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 import { buildVaultDepositTransactions, buildVaultWithdrawTransaction } from "@/vault/transactions";
 
 function displayError(error: unknown): string {
@@ -36,6 +38,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const wallet = useKeptEvmWallet();
   const sender = useKeptTransactionSender();
+  const transactionCoordinator = useMemo(() => getVaultTransactionCoordinator(), []);
+  const pendingTransaction = useSyncExternalStore(
+    transactionCoordinator.subscribe,
+    () => transactionCoordinator.pendingKind,
+    () => null,
+  );
+  const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
   const config = useMemo(() => readVaultConfig(import.meta.env), []);
   const api = useMemo(
     () => createKeptApi({
@@ -51,8 +60,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const account = wallet.address && isAddress(wallet.address) ? getAddress(wallet.address) : null;
 
   const refreshPosition = useCallback(async () => {
+    const requestId = positionRequestGate.begin();
     if (!config || !publicClient || !account) {
-      setPositionState({ kind: "unavailable" });
+      if (positionRequestGate.isCurrent(requestId)) {
+        setPositionState({ kind: "unavailable" });
+      }
       return;
     }
 
@@ -66,11 +78,15 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         vault: config.vault,
         account,
       });
-      setPositionState({ kind: "ready", position });
+      if (positionRequestGate.isCurrent(requestId)) {
+        setPositionState({ kind: "ready", position });
+      }
     } catch (error) {
-      setPositionState({ kind: "error", message: displayError(error) });
+      if (positionRequestGate.isCurrent(requestId)) {
+        setPositionState({ kind: "error", message: displayError(error) });
+      }
     }
-  }, [account, config, publicClient]);
+  }, [account, config, positionRequestGate, publicClient]);
 
   const refreshProductData = useCallback(async () => {
     setProductState((current) => current.kind === "loading" ? current : { kind: "loading" });
@@ -111,8 +127,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       return;
     }
 
-    setDepositError(null);
-    setDepositStatus("Confirm the transaction in your wallet.");
     const [approval, deposit] = buildVaultDepositTransactions({
       usdc: config.usdc,
       vault: config.vault,
@@ -121,31 +135,35 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       chainId: config.chainId,
     });
 
-    try {
-      const result = await submitVaultDeposit({
-        allowance: positionState.position.allowance,
-        assets: parsedAmount.assets,
-        approval,
-        deposit,
-        sender,
-        receipts: {
-          waitForTransactionReceipt: async ({ hash }) => {
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
-            return { status: receipt.status === "success" ? "success" : "reverted" };
+    await transactionCoordinator.run("deposit", async () => {
+      setDepositError(null);
+      setDepositStatus("Confirm the transaction in your wallet.");
+      try {
+        const result = await submitVaultDeposit({
+          allowance: positionState.position.allowance,
+          assets: parsedAmount.assets,
+          approval,
+          deposit,
+          sender,
+          receipts: {
+            waitForTransactionReceipt: async ({ hash }) => {
+              const receipt = await publicClient.waitForTransactionReceipt({ hash });
+              return { status: receipt.status === "success" ? "success" : "reverted" };
+            },
           },
-        },
-      });
-      setDepositStatus(result.approvalHash
-        ? "USDC approved and added. Refreshing your balance…"
-        : "USDC added. Refreshing your balance…");
-      setDepositAmount("");
-      await refreshPosition();
-      setDepositStatus("Deposit confirmed.");
-    } catch (error) {
-      setDepositStatus(null);
-      setDepositError(displayError(error));
-    }
-  }, [account, config, depositAmount, positionState, publicClient, refreshPosition, sender]);
+        });
+        setDepositStatus(result.approvalHash
+          ? "USDC approved and added. Refreshing your balance…"
+          : "USDC added. Refreshing your balance…");
+        setDepositAmount("");
+        await refreshPosition();
+        setDepositStatus("Deposit confirmed.");
+      } catch (error) {
+        setDepositStatus(null);
+        setDepositError(displayError(error));
+      }
+    });
+  }, [account, config, depositAmount, positionState, publicClient, refreshPosition, sender, transactionCoordinator]);
 
   const submitWithdrawal = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
@@ -158,13 +176,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       setWithdrawError(parsedAmount.error);
       return;
     }
-    if (parsedAmount.assets > positionState.position.assets) {
-      setWithdrawError("Enter an amount no greater than your confirmed Kept balance.");
+    if (parsedAmount.assets > positionState.position.withdrawableAssets) {
+      setWithdrawError("Enter an amount no greater than the amount currently available to withdraw.");
       return;
     }
 
-    setWithdrawError(null);
-    setWithdrawStatus("Confirm the withdrawal in your wallet.");
     const withdrawal = buildVaultWithdrawTransaction({
       vault: config.vault,
       receiver: account,
@@ -173,26 +189,30 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       chainId: config.chainId,
     });
 
-    try {
-      await submitVaultWithdrawal({
-        withdrawal,
-        sender,
-        receipts: {
-          waitForTransactionReceipt: async ({ hash }) => {
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
-            return { status: receipt.status === "success" ? "success" : "reverted" };
+    await transactionCoordinator.run("withdraw", async () => {
+      setWithdrawError(null);
+      setWithdrawStatus("Confirm the withdrawal in your wallet.");
+      try {
+        await submitVaultWithdrawal({
+          withdrawal,
+          sender,
+          receipts: {
+            waitForTransactionReceipt: async ({ hash }) => {
+              const receipt = await publicClient.waitForTransactionReceipt({ hash });
+              return { status: receipt.status === "success" ? "success" : "reverted" };
+            },
           },
-        },
-      });
-      setWithdrawStatus("Withdrawal confirmed. Refreshing your balance…");
-      setWithdrawAmount("");
-      await refreshPosition();
-      setWithdrawStatus("Withdrawal confirmed.");
-    } catch (error) {
-      setWithdrawStatus(null);
-      setWithdrawError(displayError(error));
-    }
-  }, [account, config, positionState, publicClient, refreshPosition, sender, withdrawAmount]);
+        });
+        setWithdrawStatus("Withdrawal confirmed. Refreshing your balance…");
+        setWithdrawAmount("");
+        await refreshPosition();
+        setWithdrawStatus("Withdrawal confirmed.");
+      } catch (error) {
+        setWithdrawStatus(null);
+        setWithdrawError(displayError(error));
+      }
+    });
+  }, [account, config, positionState, publicClient, refreshPosition, sender, transactionCoordinator, withdrawAmount]);
 
   const createGoal = useCallback(async (input: {
     readonly name: string;
@@ -288,6 +308,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         withdrawAmount={withdrawAmount}
         withdrawStatus={withdrawStatus}
         withdrawError={withdrawError}
+        pendingTransaction={pendingTransaction}
         creatingGoal={creatingGoal}
         goalError={goalError}
         creatingCommitment={creatingCommitment}

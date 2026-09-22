@@ -28,6 +28,7 @@ interface DashboardPageProps {
   readonly withdrawAmount: string;
   readonly withdrawStatus: string | null;
   readonly withdrawError: string | null;
+  readonly pendingTransaction: "deposit" | "withdraw" | null;
   readonly creatingGoal: boolean;
   readonly goalError: string | null;
   readonly creatingCommitment: boolean;
@@ -76,6 +77,7 @@ export function DashboardPage(props: DashboardPageProps) {
     withdrawAmount,
     withdrawStatus,
     withdrawError,
+    pendingTransaction,
     creatingGoal,
     goalError,
     creatingCommitment,
@@ -128,6 +130,7 @@ export function DashboardPage(props: DashboardPageProps) {
       <BalanceCard
         positionState={positionState}
         activeGoalCount={activeGoals.length}
+        transactionPending={pendingTransaction !== null}
         onAddMoney={() => setDepositOpen(true)}
         onWithdraw={() => setWithdrawOpen(true)}
       />
@@ -201,6 +204,7 @@ export function DashboardPage(props: DashboardPageProps) {
         status={depositStatus}
         error={depositError}
         ready={positionState.kind === "ready" && Boolean(walletAddress)}
+        submitting={pendingTransaction === "deposit"}
         onOpenChange={setDepositOpen}
         onAmountChange={onDepositAmountChange}
         onSubmit={onSubmitDeposit}
@@ -212,6 +216,7 @@ export function DashboardPage(props: DashboardPageProps) {
         amount={withdrawAmount}
         status={withdrawStatus}
         error={withdrawError}
+        submitting={pendingTransaction === "withdraw"}
         onOpenChange={setWithdrawOpen}
         onAmountChange={onWithdrawAmountChange}
         onSubmit={onSubmitWithdrawal}

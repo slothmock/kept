@@ -18,19 +18,25 @@ interface DepositDialogProps {
   readonly status: string | null;
   readonly error: string | null;
   readonly ready: boolean;
+  readonly submitting: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onAmountChange: (value: string) => void;
   readonly onSubmit: () => void;
 }
 
-export function DepositDialog({ open, amount, status, error, ready, onOpenChange, onAmountChange, onSubmit }: DepositDialogProps) {
+export function DepositDialog({ open, amount, status, error, ready, submitting, onOpenChange, onAmountChange, onSubmit }: DepositDialogProps) {
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && submitting) return;
+    onOpenChange(nextOpen);
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <form onSubmit={submit} className="space-y-6">
           <DialogHeader>
@@ -50,6 +56,7 @@ export function DepositDialog({ open, amount, status, error, ready, onOpenChange
                 inputMode="decimal"
                 placeholder="0.00"
                 className="pr-16"
+                disabled={submitting}
               />
               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground">USDC</span>
             </div>
@@ -59,8 +66,10 @@ export function DepositDialog({ open, amount, status, error, ready, onOpenChange
           {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={!ready || !amount.trim()}>Add money</Button>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>Cancel</Button>
+            <Button type="submit" disabled={!ready || submitting || !amount.trim()}>
+              {submitting ? "Adding…" : "Add money"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

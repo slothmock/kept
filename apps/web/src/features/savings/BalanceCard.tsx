@@ -15,13 +15,14 @@ export type PositionState =
 interface BalanceCardProps {
   readonly positionState: PositionState;
   readonly activeGoalCount: number;
+  readonly transactionPending: boolean;
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
 }
 
-export function BalanceCard({ positionState, activeGoalCount, onAddMoney, onWithdraw }: BalanceCardProps) {
+export function BalanceCard({ positionState, activeGoalCount, transactionPending, onAddMoney, onWithdraw }: BalanceCardProps) {
   const ready = positionState.kind === "ready";
-  const canWithdraw = ready && positionState.position.assets > 0n;
+  const canWithdraw = ready && positionState.position.withdrawableAssets > 0n;
 
   return (
     <Card className="overflow-hidden border-primary/10 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--card)_94%,var(--primary)),var(--card))] shadow-none">
@@ -52,11 +53,11 @@ export function BalanceCard({ positionState, activeGoalCount, onAddMoney, onWith
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={onAddMoney}>
+          <Button disabled={transactionPending} onClick={onAddMoney}>
             <ArrowDownToLine className="size-4" />
             Add money
           </Button>
-          <Button variant="outline" disabled={!canWithdraw} onClick={onWithdraw}>
+          <Button variant="outline" disabled={!canWithdraw || transactionPending} onClick={onWithdraw}>
             <ArrowUpFromLine className="size-4" />
             Withdraw
           </Button>

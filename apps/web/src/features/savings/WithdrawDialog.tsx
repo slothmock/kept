@@ -20,19 +20,25 @@ interface WithdrawDialogProps {
   readonly amount: string;
   readonly status: string | null;
   readonly error: string | null;
+  readonly submitting: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onAmountChange: (value: string) => void;
   readonly onSubmit: () => void;
 }
 
-export function WithdrawDialog({ open, position, amount, status, error, onOpenChange, onAmountChange, onSubmit }: WithdrawDialogProps) {
+export function WithdrawDialog({ open, position, amount, status, error, submitting, onOpenChange, onAmountChange, onSubmit }: WithdrawDialogProps) {
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && submitting) return;
+    onOpenChange(nextOpen);
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <form onSubmit={submit} className="space-y-6">
           <DialogHeader>
@@ -43,7 +49,7 @@ export function WithdrawDialog({ open, position, amount, status, error, onOpenCh
           </DialogHeader>
 
           <div className="rounded-lg bg-muted/50 p-3 text-sm">
-            Available: <span className="font-medium tabular-nums">{position ? `${formatUsdc(position.assets)} USDC` : "—"}</span>
+            Available: <span className="font-medium tabular-nums">{position ? `${formatUsdc(position.withdrawableAssets)} USDC` : "—"}</span>
           </div>
 
           <div className="space-y-2">
@@ -56,6 +62,7 @@ export function WithdrawDialog({ open, position, amount, status, error, onOpenCh
                 inputMode="decimal"
                 placeholder="0.00"
                 className="pr-16"
+                disabled={submitting}
               />
               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground">USDC</span>
             </div>
@@ -65,8 +72,10 @@ export function WithdrawDialog({ open, position, amount, status, error, onOpenCh
           {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={!position || position.assets === 0n || !amount.trim()}>Withdraw</Button>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>Cancel</Button>
+            <Button type="submit" disabled={!position || position.withdrawableAssets === 0n || submitting || !amount.trim()}>
+              {submitting ? "Withdrawing…" : "Withdraw"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Target } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 

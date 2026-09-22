@@ -15,6 +15,13 @@ const vaultPositionAbi = [
     inputs: [{ name: "shares", type: "uint256" }],
     outputs: [{ name: "assets", type: "uint256" }],
   },
+  {
+    type: "function",
+    name: "maxWithdraw",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "assets", type: "uint256" }],
+  },
 ] as const;
 
 interface ContractReader {
@@ -26,6 +33,7 @@ export interface VaultPosition {
   readonly allowance: bigint;
   readonly shares: bigint;
   readonly assets: bigint;
+  readonly withdrawableAssets: bigint;
 }
 
 export interface ReadVaultPositionInput {
@@ -61,12 +69,20 @@ export async function readVaultPosition({
       args: [account],
     }),
   ]);
-  const assets = await publicClient.readContract({
-    address: vault,
-    abi: vaultPositionAbi,
-    functionName: "convertToAssets",
-    args: [shares],
-  });
+  const [assets, withdrawableAssets] = await Promise.all([
+    publicClient.readContract({
+      address: vault,
+      abi: vaultPositionAbi,
+      functionName: "convertToAssets",
+      args: [shares],
+    }),
+    publicClient.readContract({
+      address: vault,
+      abi: vaultPositionAbi,
+      functionName: "maxWithdraw",
+      args: [account],
+    }),
+  ]);
 
-  return { usdcBalance, allowance, shares, assets };
+  return { usdcBalance, allowance, shares, assets, withdrawableAssets };
 }
