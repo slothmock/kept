@@ -4,6 +4,8 @@ import { Target } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import keptLogo from "@/assets/img/kept-logo-192x192.png";
+
 interface AppShellProps {
   readonly children: ReactNode;
   readonly headerAction?: ReactNode;
@@ -14,10 +16,17 @@ export function AppShell({ children, headerAction }: AppShellProps) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight" aria-label="Kept home">
-            <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Target className="size-4" />
-            </span>
+          <Link
+            to="/"
+            className="flex items-center gap-2 font-semibold tracking-tight"
+            aria-label="Kept home"
+          >
+            <img
+              src={keptLogo}
+              alt=""
+              className="size-8 object-contain"
+            />
+
             <span>Kept</span>
           </Link>
 
