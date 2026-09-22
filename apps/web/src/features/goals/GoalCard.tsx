@@ -4,7 +4,6 @@ import { ArrowRight, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { CommitmentCard } from "@/features/commitments/CommitmentCard";
 import { formatUsdc } from "@/features/savings/format";
 
@@ -19,12 +18,11 @@ function targetAmount(goal: GoalDto): string {
 interface GoalCardProps {
   readonly goal: GoalDto;
   readonly commitment?: CommitmentDto | undefined;
-  readonly progress?: number | null | undefined;
   readonly onAddCommitment: (goal: GoalDto) => void;
   readonly onOpen: (goal: GoalDto) => void;
 }
 
-export function GoalCard({ goal, commitment, progress, onAddCommitment, onOpen }: GoalCardProps) {
+export function GoalCard({ goal, commitment, onAddCommitment, onOpen }: GoalCardProps) {
   return (
     <Card className="overflow-hidden shadow-none transition-shadow hover:shadow-sm">
       <CardHeader className="gap-4 pb-4">
@@ -37,18 +35,8 @@ export function GoalCard({ goal, commitment, progress, onAddCommitment, onOpen }
         </div>
 
         <div>
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-2xl font-semibold tabular-nums">{targetAmount(goal)} USDC</p>
-              <p className="text-sm text-muted-foreground">target</p>
-            </div>
-            {progress !== null && progress !== undefined && (
-              <p className="text-sm font-medium tabular-nums">{progress.toFixed(0)}%</p>
-            )}
-          </div>
-          {progress !== null && progress !== undefined && (
-            <Progress value={progress} className="mt-3" aria-label={`${progress}% of goal target`} />
-          )}
+          <p className="text-2xl font-semibold tabular-nums">{targetAmount(goal)} USDC</p>
+          <p className="text-sm text-muted-foreground">target</p>
         </div>
       </CardHeader>
 
@@ -71,24 +59,9 @@ export function GoalCard({ goal, commitment, progress, onAddCommitment, onOpen }
             className="w-full rounded-lg border border-dashed p-4 text-left text-sm text-muted-foreground transition hover:border-primary/40 hover:bg-accent/40 hover:text-foreground"
             onClick={() => onAddCommitment(goal)}
           >
-            Add a weekly savings or activity commitment.
+            Add a weekly savings commitment.
           </button>
         )}
-        <div className="rounded-xl border bg-muted/40 p-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Weekly bonus rate</span>
-            <span className="font-medium">0.50%</span>
-          </div>
-
-          <div className="mt-1 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Estimated bonus</span>
-            <span className="font-medium">0.84 USDC</span>
-          </div>
-
-          <p className="mt-2 text-xs text-muted-foreground">
-            Based on your average goal balance this week.
-          </p>
-        </div>
 
         <Button variant="ghost" className="w-full justify-between" onClick={() => onOpen(goal)}>
           Goal details

@@ -8,9 +8,15 @@ import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import { AccountMenu } from "@/components/AccountMenu";
 import { AppShell } from "@/components/AppShell";
 import type { CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
+import {
+  beginProductRefresh,
+  failProductRefresh,
+  initialProductDataState,
+  type ProductDataState,
+} from "@/features/dashboard/product-data-state";
 import type { PositionState } from "@/features/savings/BalanceCard";
 import { createLatestRequestGate } from "@/lib/latest-request";
-import { DashboardPage, type ProductDataState } from "@/pages/DashboardPage";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { readVaultConfig } from "@/vault/config";
 import { parseUsdcDepositAmount } from "@/vault/deposit-input";
 import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
@@ -30,7 +36,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [withdrawStatus, setWithdrawStatus] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [positionState, setPositionState] = useState<PositionState>({ kind: "unavailable" });
-  const [productState, setProductState] = useState<ProductDataState>({ kind: "loading" });
+  const [productState, setProductState] = useState<ProductDataState>(initialProductDataState);
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [creatingCommitment, setCreatingCommitment] = useState(false);
@@ -45,6 +51,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     () => null,
   );
   const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
+  const productRequestGate = useMemo(() => createLatestRequestGate(), []);
   const config = useMemo(() => readVaultConfig(import.meta.env), []);
   const api = useMemo(
     () => createKeptApi({
@@ -89,22 +96,22 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [account, config, positionRequestGate, publicClient]);
 
   const refreshProductData = useCallback(async () => {
-    setProductState((current) => current.kind === "loading" ? current : { kind: "loading" });
+    const requestId = productRequestGate.begin();
+    setProductState(beginProductRefresh);
     try {
       const [goals, commitments] = await Promise.all([
         api.listGoals(),
         api.listCommitments(),
       ]);
-      setProductState({ kind: "ready", goals, commitments });
+      if (productRequestGate.isCurrent(requestId)) {
+        setProductState({ kind: "ready", goals, commitments });
+      }
     } catch (error) {
-      setProductState((current) => ({
-        kind: "error",
-        message: displayError(error),
-        goals: current.kind === "ready" || current.kind === "error" ? current.goals : [],
-        commitments: current.kind === "ready" || current.kind === "error" ? current.commitments : [],
-      }));
+      if (productRequestGate.isCurrent(requestId)) {
+        setProductState((current) => failProductRefresh(current, displayError(error)));
+      }
     }
-  }, [api]);
+  }, [api, productRequestGate]);
 
   useEffect(() => {
     void refreshPosition();
@@ -250,23 +257,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [api, refreshProductData]);
 
   const createCommitment = useCallback(async (goal: GoalDto, input: CreateCommitmentInput) => {
-    let parameters: Readonly<Record<string, unknown>>;
-
-    if (input.code === "WEEKLY_SAVINGS_V1") {
-      const parsed = parseUsdcDepositAmount(input.target);
-      if ("error" in parsed || parsed.assets <= 0n) {
-        setCommitmentError("Enter a valid weekly savings amount.");
-        return false;
-      }
-      parameters = { targetAmountAtomic: parsed.assets.toString(), periodDays: 7 };
-    } else {
-      const count = Number(input.target);
-      if (!Number.isSafeInteger(count) || count <= 0) {
-        setCommitmentError("Enter a whole number of activities greater than zero.");
-        return false;
-      }
-      parameters = { targetCount: count, periodDays: 7 };
+    const parsed = parseUsdcDepositAmount(input.target);
+    if ("error" in parsed || parsed.assets <= 0n) {
+      setCommitmentError("Enter a valid weekly savings amount.");
+      return false;
     }
+    const parameters = { targetAmountAtomic: parsed.assets.toString(), periodDays: 7 };
 
     setCreatingCommitment(true);
     setCommitmentError(null);

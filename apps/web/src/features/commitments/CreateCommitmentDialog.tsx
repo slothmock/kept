@@ -4,7 +4,6 @@ import { Activity, PiggyBank } from "lucide-react";
 import type { GoalDto } from "@/api/kept-api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-import { rewardRateLabel } from "./reward-policy";
+import { COMMITMENT_OPTIONS } from "./options";
 
 export interface CreateCommitmentInput {
-  readonly code:
-  | "WEEKLY_SAVINGS_V1"
-  | "ACTIVITY_COUNT_V1";
+  readonly code: "WEEKLY_SAVINGS_V1";
 
   readonly target: string;
   readonly startAt: Date;
@@ -44,9 +41,7 @@ interface CreateCommitmentDialogProps {
   ) => Promise<boolean>;
 }
 
-type CommitmentCode =
-  | "WEEKLY_SAVINGS_V1"
-  | "ACTIVITY_COUNT_V1";
+type CommitmentCode = "WEEKLY_SAVINGS_V1";
 
 export function CreateCommitmentDialog({
   open,
@@ -167,63 +162,35 @@ export function CreateCommitmentDialog({
                 <PiggyBank className="mb-3 size-5 text-primary" />
 
                 <p className="font-medium">
-                  Save weekly
+                  {COMMITMENT_OPTIONS.WEEKLY_SAVINGS_V1.title}
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Commit to adding an amount
-                  to this goal each week.
+                  {COMMITMENT_OPTIONS.WEEKLY_SAVINGS_V1.description}
                 </p>
-
-                <Badge
-                  variant="secondary"
-                  className="mt-3"
-                >
-                  {rewardRateLabel(
-                    "WEEKLY_SAVINGS_V1",
-                  )}{" "}
-                  weekly bonus
-                </Badge>
               </button>
 
               <button
                 type="button"
-                aria-pressed={
-                  code ===
-                  "ACTIVITY_COUNT_V1"
-                }
-                onClick={() =>
-                  selectCode(
-                    "ACTIVITY_COUNT_V1",
-                  )
-                }
-                className={cn(
-                  "rounded-xl border p-4 text-left transition",
-                  code ===
-                    "ACTIVITY_COUNT_V1"
-                    ? "border-primary bg-accent/60 ring-1 ring-primary/20"
-                    : "hover:bg-muted/50",
-                )}
+                disabled
+                aria-disabled="true"
+                className="cursor-not-allowed rounded-xl border p-4 text-left opacity-60"
               >
                 <Activity className="mb-3 size-5 text-primary" />
 
                 <p className="font-medium">
-                  Stay active
+                  {COMMITMENT_OPTIONS.ACTIVITY_COUNT_V1.title}
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Commit to a number of
-                  activities each week.
+                  {COMMITMENT_OPTIONS.ACTIVITY_COUNT_V1.description}
                 </p>
 
                 <Badge
                   variant="secondary"
                   className="mt-3"
                 >
-                  {rewardRateLabel(
-                    "ACTIVITY_COUNT_V1",
-                  )}{" "}
-                  weekly bonus
+                  {COMMITMENT_OPTIONS.ACTIVITY_COUNT_V1.availabilityLabel}
                 </Badge>
               </button>
             </div>
@@ -233,10 +200,7 @@ export function CreateCommitmentDialog({
             <>
               <div className="space-y-2">
                 <Label htmlFor="commitment-target">
-                  {code ===
-                    "WEEKLY_SAVINGS_V1"
-                    ? "Amount to save each week"
-                    : "Activities to complete each week"}
+                  Amount to save each week
                 </Label>
 
                 <Input
@@ -247,70 +211,14 @@ export function CreateCommitmentDialog({
                       event.target.value,
                     )
                   }
-                  inputMode={
-                    code ===
-                      "WEEKLY_SAVINGS_V1"
-                      ? "decimal"
-                      : "numeric"
-                  }
-                  placeholder={
-                    code ===
-                      "WEEKLY_SAVINGS_V1"
-                      ? "50.00"
-                      : "3"
-                  }
+                  inputMode="decimal"
+                  placeholder="50.00"
                 />
 
                 <p className="text-xs text-muted-foreground">
-                  {code ===
-                    "WEEKLY_SAVINGS_V1"
-                    ? "This is the amount you plan to add to the goal this week."
-                    : "Activities will be verified through your connected activity provider."}
+                  This is the amount you plan to add to the goal this week.
                 </p>
               </div>
-
-              <Card className="bg-muted/40">
-                <CardContent className="space-y-3 pt-6">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium">
-                        Weekly commitment bonus
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">
-                        Earned when this
-                        commitment is verified.
-                      </p>
-                    </div>
-
-                    <Badge variant="secondary">
-                      {rewardRateLabel(code)}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="text-muted-foreground">
-                      Maximum weekly bonus
-                    </span>
-
-                    <span className="font-medium">
-                      {code ===
-                        "WEEKLY_SAVINGS_V1"
-                        ? "2.00 USDC"
-                        : "1.00 USDC"}
-                    </span>
-                  </div>
-
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    Your bonus is calculated
-                    from the average balance
-                    kept in this goal during
-                    the commitment period. You
-                    can withdraw your goal
-                    balance at any time.
-                  </p>
-                </CardContent>
-              </Card>
             </>
           )}
 
@@ -325,7 +233,7 @@ export function CreateCommitmentDialog({
               type="button"
               variant="outline"
               onClick={() =>
-                onOpenChange(false)
+                handleOpenChange(false)
               }
               disabled={submitting}
             >

@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { Session } from "@/auth/session";
 import { Link, useNavigate } from "react-router-dom";
 
+import keptLogo from "@/assets/img/kept-logo-192x192.png";
+
 export function LandingPage({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
@@ -20,17 +22,28 @@ export function LandingPage({ session }: { readonly session: Session }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <Target className="size-4" />
-          </span>
-          Kept
+        <Link
+          to="/"
+          className="flex items-center gap-2 font-semibold tracking-tight"
+          aria-label="Kept home"
+        >
+          <img
+            src={keptLogo}
+            alt=""
+            className="size-8 object-contain"
+          />
+
+          <span>Kept</span>
         </Link>
+
         <div className="flex items-center gap-2">
           <Button variant="ghost" asChild>
             <Link to="/verification">How verification works</Link>
           </Button>
-          <Button onClick={() => void start()}>{session.isAuthenticated ? "Open dashboard" : "Get started"}</Button>
+
+          <Button onClick={() => void start()}>
+            {session.isAuthenticated ? "Open dashboard" : "Get started"}
+          </Button>
         </div>
       </header>
 
@@ -91,8 +104,8 @@ export function LandingPage({ session }: { readonly session: Session }) {
         <section className="border-y bg-card/50">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 sm:px-6 md:grid-cols-3 lg:px-8">
             <Feature icon={<Target className="size-5" />} title="Start with a goal" copy="Define the outcome first. Kept keeps the interface focused on what you are working toward." />
-            <Feature icon={<Check className="size-5" />} title="Make it weekly" copy="Pick a measurable savings or activity commitment small enough to repeat." />
-            <Feature icon={<ShieldCheck className="size-5" />} title="Your money stays yours" copy="Commitments do not lock your savings. Withdraw when you need to." />
+            <Feature icon={<Check className="size-5" />} title="Make it weekly" copy="Pick a measurable savings commitment small enough to repeat." />
+            <Feature icon={<ShieldCheck className="size-5" />} title="Your money stays yours" copy="Commitments do not lock your savings. Withdraw up to the amount currently available." />
           </div>
         </section>
       </main>
