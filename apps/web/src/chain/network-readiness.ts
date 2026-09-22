@@ -1,6 +1,6 @@
 export type NetworkReadiness =
   | { readonly ready: true }
-  | { readonly ready: false; readonly message: string };
+  | { readonly ready: false; readonly message: string; readonly diagnostic: unknown };
 
 interface ChainIdReader {
   getChainId(): Promise<number>;
@@ -29,10 +29,11 @@ export async function checkNetworkReadiness(input: {
   let rpcChainId: number;
   try {
     rpcChainId = await input.rpc.getChainId();
-  } catch {
+  } catch (error) {
     return {
       ready: false,
       message: "Kept's network connection is unavailable. Try again later.",
+      diagnostic: error,
     };
   }
 
@@ -40,6 +41,7 @@ export async function checkNetworkReadiness(input: {
     return {
       ready: false,
       message: "Kept's network connection is unavailable. Try again later.",
+      diagnostic: new Error(`RPC chain mismatch: expected ${input.expectedChainId}, received ${rpcChainId}.`),
     };
   }
 
@@ -47,6 +49,7 @@ export async function checkNetworkReadiness(input: {
     return {
       ready: false,
       message: "Your account is connected to a different network. Switch networks before adding or withdrawing money.",
+      diagnostic: new Error(`Wallet chain mismatch: expected ${input.expectedChainId}, received ${input.walletChainId ?? "unknown"}.`),
     };
   }
 

@@ -26,9 +26,10 @@ describe("network readiness", () => {
       expectedChainId: 143,
       walletChainId: 143,
       rpc: { getChainId: async () => 1 },
-    })).resolves.toEqual({
+    })).resolves.toMatchObject({
       ready: false,
       message: "Kept's network connection is unavailable. Try again later.",
+      diagnostic: expect.any(Error),
     });
   });
 
@@ -41,9 +42,10 @@ describe("network readiness", () => {
           throw new Error("fetch failed for https://private-rpc.example");
         },
       },
-    })).resolves.toEqual({
+    })).resolves.toMatchObject({
       ready: false,
       message: "Kept's network connection is unavailable. Try again later.",
+      diagnostic: expect.objectContaining({ message: "fetch failed for https://private-rpc.example" }),
     });
   });
 
@@ -52,9 +54,10 @@ describe("network readiness", () => {
       expectedChainId: 143,
       walletChainId: 1,
       rpc: { getChainId: async () => 143 },
-    })).resolves.toEqual({
+    })).resolves.toMatchObject({
       ready: false,
       message: "Your account is connected to a different network. Switch networks before adding or withdrawing money.",
+      diagnostic: expect.any(Error),
     });
   });
 

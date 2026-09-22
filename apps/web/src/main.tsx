@@ -5,8 +5,16 @@ import { createRoot } from "react-dom/client";
 import { KeptApp } from "@/KeptApp";
 import { createLocalAnvilChain } from "@/chain/local-anvil-chain";
 import { createMonadChain } from "@/chain/monad-chain";
+import { diagnostics } from "@/lib/diagnostics";
 import { readVaultConfig } from "@/vault/config";
 import "@/styles.css";
+
+window.addEventListener("error", (event) => {
+  diagnostics.error("app.unhandled_error", event.error ?? new Error(event.message));
+});
+window.addEventListener("unhandledrejection", (event) => {
+  diagnostics.error("app.unhandled_rejection", event.reason);
+});
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 const localAnvilEnabled = import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true";

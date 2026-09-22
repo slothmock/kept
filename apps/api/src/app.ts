@@ -63,16 +63,19 @@ function sendError(
   readonly body: { readonly error: { readonly code: string } };
 } {
   if (error instanceof NotFoundError) {
+    request.log.warn({ err: error, errorCode: "NOT_FOUND" }, "API request rejected");
     return { statusCode: 404, body: { error: { code: "NOT_FOUND" } } };
   }
   if (error instanceof PersistenceValidationError) {
+    request.log.warn({ err: error, errorCode: "VALIDATION_ERROR" }, "API request rejected");
     return { statusCode: 400, body: { error: { code: "VALIDATION_ERROR" } } };
   }
   if (error instanceof IdempotencyConflictError) {
+    request.log.warn({ err: error, errorCode: "IDEMPOTENCY_CONFLICT" }, "API request rejected");
     return { statusCode: 409, body: { error: { code: "IDEMPOTENCY_CONFLICT" } } };
   }
   if (error instanceof IncompleteIdempotencyRecordError) {
-    request.log.error(error, "idempotency record was incomplete");
+    request.log.warn({ err: error, errorCode: "REQUEST_IN_PROGRESS" }, "API request rejected");
     return { statusCode: 409, body: { error: { code: "REQUEST_IN_PROGRESS" } } };
   }
 
@@ -151,12 +154,15 @@ export function buildApp(
         : 500;
 
     if (statusCode === 400) {
+      request.log.warn({ err: error, errorCode: "VALIDATION_ERROR" }, "API framework request rejected");
       return reply.code(400).send({ error: { code: "VALIDATION_ERROR" } });
     }
     if (statusCode === 415) {
+      request.log.warn({ err: error, errorCode: "UNSUPPORTED_MEDIA_TYPE" }, "API framework request rejected");
       return reply.code(415).send({ error: { code: "UNSUPPORTED_MEDIA_TYPE" } });
     }
     if (statusCode === 413) {
+      request.log.warn({ err: error, errorCode: "PAYLOAD_TOO_LARGE" }, "API framework request rejected");
       return reply.code(413).send({ error: { code: "PAYLOAD_TOO_LARGE" } });
     }
 
@@ -175,6 +181,7 @@ export function buildApp(
 
     const identity = await dependencies.authenticate(request.headers.authorization);
     if (!identity) {
+      request.log.warn({ errorCode: "UNAUTHENTICATED" }, "API authentication failed");
       await reply.code(401).send({ error: { code: "UNAUTHENTICATED" } });
       return reply;
     }

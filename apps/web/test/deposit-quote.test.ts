@@ -30,4 +30,8 @@ describe("deposit quote state", () => {
   it("does not expose a quote for invalid input", () => {
     expect(currentDepositQuote(readyQuote, "not an amount")).toEqual({ kind: "idle" });
   });
+
+  it("does not request or expose a quote below the minimum deposit", () => {
+    expect(currentDepositQuote(readyQuote, "9.999999")).toEqual({ kind: "idle" });
+  });
 });

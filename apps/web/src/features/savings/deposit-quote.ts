@@ -1,4 +1,4 @@
-import { parseUsdcDepositAmount } from "../../vault/deposit-input.js";
+import { minimumUsdcDepositError, parseUsdcDepositAmount } from "../../vault/deposit-input.js";
 import type { VaultDepositQuote } from "../../vault/fees.js";
 
 export type DepositQuoteState =
@@ -12,7 +12,7 @@ export function currentDepositQuote(
   amount: string,
 ): DepositQuoteState {
   const parsed = parseUsdcDepositAmount(amount);
-  if ("error" in parsed) return { kind: "idle" };
+  if ("error" in parsed || minimumUsdcDepositError(parsed.assets)) return { kind: "idle" };
   if (state.kind === "ready") {
     return parsed.assets === state.quote.assets ? state : { kind: "loading" };
   }

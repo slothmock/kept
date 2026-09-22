@@ -5,6 +5,11 @@ export type ParsedUsdcDepositAmount =
   | { readonly error: string };
 
 const DECIMAL_AMOUNT = /^\d+(?:\.\d+)?$/;
+export const MINIMUM_USDC_DEPOSIT_ASSETS = 10_000_000n;
+
+export function minimumUsdcDepositError(assets: bigint): string | null {
+  return assets < MINIMUM_USDC_DEPOSIT_ASSETS ? "Enter at least 10 USDC." : null;
+}
 
 export function parseUsdcDepositAmount(value: string): ParsedUsdcDepositAmount {
   const trimmed = value.trim();

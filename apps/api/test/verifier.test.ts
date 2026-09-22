@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CommitmentVerifier, FixedRewardPolicy } from "../src/verifier/index.js";
 import type {
@@ -176,22 +176,29 @@ describe("CommitmentVerifier", () => {
   it("returns RETRY when an evidence source is temporarily unavailable", async () => {
     const store = new MemoryStore(commitment());
     const settlement = new SettlementSpy();
+    const onDiagnostic = vi.fn();
+    const sourceError = new Error("RPC unavailable at https://private-rpc.example");
     const verifier = new CommitmentVerifier({
       store,
       settlement,
       weeklySavings: {
         async totalDepositedAtomic() {
-          throw new Error("RPC unavailable");
+          throw sourceError;
         },
       },
       activity: { async countActivities() { return 0; } },
       rewards: new FixedRewardPolicy(5_000_000n),
       now: () => new Date("2026-09-08T12:00:00.000Z"),
+      onDiagnostic,
     });
 
     const result = await verifier.verify("commitment-1");
 
-    expect(result.decision).toEqual({ outcome: "RETRY", reason: "RPC unavailable" });
+    expect(result.decision).toEqual({
+      outcome: "RETRY",
+      reason: "Verification source is temporarily unavailable",
+    });
+    expect(onDiagnostic).toHaveBeenCalledWith("verification.evidence_source_failed", sourceError);
     expect(store.finalized).toBeNull();
     expect(settlement.failed).toBe(false);
   });

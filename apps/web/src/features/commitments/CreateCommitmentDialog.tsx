@@ -62,6 +62,7 @@ export function CreateCommitmentDialog({
   }
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && submitting) return;
     if (!nextOpen) {
       resetForm();
     }
@@ -106,7 +107,8 @@ export function CreateCommitmentDialog({
     });
 
     if (created) {
-      handleOpenChange(false);
+      resetForm();
+      onOpenChange(false);
     }
   }
 
@@ -115,7 +117,7 @@ export function CreateCommitmentDialog({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DialogContent>
+      <DialogContent dismissible={!submitting} aria-busy={submitting}>
         <form
           onSubmit={(event) =>
             void submit(event)

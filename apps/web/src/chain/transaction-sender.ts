@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
 import type { Hex } from "viem";
 
+import { ConsumerError } from "../lib/consumer-error.js";
 import type { UnsignedVaultTransaction } from "../vault/transactions.js";
 
 export interface KeptTransactionSender {
@@ -20,7 +21,10 @@ export function createBoundTransactionSender(
   return {
     async sendTransaction(transaction) {
       if (!address) {
-        throw new Error("Your Kept account is not ready yet.");
+        throw new ConsumerError("Your Kept account is not ready yet.", {
+          code: "wallet_unavailable",
+          cause: new Error("No selected wallet is available for this transaction."),
+        });
       }
 
       const result = await sendTransaction(transaction, { address });

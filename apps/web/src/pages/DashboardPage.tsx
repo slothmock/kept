@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateCommitmentDialog, type CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
 import type { ProductDataState } from "@/features/dashboard/product-data-state";
+import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
 import { CreateGoalDialog } from "@/features/goals/CreateGoalDialog";
 import { GoalCard } from "@/features/goals/GoalCard";
 import { GoalDetailsDialog } from "@/features/goals/GoalDetailsDialog";
@@ -33,8 +34,10 @@ interface DashboardPageProps {
   readonly commitmentError: string | null;
   readonly onDepositAmountChange: (value: string) => void;
   readonly onSubmitDeposit: () => void;
+  readonly onDismissDeposit: () => void;
   readonly onWithdrawAmountChange: (value: string) => void;
   readonly onSubmitWithdrawal: () => void;
+  readonly onDismissWithdrawal: () => void;
   readonly onRefreshPosition: () => void;
   readonly onRefreshProductData: () => void;
   readonly onCreateGoal: (input: {
@@ -43,6 +46,8 @@ interface DashboardPageProps {
     readonly targetDate: string | null;
   }) => Promise<boolean>;
   readonly onCreateCommitment: (goal: GoalDto, input: CreateCommitmentInput) => Promise<boolean>;
+  readonly onDismissGoal: () => void;
+  readonly onDismissCommitment: () => void;
 }
 
 function currentCommitment(goalId: string, commitments: readonly CommitmentDto[]): CommitmentDto | undefined {
@@ -69,12 +74,16 @@ export function DashboardPage(props: DashboardPageProps) {
     commitmentError,
     onDepositAmountChange,
     onSubmitDeposit,
+    onDismissDeposit,
     onWithdrawAmountChange,
     onSubmitWithdrawal,
+    onDismissWithdrawal,
     onRefreshPosition,
     onRefreshProductData,
     onCreateGoal,
     onCreateCommitment,
+    onDismissGoal,
+    onDismissCommitment,
   } = props;
 
   const [depositOpen, setDepositOpen] = useState(false);
@@ -183,9 +192,10 @@ export function DashboardPage(props: DashboardPageProps) {
         status={depositStatus}
         error={depositError}
         quoteState={depositQuoteState}
+        availableBalance={positionState.kind === "ready" ? positionState.position.usdcBalance : null}
         ready={positionState.kind === "ready" && Boolean(walletAddress)}
         submitting={pendingTransaction === "deposit"}
-        onOpenChange={setDepositOpen}
+        onOpenChange={(open) => updateDialogOpenState(open, setDepositOpen, onDismissDeposit)}
         onAmountChange={onDepositAmountChange}
         onSubmit={onSubmitDeposit}
       />
@@ -197,7 +207,7 @@ export function DashboardPage(props: DashboardPageProps) {
         status={withdrawStatus}
         error={withdrawError}
         submitting={pendingTransaction === "withdraw"}
-        onOpenChange={setWithdrawOpen}
+        onOpenChange={(open) => updateDialogOpenState(open, setWithdrawOpen, onDismissWithdrawal)}
         onAmountChange={onWithdrawAmountChange}
         onSubmit={onSubmitWithdrawal}
       />
@@ -206,7 +216,7 @@ export function DashboardPage(props: DashboardPageProps) {
         open={createGoalOpen}
         submitting={creatingGoal}
         error={goalError}
-        onOpenChange={setCreateGoalOpen}
+        onOpenChange={(open) => updateDialogOpenState(open, setCreateGoalOpen, onDismissGoal)}
         onSubmit={onCreateGoal}
       />
 
@@ -216,7 +226,10 @@ export function DashboardPage(props: DashboardPageProps) {
         submitting={creatingCommitment}
         error={commitmentError}
         onOpenChange={(open) => {
-          if (!open) setCommitmentGoal(null);
+          if (!open) {
+            setCommitmentGoal(null);
+            onDismissCommitment();
+          }
         }}
         onSubmit={onCreateCommitment}
       />

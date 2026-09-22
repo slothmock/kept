@@ -37,6 +37,7 @@ export function CreateGoalDialog({ open, submitting, error, onOpenChange, onSubm
   }
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && submitting) return;
     if (!nextOpen) resetForm();
     onOpenChange(nextOpen);
   }
@@ -48,12 +49,15 @@ export function CreateGoalDialog({ open, submitting, error, onOpenChange, onSubm
       targetAmount,
       targetDate: targetDate || null,
     });
-    if (created) handleOpenChange(false);
+    if (created) {
+      resetForm();
+      onOpenChange(false);
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent dismissible={!submitting} aria-busy={submitting}>
         <form onSubmit={(event) => void submit(event)} className="space-y-6">
           <DialogHeader>
             <DialogTitle>Create a goal</DialogTitle>

@@ -1,3 +1,5 @@
+import { ConsumerError } from "../lib/consumer-error.js";
+
 export type GoalStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
 export type CommitmentState = "DRAFT" | "ACTIVE" | "COMPLETED" | "FAILED" | "CANCELLED";
 
@@ -73,6 +75,49 @@ function idempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
+function apiConsumerError(status: number, code: string, cause?: unknown): ConsumerError {
+  if (status === 401 || code === "UNAUTHENTICATED") {
+    return new ConsumerError("Your session has expired. Sign in again.", {
+      code: "authentication_required",
+      cause,
+      diagnosticCode: code,
+    });
+  }
+  if (code === "REQUEST_IN_PROGRESS") {
+    return new ConsumerError("That request is already being processed. Wait a moment and try again.", {
+      code: "request_in_progress",
+      cause,
+      diagnosticCode: code,
+    });
+  }
+  if (status === 409) {
+    return new ConsumerError("That request conflicts with a recent change. Refresh and try again.", {
+      code: "request_conflict",
+      cause,
+      diagnosticCode: code,
+    });
+  }
+  if (status === 404) {
+    return new ConsumerError("We couldn't find that item.", {
+      code: "not_found",
+      cause,
+      diagnosticCode: code,
+    });
+  }
+  if (status === 400 || status === 413 || status === 415) {
+    return new ConsumerError("Check the information and try again.", {
+      code: "validation_failed",
+      cause,
+      diagnosticCode: code,
+    });
+  }
+  return new ConsumerError("Kept is temporarily unavailable. Try again.", {
+    code: "service_unavailable",
+    cause,
+    diagnosticCode: code,
+  });
+}
+
 export function createKeptApi(input: {
   readonly baseUrl: string;
   readonly getAccessToken: AccessTokenProvider;
@@ -81,32 +126,58 @@ export function createKeptApi(input: {
   const fetcher = input.fetcher ?? fetch;
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const accessToken = await input.getAccessToken();
+    let accessToken: string | null;
+    try {
+      accessToken = await input.getAccessToken();
+    } catch (error) {
+      throw new ConsumerError("We couldn't verify your session. Sign in again.", {
+        code: "authentication_required",
+        cause: error,
+      });
+    }
     if (!accessToken) {
-      throw new Error("Your Kept session is not authenticated.");
+      throw new ConsumerError("Your session has expired. Sign in again.", {
+        code: "authentication_required",
+      });
     }
 
     const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${accessToken}`);
     if (init.body) headers.set("content-type", "application/json");
 
-    const response = await fetcher(`${input.baseUrl}${path}`, {
-      ...init,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetcher(`${input.baseUrl}${path}`, {
+        ...init,
+        headers,
+      });
+    } catch (error) {
+      throw new ConsumerError("Kept couldn't connect. Check your connection and try again.", {
+        code: "connection_failed",
+        cause: error,
+      });
+    }
 
     if (!response.ok) {
       let code = `HTTP_${response.status}`;
+      let responseParseError: unknown;
       try {
         const body = await response.json() as { error?: { code?: string } };
         code = body.error?.code ?? code;
-      } catch {
-        // Keep the HTTP status as the fallback error code.
+      } catch (error) {
+        responseParseError = error;
       }
-      throw new Error(`Kept API request failed: ${code}`);
+      throw apiConsumerError(response.status, code, responseParseError);
     }
 
-    return response.json() as Promise<T>;
+    try {
+      return await response.json() as T;
+    } catch (error) {
+      throw new ConsumerError("Kept returned an unexpected response. Try again.", {
+        code: "service_unavailable",
+        cause: error,
+      });
+    }
   }
 
   function post<T>(path: string, body: unknown): Promise<T> {

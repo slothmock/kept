@@ -1,22 +1,35 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowRight, Check, ShieldCheck, Sparkles, Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Session } from "@/auth/session";
+import { consumerErrorMessage } from "@/lib/consumer-error";
+import { diagnostics } from "@/lib/diagnostics";
 import { Link, useNavigate } from "react-router-dom";
 
 import keptLogo from "@/assets/img/kept-logo-192x192.png";
 
 export function LandingPage({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
+  const [signInPending, setSignInPending] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   async function start() {
     if (session.isAuthenticated) {
       navigate("/dashboard");
       return;
     }
-    await session.login();
+    setSignInPending(true);
+    setSignInError(null);
+    try {
+      await session.login();
+    } catch (error) {
+      diagnostics.error("auth.sign_in_failed", error);
+      setSignInError(consumerErrorMessage(error, "We couldn't start sign-in. Try again."));
+    } finally {
+      setSignInPending(false);
+    }
   }
 
   return (
@@ -41,8 +54,8 @@ export function LandingPage({ session }: { readonly session: Session }) {
             <Link to="/verification">How verification works</Link>
           </Button>
 
-          <Button onClick={() => void start()}>
-            {session.isAuthenticated ? "Open dashboard" : "Get started"}
+          <Button onClick={() => void start()} disabled={signInPending}>
+            {session.isAuthenticated ? "Open dashboard" : signInPending ? "Opening sign-in…" : "Get started"}
           </Button>
         </div>
       </header>
@@ -61,14 +74,15 @@ export function LandingPage({ session }: { readonly session: Session }) {
               Kept combines goals, simple weekly commitments, and productive savings without turning your finances into a crypto dashboard.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button size="lg" onClick={() => void start()}>
-                {session.isAuthenticated ? "Open dashboard" : "Create your first goal"}
+              <Button size="lg" onClick={() => void start()} disabled={signInPending}>
+                {session.isAuthenticated ? "Open dashboard" : signInPending ? "Opening sign-in…" : "Create your first goal"}
                 <ArrowRight className="size-4" />
               </Button>
               <Button size="lg" variant="outline" asChild>
                 <Link to="/verification">See how commitments work</Link>
               </Button>
             </div>
+            {signInError ? <p className="mt-3 text-sm text-destructive" role="alert">{signInError}</p> : null}
           </div>
 
           <Card className="overflow-hidden border-primary/10 shadow-xl shadow-primary/5">

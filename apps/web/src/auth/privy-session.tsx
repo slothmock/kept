@@ -15,7 +15,7 @@ export function usePrivySession(): Session {
     isReady: ready,
     isAuthenticated: authenticated,
     getAccessToken,
-    login,
-    logout,
+    login: async () => { await login(); },
+    logout: async () => { await logout(); },
   };
 }

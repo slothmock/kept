@@ -16,6 +16,7 @@ export interface VerifierDependencies {
   readonly settlement: CommitmentSettlementGateway;
   readonly rewards: RewardPolicy;
   readonly now?: () => Date;
+  readonly onDiagnostic?: (event: string, error: unknown) => void;
 }
 
 export interface VerificationResult {
@@ -97,14 +98,12 @@ export class CommitmentVerifier {
           );
       }
     } catch (error) {
+      this.dependencies.onDiagnostic?.("verification.evidence_source_failed", error);
       return {
         commitmentId,
         decision: {
           outcome: "RETRY",
-          reason:
-            error instanceof Error
-              ? error.message
-              : "Verification source failed",
+          reason: "Verification source is temporarily unavailable",
         },
       };
     }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 
+import { diagnostics } from "../lib/diagnostics.js";
 import { parseEvmChainId, parseProviderChainId } from "./network-readiness.js";
 
 interface EthereumProvider {
@@ -28,6 +29,7 @@ export interface KeptEvmWallet {
 export function observeProviderChainId(
   provider: EthereumProvider,
   onChainId: (chainId: number | null) => void,
+  onError: (error: unknown) => void = () => undefined,
 ): () => void {
   let active = true;
   let receivedChainChanged = false;
@@ -41,7 +43,8 @@ export function observeProviderChainId(
     .then((chainId) => {
       if (active && !receivedChainChanged) onChainId(parseProviderChainId(chainId));
     })
-    .catch(() => {
+    .catch((error) => {
+      onError(error);
       if (active && !receivedChainChanged) onChainId(null);
     });
 
@@ -74,10 +77,13 @@ export function useKeptEvmWallet(): KeptEvmWallet {
     let stopObserving: (() => void) | undefined;
     void wallet.getEthereumProvider().then((provider) => {
       if (disposed) return;
-      stopObserving = observeProviderChainId(provider, (chainId) => {
-        setObservedChain({ wallet, chainId });
-      });
-    }).catch(() => {
+      stopObserving = observeProviderChainId(
+        provider,
+        (chainId) => setObservedChain({ wallet, chainId }),
+        (error) => diagnostics.error("wallet.chain_observation_failed", error),
+      );
+    }).catch((error) => {
+      diagnostics.error("wallet.provider_unavailable", error);
       if (!disposed) setObservedChain({ wallet, chainId: null });
     });
 
@@ -93,7 +99,8 @@ export function useKeptEvmWallet(): KeptEvmWallet {
     try {
       const provider = await wallet.getEthereumProvider();
       return parseProviderChainId(await provider.request({ method: "eth_chainId" }));
-    } catch {
+    } catch (error) {
+      diagnostics.error("wallet.chain_read_failed", error);
       return null;
     }
   }, [wallet]);

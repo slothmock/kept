@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { minimumUsdcDepositError, parseUsdcDepositAmount } from "@/vault/deposit-input";
 import { formatBasisPoints } from "@/vault/fees";
 import type { DepositQuoteState } from "./deposit-quote";
 import { formatUsdcPrecise } from "./format";
@@ -22,6 +23,7 @@ interface DepositDialogProps {
   readonly status: string | null;
   readonly error: string | null;
   readonly quoteState: DepositQuoteState;
+  readonly availableBalance: bigint | null;
   readonly ready: boolean;
   readonly submitting: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -29,7 +31,9 @@ interface DepositDialogProps {
   readonly onSubmit: () => void;
 }
 
-export function DepositDialog({ open, amount, status, error, quoteState, ready, submitting, onOpenChange, onAmountChange, onSubmit }: DepositDialogProps) {
+export function DepositDialog({ open, amount, status, error, quoteState, availableBalance, ready, submitting, onOpenChange, onAmountChange, onSubmit }: DepositDialogProps) {
+  const parsedAmount = parseUsdcDepositAmount(amount);
+  const meetsMinimum = !("error" in parsedAmount) && minimumUsdcDepositError(parsedAmount.assets) === null;
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && submitting) return;
     onOpenChange(nextOpen);
@@ -42,12 +46,18 @@ export function DepositDialog({ open, amount, status, error, quoteState, ready, 
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent dismissible={!submitting} aria-busy={submitting}>
         <form onSubmit={submit} className="space-y-6">
           <DialogHeader>
             <DialogTitle>Add money</DialogTitle>
             <DialogDescription>
-              Add USDC to Kept. Your balance remains available to withdraw.
+              Add USDC to your Kept savings. Your money remains available to withdraw.
+            </DialogDescription>
+            <DialogDescription>
+              Available balance: {availableBalance === null ? "…" : formatUsdcPrecise(availableBalance)} USDC
+            </DialogDescription>
+            <DialogDescription>
+              Minimum deposit: 10 USDC
             </DialogDescription>
           </DialogHeader>
 
@@ -118,7 +128,7 @@ export function DepositDialog({ open, amount, status, error, quoteState, ready, 
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>Cancel</Button>
-            <Button type="submit" disabled={!ready || quoteState.kind !== "ready" || submitting || !amount.trim()}>
+            <Button type="submit" disabled={!ready || !meetsMinimum || quoteState.kind !== "ready" || submitting}>
               {submitting ? "Adding…" : "Add money"}
             </Button>
           </DialogFooter>

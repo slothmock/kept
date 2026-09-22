@@ -25,10 +25,11 @@ import {
   type DepositQuoteState,
 } from "@/features/savings/deposit-quote";
 import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
+import { diagnostics } from "@/lib/diagnostics";
 import { createLatestRequestGate } from "@/lib/latest-request";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { readVaultConfig } from "@/vault/config";
-import { parseUsdcDepositAmount } from "@/vault/deposit-input";
+import { minimumUsdcDepositError, parseUsdcDepositAmount } from "@/vault/deposit-input";
 import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
 import { readVaultDepositQuote } from "@/vault/fees";
 import { readVaultPosition } from "@/vault/position";
@@ -83,7 +84,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const getCurrentWalletChainId = wallet.getCurrentChainId;
   const ensureTransactionNetwork = useCallback(async () => {
     if (!config || !publicClient) {
-      throw new ConsumerError("Savings are unavailable because Kept is not configured.");
+      throw new ConsumerError("Savings are unavailable because Kept is not configured.", {
+        code: "service_unavailable",
+      });
     }
 
     const network = await checkNetworkReadiness({
@@ -91,7 +94,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       walletChainId: await getCurrentWalletChainId(),
       rpc: publicClient,
     });
-    if (!network.ready) throw new ConsumerError(network.message);
+    if (!network.ready) {
+      throw new ConsumerError(network.message, {
+        code: "wrong_network",
+        cause: network.diagnostic,
+      });
+    }
   }, [config, getCurrentWalletChainId, publicClient]);
 
   const refreshPosition = useCallback(async () => {
@@ -128,6 +136,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       });
       if (!network.ready) {
         if (positionRequestGate.isCurrent(requestId)) {
+          diagnostics.warn("wallet.network_not_ready", network.diagnostic);
           setStoredPositionState({ kind: "error", message: network.message });
         }
         return;
@@ -151,6 +160,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       }
     } catch (error) {
       if (positionRequestGate.isCurrent(requestId)) {
+        diagnostics.error("vault.position_refresh_failed", error);
         setStoredPositionState({
           kind: "error",
           message: consumerErrorMessage(error, "We could not refresh your savings. Try again."),
@@ -178,6 +188,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       }
     } catch (error) {
       if (productRequestGate.isCurrent(requestId)) {
+        diagnostics.error("api.product_refresh_failed", error);
         setProductState((current) => failProductRefresh(
           current,
           consumerErrorMessage(error, "We could not refresh your goals and commitments. Try again."),
@@ -189,7 +200,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   useEffect(() => {
     const requestId = depositQuoteRequestGate.begin();
     const parsedAmount = parseUsdcDepositAmount(depositAmount);
-    if ("error" in parsedAmount || !config || !publicClient || positionState.kind !== "ready") {
+    if (
+      "error" in parsedAmount
+      || minimumUsdcDepositError(parsedAmount.assets)
+      || !config
+      || !publicClient
+      || positionState.kind !== "ready"
+    ) {
       setStoredDepositQuote({ kind: "idle" });
       return;
     }
@@ -207,6 +224,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       }
     }).catch((error) => {
       if (depositQuoteRequestGate.isCurrent(requestId)) {
+        diagnostics.error("vault.deposit_quote_failed", error);
         setStoredDepositQuote({
           kind: "error",
           assets: parsedAmount.assets,
@@ -230,6 +248,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     const parsedAmount = parseUsdcDepositAmount(depositAmount);
     if ("error" in parsedAmount) {
       setDepositError(parsedAmount.error);
+      return;
+    }
+    const minimumError = minimumUsdcDepositError(parsedAmount.assets);
+    if (minimumError) {
+      setDepositError(minimumError);
       return;
     }
     if (depositQuoteState.kind !== "ready" || depositQuoteState.quote.assets !== parsedAmount.assets) {
@@ -274,6 +297,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         await refreshPosition();
         setDepositStatus("Deposit confirmed.");
       } catch (error) {
+        diagnostics.warn("vault.deposit_failed", error);
         setDepositStatus(null);
         setDepositError(consumerErrorMessage(error, "We could not add your money. Try again."));
       }
@@ -324,6 +348,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         await refreshPosition();
         setWithdrawStatus("Withdrawal confirmed.");
       } catch (error) {
+        diagnostics.warn("vault.withdrawal_failed", error);
         setWithdrawStatus(null);
         setWithdrawError(consumerErrorMessage(error, "We could not complete your withdrawal. Try again."));
       }
@@ -363,6 +388,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       await refreshProductData();
       return true;
     } catch (error) {
+      diagnostics.error("api.goal_create_failed", error);
       setGoalError(consumerErrorMessage(error, "We could not create your goal. Try again."));
       return false;
     } finally {
@@ -398,12 +424,29 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       await refreshProductData();
       return true;
     } catch (error) {
+      diagnostics.error("api.commitment_create_failed", error);
       setCommitmentError(consumerErrorMessage(error, "We could not create your commitment. Try again."));
       return false;
     } finally {
       setCreatingCommitment(false);
     }
   }, [api, refreshProductData]);
+
+  const dismissDeposit = useCallback(() => {
+    setDepositAmount("");
+    setDepositStatus(null);
+    setDepositError(null);
+    setStoredDepositQuote({ kind: "idle" });
+  }, []);
+
+  const dismissWithdrawal = useCallback(() => {
+    setWithdrawAmount("");
+    setWithdrawStatus(null);
+    setWithdrawError(null);
+  }, []);
+
+  const dismissGoal = useCallback(() => setGoalError(null), []);
+  const dismissCommitment = useCallback(() => setCommitmentError(null), []);
 
   if (!session.isReady) {
     return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground" aria-live="polite">Preparing your account…</main>;
@@ -431,12 +474,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         commitmentError={commitmentError}
         onDepositAmountChange={setDepositAmount}
         onSubmitDeposit={() => void submitDeposit()}
+        onDismissDeposit={dismissDeposit}
         onWithdrawAmountChange={setWithdrawAmount}
         onSubmitWithdrawal={() => void submitWithdrawal()}
+        onDismissWithdrawal={dismissWithdrawal}
         onRefreshPosition={() => void refreshPosition()}
         onRefreshProductData={() => void refreshProductData()}
         onCreateGoal={createGoal}
         onCreateCommitment={createCommitment}
+        onDismissGoal={dismissGoal}
+        onDismissCommitment={dismissCommitment}
       />
     </AppShell>
   );

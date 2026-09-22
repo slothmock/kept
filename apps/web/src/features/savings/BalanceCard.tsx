@@ -30,7 +30,7 @@ export function BalanceCard({ positionState, activeGoalCount, transactionPending
         <div>
           <div className="mb-6 flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <WalletCards className="size-4" />
-            Total in Kept
+            Your Kept Vault balance
           </div>
 
           {positionState.kind === "loading" ? (

@@ -1,5 +1,6 @@
 import type { Hex } from "viem";
 
+import { ConsumerError } from "../lib/consumer-error.js";
 import type { UnsignedVaultTransaction } from "./transactions.js";
 
 interface TransactionSender {
@@ -49,7 +50,10 @@ async function sendAndConfirm(
   const receipt = await receipts.waitForTransactionReceipt({ hash });
 
   if (receipt.status !== "success") {
-    throw new Error("The transaction was not confirmed on Monad.");
+    throw new ConsumerError("The transaction was not completed. Your money was not moved.", {
+      code: "contract_reverted",
+      cause: new Error("The transaction was not confirmed on Monad."),
+    });
   }
 
   return hash;

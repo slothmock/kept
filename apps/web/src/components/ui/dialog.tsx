@@ -7,7 +7,18 @@ export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
-export function DialogContent({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Content> & {
+  readonly dismissible?: boolean;
+};
+
+export function DialogContent({
+  className,
+  children,
+  dismissible = true,
+  onEscapeKeyDown,
+  onPointerDownOutside,
+  ...props
+}: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
@@ -17,12 +28,22 @@ export function DialogContent({ className, children, ...props }: React.Component
           className,
         )}
         {...props}
+        onEscapeKeyDown={(event) => {
+          onEscapeKeyDown?.(event);
+          if (!dismissible) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          onPointerDownOutside?.(event);
+          if (!dismissible) event.preventDefault();
+        }}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <X className="size-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {dismissible && (
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <X className="size-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

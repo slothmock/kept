@@ -19,4 +19,20 @@ describe("consumerErrorMessage", () => {
       "We could not complete that request.",
     )).toBe("Your account is connected to a different network.");
   });
+
+  it("maps wallet rejection without exposing the provider message", () => {
+    expect(consumerErrorMessage(
+      { code: 4001, message: "User rejected request with calldata 0xdeadbeef" },
+      "We could not complete that request.",
+    )).toBe("You cancelled the request. No money was moved.");
+  });
+
+  it("maps typed contract reverts without exposing revert details", () => {
+    expect(consumerErrorMessage(
+      Object.assign(new Error("execution reverted: AccessControlUnauthorizedAccount(0x1234)"), {
+        name: "ContractFunctionRevertedError",
+      }),
+      "We could not add your money. Try again.",
+    )).toBe("The transaction was not completed. Your money was not moved.");
+  });
 });
