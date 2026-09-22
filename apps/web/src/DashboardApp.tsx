@@ -20,12 +20,17 @@ import {
   type BoundPositionState,
 } from "@/features/dashboard/position-context";
 import type { PositionState } from "@/features/savings/BalanceCard";
+import {
+  currentDepositQuote,
+  type DepositQuoteState,
+} from "@/features/savings/deposit-quote";
 import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
 import { createLatestRequestGate } from "@/lib/latest-request";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { readVaultConfig } from "@/vault/config";
 import { parseUsdcDepositAmount } from "@/vault/deposit-input";
 import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
+import { readVaultDepositQuote } from "@/vault/fees";
 import { readVaultPosition } from "@/vault/position";
 import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 import { buildVaultDepositTransactions, buildVaultWithdrawTransaction } from "@/vault/transactions";
@@ -34,6 +39,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [depositAmount, setDepositAmount] = useState("");
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
+  const [storedDepositQuote, setStoredDepositQuote] = useState<DepositQuoteState>({ kind: "idle" });
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawStatus, setWithdrawStatus] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -53,6 +59,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     () => null,
   );
   const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
+  const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
   const productRequestGate = useMemo(() => createLatestRequestGate(), []);
   const config = useMemo(() => readVaultConfig(import.meta.env), []);
   const apiBaseUrl = useMemo(() => readApiBaseUrl(import.meta.env), []);
@@ -72,6 +79,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     account,
     chainId: wallet.liveChainId,
   });
+  const depositQuoteState = currentDepositQuote(storedDepositQuote, depositAmount);
   const getCurrentWalletChainId = wallet.getCurrentChainId;
   const ensureTransactionNetwork = useCallback(async () => {
     if (!config || !publicClient) {
@@ -179,6 +187,36 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [api, productRequestGate]);
 
   useEffect(() => {
+    const requestId = depositQuoteRequestGate.begin();
+    const parsedAmount = parseUsdcDepositAmount(depositAmount);
+    if ("error" in parsedAmount || !config || !publicClient || positionState.kind !== "ready") {
+      setStoredDepositQuote({ kind: "idle" });
+      return;
+    }
+
+    setStoredDepositQuote({ kind: "loading" });
+    void readVaultDepositQuote({
+      assets: parsedAmount.assets,
+      vault: config.vault,
+      publicClient: {
+        readContract: (input) => publicClient.readContract(input as never) as Promise<bigint>,
+      },
+    }).then((quote) => {
+      if (depositQuoteRequestGate.isCurrent(requestId)) {
+        setStoredDepositQuote({ kind: "ready", quote });
+      }
+    }).catch((error) => {
+      if (depositQuoteRequestGate.isCurrent(requestId)) {
+        setStoredDepositQuote({
+          kind: "error",
+          assets: parsedAmount.assets,
+          message: consumerErrorMessage(error, "We could not calculate the fees. Try again."),
+        });
+      }
+    });
+  }, [config, depositAmount, depositQuoteRequestGate, positionState.kind, publicClient]);
+
+  useEffect(() => {
     void refreshPosition();
     void refreshProductData();
   }, [refreshPosition, refreshProductData]);
@@ -192,6 +230,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     const parsedAmount = parseUsdcDepositAmount(depositAmount);
     if ("error" in parsedAmount) {
       setDepositError(parsedAmount.error);
+      return;
+    }
+    if (depositQuoteState.kind !== "ready" || depositQuoteState.quote.assets !== parsedAmount.assets) {
+      setDepositError("Wait for the fee details before adding money.");
       return;
     }
     if (parsedAmount.assets > positionState.position.usdcBalance) {
@@ -236,7 +278,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setDepositError(consumerErrorMessage(error, "We could not add your money. Try again."));
       }
     });
-  }, [account, config, depositAmount, ensureTransactionNetwork, positionState, publicClient, refreshPosition, sender, transactionCoordinator]);
+  }, [account, config, depositAmount, depositQuoteState, ensureTransactionNetwork, positionState, publicClient, refreshPosition, sender, transactionCoordinator]);
 
   const submitWithdrawal = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
@@ -378,6 +420,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         depositAmount={depositAmount}
         depositStatus={depositStatus}
         depositError={depositError}
+        depositQuoteState={depositQuoteState}
         withdrawAmount={withdrawAmount}
         withdrawStatus={withdrawStatus}
         withdrawError={withdrawError}

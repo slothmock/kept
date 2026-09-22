@@ -12,6 +12,7 @@ import { GoalCard } from "@/features/goals/GoalCard";
 import { GoalDetailsDialog } from "@/features/goals/GoalDetailsDialog";
 import { BalanceCard, type PositionState } from "@/features/savings/BalanceCard";
 import { DepositDialog } from "@/features/savings/DepositDialog";
+import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 import { WithdrawDialog } from "@/features/savings/WithdrawDialog";
 
 interface DashboardPageProps {
@@ -21,6 +22,7 @@ interface DashboardPageProps {
   readonly depositAmount: string;
   readonly depositStatus: string | null;
   readonly depositError: string | null;
+  readonly depositQuoteState: DepositQuoteState;
   readonly withdrawAmount: string;
   readonly withdrawStatus: string | null;
   readonly withdrawError: string | null;
@@ -56,6 +58,7 @@ export function DashboardPage(props: DashboardPageProps) {
     depositAmount,
     depositStatus,
     depositError,
+    depositQuoteState,
     withdrawAmount,
     withdrawStatus,
     withdrawError,
@@ -179,6 +182,7 @@ export function DashboardPage(props: DashboardPageProps) {
         amount={depositAmount}
         status={depositStatus}
         error={depositError}
+        quoteState={depositQuoteState}
         ready={positionState.kind === "ready" && Boolean(walletAddress)}
         submitting={pendingTransaction === "deposit"}
         onOpenChange={setDepositOpen}
