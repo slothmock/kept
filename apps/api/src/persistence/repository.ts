@@ -4,6 +4,7 @@ import type { CommitmentState, JsonValue } from "../domain/commitments/index.js"
 import type { KeptDatabase } from "../db/client.js";
 import {
   commitmentDefinitions,
+  goalShareAllocations,
   idempotencyRecords,
   savingsGoals,
   userCommitments,
@@ -85,6 +86,31 @@ export class KeptRepository {
     return wallet ?? null;
   }
 
+  async findPrimaryWalletForOwnerOnChain(userId: string, chainId: bigint) {
+    const [wallet] = await this.db
+      .select()
+      .from(wallets)
+      .where(and(
+        eq(wallets.userId, userId),
+        eq(wallets.chainId, chainId),
+        eq(wallets.isPrimary, true),
+      ))
+      .limit(1);
+    return wallet ?? null;
+  }
+
+  async findWalletByChainAddress(chainId: bigint, address: string) {
+    const [wallet] = await this.db
+      .select()
+      .from(wallets)
+      .where(and(
+        eq(wallets.chainId, chainId),
+        sql`lower(${wallets.address}) = lower(${address})`,
+      ))
+      .limit(1);
+    return wallet ?? null;
+  }
+
   async createGoal(input: typeof savingsGoals.$inferInsert) {
     const [goal] = await this.db.insert(savingsGoals).values(input).returning();
     return goal;
@@ -105,6 +131,56 @@ export class KeptRepository {
       .from(savingsGoals)
       .where(eq(savingsGoals.userId, userId))
       .orderBy(desc(savingsGoals.createdAt), desc(savingsGoals.id));
+  }
+
+  async lockGoalsForOwner(userId: string): Promise<void> {
+    await this.db
+      .select({ id: savingsGoals.id })
+      .from(savingsGoals)
+      .where(eq(savingsGoals.userId, userId))
+      .for("update");
+  }
+
+  async appendGoalShareAllocation(input: typeof goalShareAllocations.$inferInsert) {
+    const [allocation] = await this.db.insert(goalShareAllocations).values(input).returning();
+    return allocation;
+  }
+
+  async getGoalAllocatedShares(userId: string, goalId: string): Promise<string> {
+    const [result] = await this.db
+      .select({
+        allocatedSharesAtomic: sql<string>`coalesce(sum(${goalShareAllocations.shareDeltaAtomic}), 0)`,
+      })
+      .from(goalShareAllocations)
+      .where(and(eq(goalShareAllocations.userId, userId), eq(goalShareAllocations.goalId, goalId)));
+    return result?.allocatedSharesAtomic ?? "0";
+  }
+
+  async getTotalAllocatedShares(userId: string): Promise<string> {
+    const [result] = await this.db
+      .select({
+        allocatedSharesAtomic: sql<string>`coalesce(sum(${goalShareAllocations.shareDeltaAtomic}), 0)`,
+      })
+      .from(goalShareAllocations)
+      .where(eq(goalShareAllocations.userId, userId));
+    return result?.allocatedSharesAtomic ?? "0";
+  }
+
+  async getAllocationTotals(userId: string, goalId: string): Promise<{
+    readonly goalAllocatedSharesAtomic: string;
+    readonly totalAllocatedSharesAtomic: string;
+  }> {
+    const [result] = await this.db
+      .select({
+        goalAllocatedSharesAtomic: sql<string>`coalesce(sum(${goalShareAllocations.shareDeltaAtomic}) filter (where ${goalShareAllocations.goalId} = ${goalId}), 0)`,
+        totalAllocatedSharesAtomic: sql<string>`coalesce(sum(${goalShareAllocations.shareDeltaAtomic}), 0)`,
+      })
+      .from(goalShareAllocations)
+      .where(eq(goalShareAllocations.userId, userId));
+    return result ?? {
+      goalAllocatedSharesAtomic: "0",
+      totalAllocatedSharesAtomic: "0",
+    };
   }
 
   async findActiveDefinition(code: string, version: number) {

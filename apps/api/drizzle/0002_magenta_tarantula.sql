@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "wallets_user_chain_primary_unique" ON "wallets" USING btree ("user_id","chain_id") WHERE "wallets"."is_primary" = true;

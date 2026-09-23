@@ -8,6 +8,20 @@
       "when": 1788891982310,
       "tag": "0000_tranquil_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790181723137,
+      "tag": "0001_chief_famine",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790182301670,
+      "tag": "0002_magenta_tarantula",
+      "breakpoints": true
     }
   ]
 }

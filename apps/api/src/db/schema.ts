@@ -62,6 +62,9 @@ export const wallets = pgTable(
   },
   (table) => [
     uniqueIndex("wallets_chain_address_unique").on(table.chainId, sql`lower(${table.address})`),
+    uniqueIndex("wallets_user_chain_primary_unique")
+      .on(table.userId, table.chainId)
+      .where(sql`${table.isPrimary} = true`),
   ],
 );
 
@@ -84,6 +87,28 @@ export const savingsGoals = pgTable(
     unique("savings_goals_id_user_unique").on(table.id, table.userId),
     check("savings_goals_name_not_blank", sql`length(btrim(${table.name})) > 0`),
     check("savings_goals_target_nonnegative", sql`${table.targetAmountAtomic} >= 0`),
+  ],
+);
+
+export const goalShareAllocations = pgTable(
+  "goal_share_allocations",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    goalId: uuid("goal_id").notNull(),
+    shareDeltaAtomic: numeric("share_delta_atomic", { precision: 78, scale: 0 }).notNull(),
+    reason: text("reason").notNull(),
+    transactionHash: text("transaction_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.goalId, table.userId],
+      foreignColumns: [savingsGoals.id, savingsGoals.userId],
+      name: "goal_share_allocations_goal_owner_fk",
+    }),
+    check("goal_share_allocations_delta_nonzero", sql`${table.shareDeltaAtomic} <> 0`),
+    check("goal_share_allocations_reason_not_blank", sql`length(btrim(${table.reason})) > 0`),
   ],
 );
 
@@ -185,6 +210,7 @@ export const schema = {
   users,
   wallets,
   savingsGoals,
+  goalShareAllocations,
   commitmentDefinitions,
   userCommitments,
   idempotencyRecords,

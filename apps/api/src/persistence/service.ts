@@ -23,6 +23,7 @@ import {
   PersistenceValidationError,
 } from "./errors.js";
 import { type CommitmentRecord, KeptRepository } from "./repository.js";
+import type { VaultShareBalanceReader } from "../vault-shares.js";
 
 const IDEMPOTENCY_TTL_MILLISECONDS = 24 * 60 * 60 * 1_000;
 
@@ -78,6 +79,14 @@ export interface CommitmentDto {
   readonly updatedAt: string;
 }
 
+export interface GoalAllocationDto {
+  readonly goalId: string;
+  readonly allocatedSharesAtomic: string;
+  readonly totalVaultSharesAtomic: string;
+  readonly totalAllocatedSharesAtomic: string;
+  readonly unallocatedSharesAtomic: string;
+}
+
 function requireNonBlank(value: string, field: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -93,6 +102,17 @@ function requireAtomicAmount(value: string): string {
     );
   }
   return value;
+}
+
+function requireSignedAtomicShareDelta(value: string): bigint {
+  if (!/^-?\d{1,78}$/.test(value)) {
+    throw new PersistenceValidationError(
+      "shareDeltaAtomic must be a signed integer with at most 78 digits",
+    );
+  }
+  const delta = BigInt(value);
+  if (delta === 0n) throw new PersistenceValidationError("shareDeltaAtomic must not be zero");
+  return delta;
 }
 
 function parseTimestamp(value: string, field: string): Date {
@@ -271,7 +291,13 @@ function mapCommitment(row: CommitmentRecord): CommitmentDto {
 }
 
 export class KeptPersistenceService {
-  constructor(private readonly db: KeptDatabase) {}
+  constructor(
+    private readonly db: KeptDatabase,
+    private readonly vaultShares?: {
+      readonly reader: VaultShareBalanceReader;
+      readonly chainId: bigint;
+    },
+  ) {}
 
   async createUser(input: {
     readonly privyUserId: string;
@@ -386,6 +412,58 @@ export class KeptPersistenceService {
     return goals.map(mapGoal);
   }
 
+  async getGoalAllocation(userId: string, goalId: string): Promise<GoalAllocationDto | null> {
+    const repository = new KeptRepository(this.db);
+    if (!(await repository.findGoalForOwner(userId, goalId))) return null;
+    return this.readGoalAllocation(repository, userId, goalId);
+  }
+
+  async allocateGoalShares(input: {
+    readonly userId: string;
+    readonly goalId: string;
+    readonly shareDeltaAtomic: string;
+    readonly reason: string;
+    readonly idempotencyKey: string;
+  }): Promise<GoalAllocationDto> {
+    const delta = requireSignedAtomicShareDelta(input.shareDeltaAtomic);
+    const reason = requireNonBlank(input.reason, "reason");
+    const { idempotencyKey, ...request } = input;
+    return this.executeIdempotent(
+      input.userId,
+      "goal:share-allocation:append",
+      idempotencyKey,
+      request,
+      async (repository) => {
+        await repository.lockGoalsForOwner(input.userId);
+        if (!(await repository.findGoalForOwner(input.userId, input.goalId))) {
+          throw new NotFoundError("Savings goal");
+        }
+        const { shares } = await this.readVaultShares(repository, input.userId);
+        const allocationTotals = await repository.getAllocationTotals(input.userId, input.goalId);
+        const currentGoalAllocation = BigInt(allocationTotals.goalAllocatedSharesAtomic);
+        const totalAllocation = BigInt(allocationTotals.totalAllocatedSharesAtomic);
+        const nextGoalAllocation = currentGoalAllocation + delta;
+        const nextTotalAllocation = totalAllocation + delta;
+        if (nextGoalAllocation < 0n) {
+          throw new PersistenceValidationError("Goal allocation cannot become negative");
+        }
+        if (nextTotalAllocation > shares) {
+          throw new PersistenceValidationError("Goal allocations exceed current vault shares");
+        }
+        await repository.appendGoalShareAllocation({
+          id: randomUUID(),
+          userId: input.userId,
+          goalId: input.goalId,
+          shareDeltaAtomic: delta.toString(),
+          reason,
+          transactionHash: null,
+          createdAt: new Date(),
+        });
+        return this.toGoalAllocationDto(input.goalId, nextGoalAllocation, nextTotalAllocation, shares);
+      },
+    );
+  }
+
   async createCommitmentDraft(input: {
     readonly userId: string;
     readonly idempotencyKey: string;
@@ -486,6 +564,16 @@ export class KeptPersistenceService {
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
       throw new PersistenceValidationError("expectedVersion must be a positive safe integer");
     }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(input.settlementOwner)) {
+      throw new PersistenceValidationError("settlementOwner must be an EVM address");
+    }
+    if (!Number.isSafeInteger(input.settlementChainId) || input.settlementChainId < 1) {
+      throw new PersistenceValidationError("settlementChainId must be a positive safe integer");
+    }
+    if (![1, 2, 3, 4].includes(input.settlementStatus)) {
+      throw new PersistenceValidationError("settlementStatus is invalid");
+    }
+    const settlementRef = encodeOnchainCommitmentId(input.onchainCommitmentId);
     const { idempotencyKey, ...request } = input;
     return this.executeIdempotent(
       input.userId,
@@ -499,6 +587,38 @@ export class KeptPersistenceService {
         );
         if (!current) {
           throw new NotFoundError("Commitment");
+        }
+
+        const wallet = await repository.findWalletByChainAddress(
+          BigInt(input.settlementChainId),
+          input.settlementOwner,
+        );
+        if (wallet && wallet.userId !== input.userId) {
+          throw new PersistenceValidationError(
+            "The commitment wallet is already associated with another account",
+          );
+        }
+        if (!wallet) {
+          await repository.createWallet({
+            id: randomUUID(),
+            userId: input.userId,
+            privyWalletId: null,
+            walletKind: "commitment_signer",
+            chainId: BigInt(input.settlementChainId),
+            address: input.settlementOwner,
+            isPrimary: false,
+            createdAt: new Date(),
+          });
+        }
+
+        if (["ACTIVE", "COMPLETED", "FAILED", "CANCELLED"].includes(current.state)) {
+          if (
+            current.opaqueSettlementRef
+            && Buffer.from(current.opaqueSettlementRef).equals(Buffer.from(settlementRef))
+          ) {
+            return mapCommitment(current);
+          }
+          throw new PersistenceValidationError("Active commitment settlement does not match");
         }
 
         const validatedParameters = validateCatalogueReference(
@@ -647,6 +767,50 @@ export class KeptPersistenceService {
         return mapCommitment(cancelled);
       },
     );
+  }
+
+  private async readGoalAllocation(
+    repository: KeptRepository,
+    userId: string,
+    goalId: string,
+  ): Promise<GoalAllocationDto> {
+    const { shares } = await this.readVaultShares(repository, userId);
+    const allocationTotals = await repository.getAllocationTotals(userId, goalId);
+    const allocatedShares = BigInt(allocationTotals.goalAllocatedSharesAtomic);
+    const totalAllocatedShares = BigInt(allocationTotals.totalAllocatedSharesAtomic);
+    return this.toGoalAllocationDto(goalId, allocatedShares, totalAllocatedShares, shares);
+  }
+
+  private async readVaultShares(
+    repository: KeptRepository,
+    userId: string,
+  ): Promise<{ readonly shares: bigint }> {
+    if (!this.vaultShares) {
+      throw new Error("Vault share reader is not configured");
+    }
+    const wallet = await repository.findPrimaryWalletForOwnerOnChain(
+      userId,
+      this.vaultShares.chainId,
+    );
+    if (!wallet) throw new NotFoundError("Primary Monad wallet");
+    const shares = await this.vaultShares.reader.readShares(wallet.address);
+    if (shares < 0n) throw new Error("Vault returned a negative share balance");
+    return { shares };
+  }
+
+  private toGoalAllocationDto(
+    goalId: string,
+    allocatedShares: bigint,
+    totalAllocatedShares: bigint,
+    vaultShares: bigint,
+  ): GoalAllocationDto {
+    return {
+      goalId,
+      allocatedSharesAtomic: allocatedShares.toString(),
+      totalVaultSharesAtomic: vaultShares.toString(),
+      totalAllocatedSharesAtomic: totalAllocatedShares.toString(),
+      unallocatedSharesAtomic: (vaultShares - totalAllocatedShares).toString(),
+    };
   }
 
   private async executeIdempotent<T>(

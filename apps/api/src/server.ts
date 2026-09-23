@@ -6,6 +6,7 @@ import { loadApiConfig } from "./config.js";
 import { connectDatabase } from "./db/client.js";
 import { KeptPersistenceService } from "./persistence/index.js";
 import { createCommitmentSettlementVerifier } from "./commitment-settlement.js";
+import { createVaultShareBalanceReader } from "./vault-shares.js";
 
 const config = loadApiConfig();
 const database = connectDatabase(config.databaseUrl);

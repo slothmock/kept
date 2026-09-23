@@ -1,4 +1,5 @@
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import type { Hex } from "viem";
 import cors from "@fastify/cors";
 
 import {
@@ -32,6 +33,8 @@ export interface ApiDependencies {
     | "createGoal"
     | "getGoal"
     | "listGoals"
+    | "getGoalAllocation"
+    | "allocateGoalShares"
     | "createCommitmentDraft"
     | "getCommitment"
     | "listCommitments"
@@ -127,6 +130,14 @@ function requireInteger(body: Record<string, unknown>, key: string): number {
     throw new PersistenceValidationError(`${key} must be a safe integer`);
   }
   return value as number;
+}
+
+function requireSignedAtomicShareDelta(body: Record<string, unknown>, key: string): string {
+  const value = requireString(body, key);
+  if (!/^-?\d{1,78}$/.test(value) || BigInt(value) === 0n) {
+    throw new PersistenceValidationError(`${key} must be a non-zero signed integer`);
+  }
+  return value;
 }
 
 function requireIdempotencyKey(request: FastifyRequest): string {
@@ -253,6 +264,17 @@ export function buildApp(
     }),
   );
 
+  app.get<{ Params: { id: string } }>("/v1/goals/:id/allocation", async (request, reply) =>
+    handle(request, reply, async () => {
+      const allocation = await dependencies.persistence.getGoalAllocation(
+        asAuthenticatedRequest(request).user.id,
+        request.params.id,
+      );
+      if (!allocation) throw new NotFoundError("Savings goal");
+      return allocation;
+    }),
+  );
+
   app.post("/v1/goals", async (request, reply) =>
     handle(request, reply, async () => {
       const body = requireObject(request.body);
@@ -272,6 +294,19 @@ export function buildApp(
         name: requireString(body, "name"),
         targetAmountAtomic: requireString(body, "targetAmountAtomic"),
         targetDate,
+      });
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/v1/goals/:id/allocations", async (request, reply) =>
+    handle(request, reply, async () => {
+      const body = requireObject(request.body);
+      return dependencies.persistence.allocateGoalShares({
+        userId: asAuthenticatedRequest(request).user.id,
+        goalId: request.params.id,
+        shareDeltaAtomic: requireSignedAtomicShareDelta(body, "shareDeltaAtomic"),
+        reason: requireString(body, "reason"),
+        idempotencyKey: requireIdempotencyKey(request),
       });
     }),
   );
