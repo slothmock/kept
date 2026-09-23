@@ -56,6 +56,11 @@ if not defined LOCAL_COMMITMENT_VERIFIER (
     goto :error
 )
 
+if not defined LOCAL_TEST_WALLET_ADDRESS (
+    echo ERROR: LOCAL_TEST_WALLET_ADDRESS is not set in .env.local
+    goto :error
+)
+
 echo Environment loaded.
 
 rem --------------------------------------------------
@@ -188,6 +193,51 @@ if "%USDC_CODE%"=="0x" (
 )
 
 echo Contracts verified.
+
+rem --------------------------------------------------
+rem Fund local test wallet with gas
+rem --------------------------------------------------
+
+echo.
+echo Funding local test wallet with gas...
+
+"%CAST%" send %LOCAL_TEST_WALLET_ADDRESS% ^
+    --value 10ether ^
+    --private-key %LOCAL_DEPLOYER_PRIVATE_KEY% ^
+    --rpc-url %RPC_URL%
+
+if errorlevel 1 (
+    echo ERROR: Failed to fund local test wallet with gas.
+    goto :error
+)
+
+echo Funded local test wallet with 10 ETH for gas.
+
+rem --------------------------------------------------
+rem Mint local test USDC
+rem --------------------------------------------------
+
+echo.
+echo Minting local test USDC...
+
+set "LOCAL_TEST_USDC=1000000000"
+
+"%CAST%" send %MOCK_USDC% ^
+    "mint(address,uint256)" ^
+    %LOCAL_TEST_WALLET_ADDRESS% ^
+    %LOCAL_TEST_USDC% ^
+    --private-key %LOCAL_DEPLOYER_PRIVATE_KEY% ^
+    --rpc-url %RPC_URL%
+
+if errorlevel 1 (
+    echo ERROR: Failed to mint local test USDC.
+    goto :error
+)
+
+echo Minted 1000 USDC to:
+echo %LOCAL_TEST_WALLET_ADDRESS%
+
+echo.
 
 rem --------------------------------------------------
 rem Start API
