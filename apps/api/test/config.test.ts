@@ -2,22 +2,34 @@ import { describe, expect, it } from "vitest";
 
 import { loadApiConfig } from "../src/config.js";
 
+const requiredEnvironment = {
+  DATABASE_URL: "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test",
+  PRIVY_APP_ID: "privy-app-id",
+  PRIVY_JWT_VERIFICATION_KEY: "public-verification-key",
+  MONAD_RPC_URL: "https://rpc.monad.example",
+  MONAD_CHAIN_ID: "143",
+  COMMITMENT_MANAGER_ADDRESS: "0x0000000000000000000000000000000000000001",
+  KEPT_SAVINGS_VAULT_ADDRESS: "0x0000000000000000000000000000000000000002",
+} satisfies NodeJS.ProcessEnv;
+
 describe("API configuration", () => {
-  it("loads required database and Privy public verification settings", () => {
+  it("loads required database, Privy, and commitment settlement settings", () => {
     expect(
       loadApiConfig({
-        DATABASE_URL: "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test",
-        PRIVY_APP_ID: "privy-app-id",
-        PRIVY_JWT_VERIFICATION_KEY: "public-verification-key",
+        ...requiredEnvironment,
         PORT: "3100",
-        WEB_ORIGIN: "http://localhost:5173",
+        WEB_ORIGIN: "https://app.kept.example",
       }),
     ).toEqual({
-      databaseUrl: "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test",
+      databaseUrl: requiredEnvironment.DATABASE_URL,
       privyAppId: "privy-app-id",
       privyJwtVerificationKey: "public-verification-key",
       port: 3100,
-      webOrigin: "http://localhost:5173",
+      webOrigin: "https://app.kept.example",
+      monadRpcUrl: "https://rpc.monad.example/",
+      monadChainId: 143,
+      commitmentManagerAddress: "0x0000000000000000000000000000000000000001",
+      keptSavingsVaultAddress: "0x0000000000000000000000000000000000000002",
     });
   });
 
@@ -25,11 +37,34 @@ describe("API configuration", () => {
     expect(() => loadApiConfig({})).toThrow("DATABASE_URL is required");
     expect(() =>
       loadApiConfig({
-        DATABASE_URL: "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test",
-        PRIVY_APP_ID: "privy-app-id",
-        PRIVY_JWT_VERIFICATION_KEY: "public-verification-key",
-        PORT: "0",
+        ...requiredEnvironment,
+        PORT: "70000",
       }),
     ).toThrow("PORT must be a valid TCP port");
+  });
+
+  it("allows local Anvil only with explicit opt-in", () => {
+    expect(() =>
+      loadApiConfig({ ...requiredEnvironment, MONAD_CHAIN_ID: "31337" }),
+    ).toThrow("ENABLE_LOCAL_ANVIL=true");
+    expect(
+      loadApiConfig({
+        ...requiredEnvironment,
+        MONAD_CHAIN_ID: "31337",
+        ENABLE_LOCAL_ANVIL: "true",
+      }).monadChainId,
+    ).toBe(31337);
+  });
+
+  it("rejects invalid settlement RPC and contract configuration", () => {
+    expect(() =>
+      loadApiConfig({ ...requiredEnvironment, MONAD_RPC_URL: "not-a-url" }),
+    ).toThrow("MONAD_RPC_URL must be an absolute HTTP(S) URL");
+    expect(() =>
+      loadApiConfig({ ...requiredEnvironment, COMMITMENT_MANAGER_ADDRESS: "invalid" }),
+    ).toThrow("COMMITMENT_MANAGER_ADDRESS must be a valid EVM address");
+    expect(() =>
+      loadApiConfig({ ...requiredEnvironment, MONAD_CHAIN_ID: "1" }),
+    ).toThrow("MONAD_CHAIN_ID must be 143");
   });
 });

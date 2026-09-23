@@ -1,9 +1,15 @@
+import { getAddress, type Address } from "viem";
+
 export interface ApiConfig {
   readonly databaseUrl: string;
   readonly privyAppId: string;
   readonly privyJwtVerificationKey: string;
   readonly port: number;
   readonly webOrigin: string;
+  readonly monadRpcUrl: string;
+  readonly monadChainId: 143 | 31337;
+  readonly commitmentManagerAddress: Address;
+  readonly keptSavingsVaultAddress: Address;
 }
 
 function requireValue(environment: NodeJS.ProcessEnv, key: string): string {
@@ -28,6 +34,32 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
+function parseChainId(environment: NodeJS.ProcessEnv): 143 | 31337 {
+  const value = requireValue(environment, "MONAD_CHAIN_ID");
+  if (value === "143") return 143;
+  if (value === "31337" && environment.ENABLE_LOCAL_ANVIL === "true") return 31337;
+  throw new Error("MONAD_CHAIN_ID must be 143, or 31337 with ENABLE_LOCAL_ANVIL=true");
+}
+
+function requireHttpUrl(environment: NodeJS.ProcessEnv, key: string): string {
+  const value = requireValue(environment, key);
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
+    return url.toString();
+  } catch {
+    throw new Error(`${key} must be an absolute HTTP(S) URL`);
+  }
+}
+
+function requireAddress(environment: NodeJS.ProcessEnv, key: string): Address {
+  try {
+    return getAddress(requireValue(environment, key));
+  } catch {
+    throw new Error(`${key} must be a valid EVM address`);
+  }
+}
+
 export function loadApiConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
   return {
     databaseUrl: requireValue(environment, "DATABASE_URL"),
@@ -35,5 +67,9 @@ export function loadApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     privyJwtVerificationKey: requireValue(environment, "PRIVY_JWT_VERIFICATION_KEY"),
     port: parsePort(environment.PORT),
     webOrigin: environment.WEB_ORIGIN?.trim() || "http://localhost:5173",
+    monadRpcUrl: requireHttpUrl(environment, "MONAD_RPC_URL"),
+    monadChainId: parseChainId(environment),
+    commitmentManagerAddress: requireAddress(environment, "COMMITMENT_MANAGER_ADDRESS"),
+    keptSavingsVaultAddress: requireAddress(environment, "KEPT_SAVINGS_VAULT_ADDRESS"),
   };
 }

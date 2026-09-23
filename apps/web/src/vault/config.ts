@@ -7,6 +7,10 @@ export interface VaultConfig {
   readonly usdc: Address;
 }
 
+export interface CommitmentManagerConfig {
+  readonly address: Address;
+}
+
 type PublicEnvironment = Readonly<Record<string, string | undefined>>;
 
 function isHttpUrl(value: string | undefined): value is string {
@@ -48,4 +52,11 @@ export function readVaultConfig(environment: PublicEnvironment): VaultConfig | n
     vault: getAddress(vault),
     usdc: getAddress(usdc),
   };
+}
+
+export function readCommitmentManagerConfig(
+  environment: PublicEnvironment,
+): CommitmentManagerConfig | null {
+  const address = environment.VITE_COMMITMENT_MANAGER_ADDRESS;
+  return address && isAddress(address) ? { address: getAddress(address) } : null;
 }

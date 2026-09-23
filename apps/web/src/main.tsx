@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { BrowserRouter } from "react-router-dom";
 import { createRoot } from "react-dom/client";
@@ -15,6 +16,8 @@ window.addEventListener("error", (event) => {
 window.addEventListener("unhandledrejection", (event) => {
   diagnostics.error("app.unhandled_rejection", event.reason);
 });
+
+globalThis.Buffer = Buffer;
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 const localAnvilEnabled = import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true";
