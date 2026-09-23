@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildApp, type ApiDependencies } from "../src/app.js";
+import { CommitmentSettlementMismatchError } from "../src/commitment-settlement.js";
+import type { CommitmentDto } from "../src/persistence/index.js";
 
 const user = {
   id: "user-1",
@@ -35,11 +37,13 @@ const commitment = {
   stateVersion: 1,
   activatedAt: null,
   finalizedAt: null,
+  onchainCommitmentId: null,
   createdAt: "2026-09-18T00:00:00.000Z",
   updatedAt: "2026-09-18T00:00:00.000Z",
 };
 
 function buildDependencies(overrides: Partial<ApiDependencies> = {}): ApiDependencies {
+  let currentCommitment: CommitmentDto = commitment;
   return {
     authenticate: async (authorization) =>
       authorization === "Bearer valid-token"
@@ -51,19 +55,47 @@ function buildDependencies(overrides: Partial<ApiDependencies> = {}): ApiDepende
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],
       createCommitmentDraft: async () => commitment,
-      getCommitment: async (_userId, id) => (id === commitment.id ? commitment : null),
-      listCommitments: async () => [commitment],
-      activateCommitment: async () => ({
-        ...commitment,
-        state: "ACTIVE" as const,
-        stateVersion: 2,
-        activatedAt: "2026-09-18T01:00:00.000Z",
+      getCommitment: async (_userId, id) => (id === commitment.id ? currentCommitment : null),
+      listCommitments: async () => [currentCommitment],
+      activateCommitment: async () => {
+        currentCommitment = {
+          ...commitment,
+          state: "ACTIVE" as const,
+          stateVersion: 2,
+          onchainCommitmentId: "7",
+          activatedAt: "2026-09-18T01:00:00.000Z",
+        };
+        return currentCommitment;
+      },
+      cancelCommitment: async () => {
+        currentCommitment = {
+          ...currentCommitment,
+          state: "CANCELLED" as const,
+          stateVersion: 3,
+          finalizedAt: "2026-09-18T01:00:00.000Z",
+        };
+        return currentCommitment;
+      },
+
+    },
+    commitmentSettlementVerifier: {
+      inspect: async () => ({
+        settlementRef: new Uint8Array(32),
+        owner: "0x2222222222222222222222222222222222222222",
+        chainId: 143,
+        status: 1,
       }),
-      cancelCommitment: async () => ({
-        ...commitment,
-        state: "CANCELLED" as const,
-        stateVersion: 2,
-        finalizedAt: "2026-09-18T01:00:00.000Z",
+      verifyActive: async () => ({
+        settlementRef: new Uint8Array(32),
+        owner: "0x2222222222222222222222222222222222222222",
+        chainId: 143,
+        status: 1,
+      }),
+      verifyCancelled: async () => ({
+        settlementRef: new Uint8Array(32),
+        owner: "0x2222222222222222222222222222222222222222",
+        chainId: 143,
+        status: 4,
       }),
     },
     ...overrides,
@@ -149,7 +181,11 @@ describe("Kept HTTP API", () => {
       method: "POST",
       url: `/v1/commitments/${commitment.id}/activate`,
       headers: { ...auth, "idempotency-key": "activate-key" },
-      payload: { expectedVersion: 1 },
+      payload: {
+        expectedVersion: 1,
+        onchainCommitmentId: "7",
+        transactionHash: `0x${"a".repeat(64)}`,
+      },
     });
     expect(activated.statusCode).toBe(200);
     expect(activated.json()).toMatchObject({ state: "ACTIVE", stateVersion: 2 });
@@ -158,10 +194,27 @@ describe("Kept HTTP API", () => {
       method: "POST",
       url: `/v1/commitments/${commitment.id}/cancel`,
       headers: { ...auth, "idempotency-key": "cancel-key" },
-      payload: { expectedVersion: 1 },
+      payload: {
+        expectedVersion: 2,
+        onchainCommitmentId: "7",
+        owner: "0x0000000000000000000000000000000000000002",
+      },
     });
     expect(cancelled.statusCode).toBe(200);
-    expect(cancelled.json()).toMatchObject({ state: "CANCELLED", stateVersion: 2 });
+    expect(cancelled.json()).toMatchObject({ state: "CANCELLED", stateVersion: 3 });
+
+    const retriedCancellation = await app.inject({
+      method: "POST",
+      url: `/v1/commitments/${commitment.id}/cancel`,
+      headers: { ...auth, "idempotency-key": "cancel-key" },
+      payload: {
+        expectedVersion: 2,
+        onchainCommitmentId: "7",
+        owner: "0x0000000000000000000000000000000000000002",
+      },
+    });
+    expect(retriedCancellation.statusCode).toBe(200);
+    expect(retriedCancellation.json()).toEqual(cancelled.json());
     await app.close();
   });
 
@@ -191,6 +244,145 @@ describe("Kept HTTP API", () => {
     });
     expect(response.statusCode).toBe(204);
     expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+    await app.close();
+  });
+
+  it("does not activate API state when confirmed chain state does not match", async () => {
+    const app = buildApp(buildDependencies({
+      commitmentSettlementVerifier: {
+        inspect: async () => ({
+          settlementRef: new Uint8Array(32),
+          owner: "0x2222222222222222222222222222222222222222",
+          chainId: 143,
+          status: 1,
+        }),
+        verifyActive: async () => {
+          throw new CommitmentSettlementMismatchError("reference mismatch");
+        },
+        verifyCancelled: async () => ({
+          settlementRef: new Uint8Array(32),
+          owner: "0x2222222222222222222222222222222222222222",
+          chainId: 143,
+          status: 4,
+        }),
+      },
+    }));
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/commitments/${commitment.id}/activate`,
+      headers: { ...auth, "idempotency-key": "activate-mismatch" },
+      payload: {
+        expectedVersion: 1,
+        onchainCommitmentId: "7",
+        transactionHash: `0x${"a".repeat(64)}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: { code: "COMMITMENT_SETTLEMENT_MISMATCH" },
+    });
+    await app.close();
+  });
+
+  it("does not cancel API state until the contract is cancelled", async () => {
+    const app = buildApp(buildDependencies({
+      commitmentSettlementVerifier: {
+        inspect: async () => ({
+          settlementRef: new Uint8Array(32),
+          owner: "0x2222222222222222222222222222222222222222",
+          chainId: 143,
+          status: 1,
+        }),
+        verifyActive: async () => ({
+          settlementRef: new Uint8Array(32),
+          owner: "0x2222222222222222222222222222222222222222",
+          chainId: 143,
+          status: 1,
+        }),
+        verifyCancelled: async () => {
+          throw new CommitmentSettlementMismatchError("contract is still active");
+        },
+      },
+    }));
+    await app.inject({
+      method: "POST",
+      url: `/v1/commitments/${commitment.id}/activate`,
+      headers: { ...auth, "idempotency-key": "activate-before-cancel" },
+      payload: {
+        expectedVersion: 1,
+        onchainCommitmentId: "7",
+        transactionHash: `0x${"a".repeat(64)}`,
+      },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/commitments/${commitment.id}/cancel`,
+      headers: { ...auth, "idempotency-key": "cancel-still-active" },
+      payload: {
+        expectedVersion: 2,
+        onchainCommitmentId: "7",
+        owner: "0x0000000000000000000000000000000000000002",
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: { code: "COMMITMENT_SETTLEMENT_MISMATCH" },
+    });
+    await app.close();
+  });
+
+  it("reconciles a terminal onchain status before returning commitments", async () => {
+    const dependencies = buildDependencies();
+    const inspect = vi.fn()
+      .mockResolvedValueOnce({
+        settlementRef: new Uint8Array(32),
+        owner: "0x2222222222222222222222222222222222222222",
+        chainId: 143,
+        status: 4,
+      })
+      .mockResolvedValue({
+        settlementRef: new Uint8Array(32),
+        owner: "0x2222222222222222222222222222222222222222",
+        chainId: 143,
+        status: 1,
+      });
+    const app = buildApp({
+      ...dependencies,
+      commitmentSettlementVerifier: {
+        ...dependencies.commitmentSettlementVerifier!,
+        inspect,
+      },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/commitments/${commitment.id}/activate`,
+      headers: { ...auth, "idempotency-key": "activate-before-reconcile" },
+      payload: {
+        expectedVersion: 1,
+        onchainCommitmentId: "7",
+        transactionHash: `0x${"a".repeat(64)}`,
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/commitments",
+      headers: auth,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      expect.objectContaining({ state: "CANCELLED", stateVersion: 2 }),
+    ]);
+    const afterReorg = await app.inject({
+      method: "GET",
+      url: "/v1/commitments",
+      headers: auth,
+    });
+    expect(afterReorg.json()).toEqual([
+      expect.objectContaining({ state: "ACTIVE", stateVersion: 2 }),
+    ]);
     await app.close();
   });
 });

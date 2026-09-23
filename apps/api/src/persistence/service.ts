@@ -7,6 +7,10 @@ import {
 
 import type { KeptDatabase } from "../db/client.js";
 import {
+  decodeOnchainCommitmentId,
+  encodeOnchainCommitmentId,
+} from "../commitment-settlement.js";
+import {
   createCommitment,
   StaleCommitmentVersionError,
   transitionCommitment,
@@ -67,6 +71,7 @@ export interface CommitmentDto {
   readonly verificationDeadline: string;
   readonly state: CommitmentRecord["state"];
   readonly stateVersion: number;
+  readonly onchainCommitmentId: string | null;
   readonly activatedAt: string | null;
   readonly finalizedAt: string | null;
   readonly createdAt: string;
@@ -255,6 +260,9 @@ function mapCommitment(row: CommitmentRecord): CommitmentDto {
     verificationDeadline: row.verificationDeadline.toISOString(),
     state: row.state,
     stateVersion: row.stateVersion,
+    onchainCommitmentId: row.opaqueSettlementRef
+      ? decodeOnchainCommitmentId(row.opaqueSettlementRef)
+      : null,
     activatedAt: row.activatedAt?.toISOString() ?? null,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -469,6 +477,10 @@ export class KeptPersistenceService {
     readonly userId: string;
     readonly commitmentId: string;
     readonly expectedVersion: number;
+    readonly onchainCommitmentId: string;
+    readonly settlementOwner: string;
+    readonly settlementChainId: number;
+    readonly settlementStatus: 1 | 2 | 3 | 4;
     readonly idempotencyKey: string;
   }): Promise<CommitmentDto> {
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
@@ -529,6 +541,7 @@ export class KeptPersistenceService {
           expectedState: "DRAFT",
           expectedVersion: input.expectedVersion,
           targetState: transitioned.state,
+          opaqueSettlementRef: settlementRef,
           activatedAt: now,
           finalizedAt: null,
           updatedAt: now,
@@ -544,14 +557,14 @@ export class KeptPersistenceService {
           throw new StaleCommitmentVersionError(input.expectedVersion, latest.stateVersion);
         }
 
-        const active = await repository.findCommitmentForOwner(
+        const settled = await repository.findCommitmentForOwner(
           input.userId,
           input.commitmentId,
         );
-        if (!active) {
+        if (!settled) {
           throw new Error("Activated commitment could not be reloaded");
         }
-        return mapCommitment(active);
+        return mapCommitment(settled);
       },
     );
   }
@@ -561,6 +574,8 @@ export class KeptPersistenceService {
     readonly userId: string;
     readonly commitmentId: string;
     readonly expectedVersion: number;
+    readonly onchainCommitmentId: string;
+    readonly settlementOwner: string;
     readonly idempotencyKey: string;
   }): Promise<CommitmentDto> {
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
@@ -579,6 +594,13 @@ export class KeptPersistenceService {
         );
         if (!current) {
           throw new NotFoundError("Commitment");
+        }
+        if (
+          current.state === "CANCELLED"
+          && current.opaqueSettlementRef
+          && decodeOnchainCommitmentId(current.opaqueSettlementRef) === input.onchainCommitmentId
+        ) {
+          return mapCommitment(current);
         }
         if (current.state !== "DRAFT" && current.state !== "ACTIVE") {
           throw new PersistenceValidationError("Only draft or active commitments can be cancelled");
@@ -603,6 +625,7 @@ export class KeptPersistenceService {
           expectedState: current.state,
           expectedVersion: input.expectedVersion,
           targetState: transitioned.state,
+          opaqueSettlementRef: current.opaqueSettlementRef,
           activatedAt: current.activatedAt,
           finalizedAt: now,
           updatedAt: now,

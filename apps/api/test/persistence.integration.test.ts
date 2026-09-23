@@ -290,6 +290,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
       userId: owner.id,
       commitmentId: draft.id,
       expectedVersion: 1,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
       idempotencyKey: randomUUID(),
     });
 
@@ -306,6 +310,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
       userId: owner.id,
       commitmentId: draft.id,
       expectedVersion: 1,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
       idempotencyKey: randomUUID(),
     });
 
@@ -313,11 +321,36 @@ describe.sequential("commitment persistence and lifecycle", () => {
       userId: owner.id,
       commitmentId: draft.id,
       expectedVersion: active.stateVersion,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
       idempotencyKey: randomUUID(),
     });
 
     expect(cancelled).toMatchObject({ state: "CANCELLED", stateVersion: 3 });
     expect(cancelled.finalizedAt).not.toBeNull();
+  });
+
+  it("activates a draft when chain finalization happened before API activation", async () => {
+    const owner = await createUser("terminal-owner");
+    const goal = await createGoal(owner.id);
+    const draft = await createDraft(owner.id, goal.id);
+
+    const settled = await service.activateCommitment({
+      userId: owner.id,
+      commitmentId: draft.id,
+      expectedVersion: 1,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 4,
+      idempotencyKey: randomUUID(),
+    });
+
+    expect(settled).toMatchObject({
+      state: "ACTIVE",
+      stateVersion: 2,
+      onchainCommitmentId: "7",
+    });
   });
 
   it("rejects a commitment window that contradicts the catalogue period", async () => {
@@ -352,6 +385,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
           userId: owner.id,
           commitmentId: inactiveDraft.id,
           expectedVersion: 1,
+          onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
           idempotencyKey: randomUUID(),
         }),
       ).rejects.toBeInstanceOf(PersistenceValidationError);
@@ -371,6 +408,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
         userId: owner.id,
         commitmentId: invalidDraft.id,
         expectedVersion: 1,
+        onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(PersistenceValidationError);
@@ -392,6 +433,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
         userId: owner.id,
         commitmentId: draft.id,
         expectedVersion: 1,
+        onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
         idempotencyKey: randomUUID(),
       });
 
@@ -415,6 +460,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
         userId: other.id,
         commitmentId: draft.id,
         expectedVersion: 1,
+        onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -424,7 +473,7 @@ describe.sequential("commitment persistence and lifecycle", () => {
     });
   });
 
-  it("rejects stale expected versions without overwriting persisted state", async () => {
+  it("rejects retrying an active commitment with a different onchain id", async () => {
     const owner = await createUser("owner");
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
@@ -432,6 +481,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
       userId: owner.id,
       commitmentId: draft.id,
       expectedVersion: 1,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
       idempotencyKey: randomUUID(),
     });
 
@@ -440,16 +493,20 @@ describe.sequential("commitment persistence and lifecycle", () => {
         userId: owner.id,
         commitmentId: draft.id,
         expectedVersion: 1,
+        onchainCommitmentId: "8",
+        settlementOwner: "0x2222222222222222222222222222222222222222",
+        settlementChainId: 143,
+      settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
-    ).rejects.toMatchObject({ name: "StaleCommitmentVersionError" });
+    ).rejects.toBeInstanceOf(PersistenceValidationError);
     await expect(service.getCommitment(owner.id, draft.id)).resolves.toMatchObject({
       state: "ACTIVE",
       stateVersion: 2,
     });
   });
 
-  it("allows only one of two concurrent updates to win", async () => {
+  it("coalesces concurrent activation retries for the same onchain commitment", async () => {
     const owner = await createUser("owner");
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
@@ -458,18 +515,26 @@ describe.sequential("commitment persistence and lifecycle", () => {
         userId: owner.id,
         commitmentId: draft.id,
         expectedVersion: 1,
+        onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
       service.activateCommitment({
         userId: owner.id,
         commitmentId: draft.id,
         expectedVersion: 1,
+        onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ]);
 
-    expect(attempts.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
-    expect(attempts.filter(({ status }) => status === "rejected")).toHaveLength(1);
+    expect(attempts.filter(({ status }) => status === "fulfilled")).toHaveLength(2);
+    expect(attempts.filter(({ status }) => status === "rejected")).toHaveLength(0);
     await expect(service.getCommitment(owner.id, draft.id)).resolves.toMatchObject({
       state: "ACTIVE",
       stateVersion: 2,
@@ -486,6 +551,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
       userId: owner.id,
       commitmentId: draft.id,
       expectedVersion: 1,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1,
       idempotencyKey: randomUUID(),
     });
     const activityDefinition = await connection.pool.query<{ id: string }>(
@@ -542,6 +611,10 @@ describe.sequential("idempotent write commands", () => {
       userId: owner.id,
       commitmentId: draft.id,
       expectedVersion: 1,
+      onchainCommitmentId: "7",
+      settlementOwner: "0x2222222222222222222222222222222222222222",
+      settlementChainId: 143,
+      settlementStatus: 1 as const,
       idempotencyKey,
     };
 

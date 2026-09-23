@@ -231,6 +231,7 @@ export class KeptRepository {
     readonly expectedState: CommitmentState;
     readonly expectedVersion: number;
     readonly targetState: CommitmentState;
+    readonly opaqueSettlementRef: Uint8Array | null;
     readonly activatedAt: Date | null;
     readonly finalizedAt: Date | null;
     readonly updatedAt: Date;
@@ -240,6 +241,9 @@ export class KeptRepository {
       .set({
         state: input.targetState,
         stateVersion: sql`${userCommitments.stateVersion} + 1`,
+        opaqueSettlementRef: input.opaqueSettlementRef
+          ? Buffer.from(input.opaqueSettlementRef)
+          : null,
         activatedAt: input.activatedAt,
         finalizedAt: input.finalizedAt,
         updatedAt: input.updatedAt,
