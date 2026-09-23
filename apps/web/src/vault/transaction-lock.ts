@@ -25,7 +25,7 @@ export function createTransactionLock(): TransactionLock {
   };
 }
 
-export type VaultTransactionKind = "deposit" | "withdraw";
+export type VaultTransactionKind = "deposit" | "withdraw" | "commitment";
 
 export interface VaultTransactionCoordinator {
   readonly pendingKind: VaultTransactionKind | null;

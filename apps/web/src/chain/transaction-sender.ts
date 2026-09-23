@@ -23,11 +23,16 @@ export function createBoundTransactionSender(
       if (!address) {
         throw new ConsumerError("Your Kept account is not ready yet.", {
           code: "wallet_unavailable",
-          cause: new Error("No selected wallet is available for this transaction."),
+          cause: new Error(
+            "No selected wallet is available for this transaction.",
+          ),
         });
       }
 
-      const result = await sendTransaction(transaction, { address });
+      const result = await sendTransaction(transaction, {
+        address,
+      });
+
       return result.hash;
     },
   };

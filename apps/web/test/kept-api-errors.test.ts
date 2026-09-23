@@ -68,4 +68,95 @@ describe("Kept API consumer errors", () => {
 
     await expect(api.listGoals()).rejects.toMatchObject({ code: errorCode, message });
   });
+
+  it("reuses a caller-supplied idempotency key for draft recovery", async () => {
+    let requestHeaders: Headers | null = null;
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: async (_url, init) => {
+        requestHeaders = new Headers(init?.headers);
+        return new Response(JSON.stringify({ id: "draft-1" }), { status: 200 });
+      },
+    });
+
+    await api.createCommitment({
+      goalId: "goal-1",
+      definition: { code: "WEEKLY_SAVINGS_V1", version: 1 },
+      parameters: { targetAmountAtomic: "10000000", periodDays: 7 },
+      epochStart: "2026-09-23T00:05:00.000Z",
+      epochEnd: "2026-09-30T00:05:00.000Z",
+      verificationDeadline: "2026-10-01T00:05:00.000Z",
+    }, "stable-draft-key");
+
+    expect(requestHeaders?.get("idempotency-key")).toBe("stable-draft-key");
+  });
+
+  it("parses goal allocations and sends signed atomic deltas with idempotency", async () => {
+    const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const response = {
+      goalId: "goal-1",
+      allocatedSharesAtomic: "100000000000000",
+      totalVaultSharesAtomic: "500000000000000",
+      totalAllocatedSharesAtomic: "100000000000000",
+      unallocatedSharesAtomic: "400000000000000",
+    };
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: async (url, init) => {
+        requests.push({ url: String(url), init });
+        return new Response(JSON.stringify(response), { status: 200 });
+      },
+    });
+
+    await expect(api.getGoalAllocation("goal-1")).resolves.toEqual(response);
+    await expect(api.allocateGoalShares("goal-1", {
+      shareDeltaAtomic: "100000000000000",
+      reason: "manual",
+    }, "allocation-key")).resolves.toEqual(response);
+    expect(requests[1]?.url).toBe("https://api.example/v1/goals/goal-1/allocations");
+    expect(new Headers(requests[1]?.init?.headers).get("idempotency-key")).toBe("allocation-key");
+    expect(requests[1]?.init?.body).toBe(JSON.stringify({
+      shareDeltaAtomic: "100000000000000",
+      reason: "manual",
+    }));
+  });
+
+  it("rejects malformed allocation atomic values", async () => {
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: async () => new Response(JSON.stringify({
+        goalId: "goal-1",
+        allocatedSharesAtomic: "1.5",
+        totalVaultSharesAtomic: "10",
+        totalAllocatedSharesAtomic: "1",
+        unallocatedSharesAtomic: "9",
+      }), { status: 200 }),
+    });
+
+    await expect(api.getGoalAllocation("goal-1")).rejects.toMatchObject({
+      code: "service_unavailable",
+      message: "Kept returned an unexpected response. Try again.",
+    });
+  });
+
+  it("rejects an allocation response for a different goal", async () => {
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: async () => new Response(JSON.stringify({
+        goalId: "goal-2",
+        allocatedSharesAtomic: "1",
+        totalVaultSharesAtomic: "10",
+        totalAllocatedSharesAtomic: "1",
+        unallocatedSharesAtomic: "9",
+      }), { status: 200 }),
+    });
+
+    await expect(api.getGoalAllocation("goal-1")).rejects.toMatchObject({
+      code: "service_unavailable",
+    });
+  });
 });

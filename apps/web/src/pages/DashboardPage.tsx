@@ -8,9 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreateCommitmentDialog, type CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
 import type { ProductDataState } from "@/features/dashboard/product-data-state";
 import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
+import { AddToGoalDialog } from "@/features/goals/AddToGoalDialog";
 import { CreateGoalDialog } from "@/features/goals/CreateGoalDialog";
 import { GoalCard } from "@/features/goals/GoalCard";
 import { GoalDetailsDialog } from "@/features/goals/GoalDetailsDialog";
+import type { GoalFundingState } from "@/features/goals/funding";
 import { BalanceCard, type PositionState } from "@/features/savings/BalanceCard";
 import { DepositDialog } from "@/features/savings/DepositDialog";
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
@@ -19,6 +21,7 @@ import { WithdrawDialog } from "@/features/savings/WithdrawDialog";
 interface DashboardPageProps {
   readonly walletAddress: string | null;
   readonly positionState: PositionState;
+  readonly goalFundingState: GoalFundingState;
   readonly productState: ProductDataState;
   readonly depositAmount: string;
   readonly depositStatus: string | null;
@@ -33,6 +36,9 @@ interface DashboardPageProps {
   readonly creatingCommitment: boolean;
   readonly commitmentStatus: string | null;
   readonly commitmentError: string | null;
+  readonly allocatingGoal: boolean;
+  readonly allocationStatus: string | null;
+  readonly allocationError: string | null;
   readonly onDepositAmountChange: (value: string) => void;
   readonly onSubmitDeposit: () => void;
   readonly onDismissDeposit: () => void;
@@ -47,8 +53,10 @@ interface DashboardPageProps {
     readonly targetDate: string | null;
   }) => Promise<boolean>;
   readonly onCreateCommitment: (goal: GoalDto, input: CreateCommitmentInput) => Promise<boolean>;
+  readonly onAddToGoal: (goal: GoalDto, amount: string) => Promise<boolean>;
   readonly onDismissGoal: () => void;
   readonly onDismissCommitment: () => void;
+  readonly onDismissAllocation: () => void;
 }
 
 function currentCommitment(goalId: string, commitments: readonly CommitmentDto[]): CommitmentDto | undefined {
@@ -60,6 +68,7 @@ export function DashboardPage(props: DashboardPageProps) {
   const {
     walletAddress,
     positionState,
+    goalFundingState,
     productState,
     depositAmount,
     depositStatus,
@@ -74,6 +83,9 @@ export function DashboardPage(props: DashboardPageProps) {
     creatingCommitment,
     commitmentStatus,
     commitmentError,
+    allocatingGoal,
+    allocationStatus,
+    allocationError,
     onDepositAmountChange,
     onSubmitDeposit,
     onDismissDeposit,
@@ -84,14 +96,17 @@ export function DashboardPage(props: DashboardPageProps) {
     onRefreshProductData,
     onCreateGoal,
     onCreateCommitment,
+    onAddToGoal,
     onDismissGoal,
     onDismissCommitment,
+    onDismissAllocation,
   } = props;
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
   const [commitmentGoal, setCommitmentGoal] = useState<GoalDto | null>(null);
+  const [fundingGoal, setFundingGoal] = useState<GoalDto | null>(null);
   const [detailGoal, setDetailGoal] = useState<GoalDto | null>(null);
 
   const goals = productState.goals;
@@ -120,6 +135,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
       <BalanceCard
         positionState={positionState}
+        goalFundingState={goalFundingState}
         activeGoalCount={activeGoals.length}
         transactionPending={pendingTransaction !== null}
         onAddMoney={() => setDepositOpen(true)}
@@ -172,7 +188,11 @@ export function DashboardPage(props: DashboardPageProps) {
               <GoalCard
                 key={goal.id}
                 goal={goal}
+                funding={goalFundingState.kind === "loading"
+                  ? null
+                  : goalFundingState.funding?.byGoal.get(goal.id) ?? null}
                 commitment={currentCommitment(goal.id, commitments)}
+                onAddFunds={(selected) => setFundingGoal(selected)}
                 onAddCommitment={(selected) => setCommitmentGoal(selected)}
                 onOpen={(selected) => setDetailGoal(selected)}
               />
@@ -219,6 +239,23 @@ export function DashboardPage(props: DashboardPageProps) {
         error={goalError}
         onOpenChange={(open) => updateDialogOpenState(open, setCreateGoalOpen, onDismissGoal)}
         onSubmit={onCreateGoal}
+      />
+
+      <AddToGoalDialog
+        goal={fundingGoal}
+        unallocatedAssets={goalFundingState.kind === "ready"
+          ? goalFundingState.funding.unallocatedAssets
+          : null}
+        submitting={allocatingGoal}
+        status={allocationStatus}
+        error={allocationError}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFundingGoal(null);
+            onDismissAllocation();
+          }
+        }}
+        onSubmit={onAddToGoal}
       />
 
       <CreateCommitmentDialog

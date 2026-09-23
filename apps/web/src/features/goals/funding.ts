@@ -1,0 +1,167 @@
+import type { Address } from "viem";
+
+import type { GoalAllocationDto } from "@/api/kept-api";
+
+const allocationVaultAbi = [
+  {
+    type: "function",
+    name: "convertToAssets",
+    stateMutability: "view",
+    inputs: [{ name: "shares", type: "uint256" }],
+    outputs: [{ name: "assets", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "previewWithdraw",
+    stateMutability: "view",
+    inputs: [{ name: "assets", type: "uint256" }],
+    outputs: [{ name: "shares", type: "uint256" }],
+  },
+] as const;
+
+interface ContractReader {
+  readContract(input: unknown): Promise<bigint>;
+}
+
+export interface GoalFundingEntry {
+  readonly allocatedShares: bigint;
+  readonly allocatedAssets: bigint;
+}
+
+export interface GoalFundingSnapshot {
+  readonly totalVaultShares: bigint;
+  readonly totalAllocatedShares: bigint;
+  readonly unallocatedShares: bigint;
+  readonly totalAllocatedAssets: bigint;
+  readonly unallocatedAssets: bigint;
+  readonly byGoal: ReadonlyMap<string, GoalFundingEntry>;
+}
+
+export type GoalFundingState =
+  | { readonly kind: "loading" }
+  | { readonly kind: "ready"; readonly funding: GoalFundingSnapshot }
+  | { readonly kind: "error"; readonly message: string; readonly funding?: GoalFundingSnapshot };
+
+function parseNonnegativeAtomic(value: string, field: string): bigint {
+  if (!/^\d+$/.test(value)) throw new Error(`${field} is not a non-negative integer`);
+  return BigInt(value);
+}
+
+export async function readGoalFunding(input: {
+  readonly allocations: readonly GoalAllocationDto[];
+  readonly publicClient: ContractReader;
+  readonly vault: Address;
+}): Promise<GoalFundingSnapshot> {
+  if (input.allocations.length === 0) {
+    return {
+      totalVaultShares: 0n,
+      totalAllocatedShares: 0n,
+      unallocatedShares: 0n,
+      totalAllocatedAssets: 0n,
+      unallocatedAssets: 0n,
+      byGoal: new Map(),
+    };
+  }
+
+  const first = input.allocations[0]!;
+  const totalVaultShares = parseNonnegativeAtomic(first.totalVaultSharesAtomic, "totalVaultSharesAtomic");
+  const totalAllocatedShares = parseNonnegativeAtomic(first.totalAllocatedSharesAtomic, "totalAllocatedSharesAtomic");
+  const unallocatedShares = parseNonnegativeAtomic(first.unallocatedSharesAtomic, "unallocatedSharesAtomic");
+  if (totalAllocatedShares + unallocatedShares !== totalVaultShares) {
+    throw new Error("Goal allocation totals do not match the current savings balance");
+  }
+
+  for (const allocation of input.allocations) {
+    if (
+      allocation.totalVaultSharesAtomic !== first.totalVaultSharesAtomic
+      || allocation.totalAllocatedSharesAtomic !== first.totalAllocatedSharesAtomic
+      || allocation.unallocatedSharesAtomic !== first.unallocatedSharesAtomic
+    ) {
+      throw new Error("Goal allocation responses contain inconsistent totals");
+    }
+  }
+
+  const sharesByGoal = input.allocations.map((allocation) => ({
+    goalId: allocation.goalId,
+    shares: parseNonnegativeAtomic(allocation.allocatedSharesAtomic, "allocatedSharesAtomic"),
+  }));
+  const conversions = new Map<bigint, Promise<bigint>>();
+  const convert = (shares: bigint): Promise<bigint> => {
+    const existing = conversions.get(shares);
+    if (existing) return existing;
+    const pending = convertToAssets(input.publicClient, input.vault, shares);
+    conversions.set(shares, pending);
+    return pending;
+  };
+  const converted = await Promise.all([
+    ...sharesByGoal.map(({ shares }) => convert(shares)),
+    convert(totalAllocatedShares),
+    convert(unallocatedShares),
+  ]);
+  const byGoal = new Map<string, GoalFundingEntry>();
+  sharesByGoal.forEach(({ goalId, shares }, index) => {
+    byGoal.set(goalId, { allocatedShares: shares, allocatedAssets: converted[index]! });
+  });
+
+  return {
+    totalVaultShares,
+    totalAllocatedShares,
+    unallocatedShares,
+    totalAllocatedAssets: converted[sharesByGoal.length]!,
+    unallocatedAssets: converted[sharesByGoal.length + 1]!,
+    byGoal,
+  };
+}
+
+async function convertToAssets(
+  publicClient: ContractReader,
+  vault: Address,
+  shares: bigint,
+): Promise<bigint> {
+  return publicClient.readContract({
+    address: vault,
+    abi: allocationVaultAbi,
+    functionName: "convertToAssets",
+    args: [shares],
+  });
+}
+
+export function previewAllocationShares(input: {
+  readonly assets: bigint;
+  readonly publicClient: ContractReader;
+  readonly vault: Address;
+}): Promise<bigint> {
+  return input.publicClient.readContract({
+    address: input.vault,
+    abi: allocationVaultAbi,
+    functionName: "previewWithdraw",
+    args: [input.assets],
+  });
+}
+
+export function goalFundingPercent(
+  allocatedAssets: bigint,
+  targetAssets: bigint,
+): { readonly labelPercent: number; readonly visualPercent: number } {
+  if (allocatedAssets <= 0n || targetAssets <= 0n) {
+    return { labelPercent: 0, visualPercent: 0 };
+  }
+  const labelPercentBigInt = allocatedAssets * 100n / targetAssets;
+  const labelPercent = Number(labelPercentBigInt > BigInt(Number.MAX_SAFE_INTEGER)
+    ? BigInt(Number.MAX_SAFE_INTEGER)
+    : labelPercentBigInt);
+  return { labelPercent, visualPercent: Math.min(labelPercent, 100) };
+}
+
+export function allocationInputError(
+  assets: bigint,
+  requiredShares: bigint,
+  unallocatedShares: bigint,
+): string | null {
+  if (assets <= 0n) return "Enter an amount greater than zero.";
+  if (requiredShares <= 0n) return "That amount is too small to add to this goal.";
+  if (requiredShares > unallocatedShares) {
+    return "Enter an amount no greater than your unallocated savings.";
+  }
+  return null;
+}

@@ -45,6 +45,14 @@ export interface CreateCommitmentRequest {
   readonly verificationDeadline: string;
 }
 
+export interface GoalAllocationDto {
+  readonly goalId: string;
+  readonly allocatedSharesAtomic: string;
+  readonly totalVaultSharesAtomic: string;
+  readonly totalAllocatedSharesAtomic: string;
+  readonly unallocatedSharesAtomic: string;
+}
+
 export interface KeptApi {
   listGoals(): Promise<readonly GoalDto[]>;
   createGoal(input: {
@@ -52,6 +60,12 @@ export interface KeptApi {
     readonly targetAmountAtomic: string;
     readonly targetDate: string | null;
   }): Promise<GoalDto>;
+  getGoalAllocation(goalId: string): Promise<GoalAllocationDto>;
+  allocateGoalShares(
+    goalId: string,
+    input: { readonly shareDeltaAtomic: string; readonly reason: string },
+    idempotencyKey?: string,
+  ): Promise<GoalAllocationDto>;
   listCommitments(): Promise<readonly CommitmentDto[]>;
   createCommitment(input: CreateCommitmentRequest, idempotencyKey?: string): Promise<CommitmentDto>;
   activateCommitment(
@@ -127,6 +141,38 @@ function apiConsumerError(status: number, code: string, cause?: unknown): Consum
   });
 }
 
+function parseGoalAllocation(value: unknown, expectedGoalId: string): GoalAllocationDto {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new ConsumerError("Kept returned an unexpected response. Try again.", {
+      code: "service_unavailable",
+    });
+  }
+  const record = value as Record<string, unknown>;
+  const atomicFields = [
+    "allocatedSharesAtomic",
+    "totalVaultSharesAtomic",
+    "totalAllocatedSharesAtomic",
+    "unallocatedSharesAtomic",
+  ] as const;
+  if (
+    record.goalId !== expectedGoalId
+    || atomicFields.some((field) => (
+      typeof record[field] !== "string" || !/^-?\d+$/.test(record[field] as string)
+    ))
+  ) {
+    throw new ConsumerError("Kept returned an unexpected response. Try again.", {
+      code: "service_unavailable",
+    });
+  }
+  return {
+    goalId: record.goalId,
+    allocatedSharesAtomic: record.allocatedSharesAtomic as string,
+    totalVaultSharesAtomic: record.totalVaultSharesAtomic as string,
+    totalAllocatedSharesAtomic: record.totalAllocatedSharesAtomic as string,
+    unallocatedSharesAtomic: record.unallocatedSharesAtomic as string,
+  };
+}
+
 export function createKeptApi(input: {
   readonly baseUrl: string;
   readonly getAccessToken: AccessTokenProvider;
@@ -200,6 +246,18 @@ export function createKeptApi(input: {
   return {
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
+    getGoalAllocation: async (goalId) => parseGoalAllocation(
+      await request<unknown>(`/v1/goals/${encodeURIComponent(goalId)}/allocation`),
+      goalId,
+    ),
+    allocateGoalShares: async (goalId, allocation, requestIdempotencyKey) => parseGoalAllocation(
+      await post<unknown>(
+        `/v1/goals/${encodeURIComponent(goalId)}/allocations`,
+        allocation,
+        requestIdempotencyKey,
+      ),
+      goalId,
+    ),
     listCommitments: () => request<readonly CommitmentDto[]>("/v1/commitments"),
     createCommitment: (commitment, requestIdempotencyKey) => post<CommitmentDto>(
       "/v1/commitments",

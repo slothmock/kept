@@ -36,6 +36,19 @@ import {
   type BoundPositionState,
 } from "@/features/dashboard/position-context";
 import type { PositionState } from "@/features/savings/BalanceCard";
+import { formatUsdc } from "@/features/savings/format";
+import {
+  allocationInputError,
+  previewAllocationShares,
+  readGoalFunding,
+  type GoalFundingState,
+} from "@/features/goals/funding";
+import {
+  clearPendingGoalAllocation,
+  loadPendingGoalAllocation,
+  savePendingGoalAllocation,
+  type PendingGoalAllocation,
+} from "@/features/goals/pending-allocation";
 import {
   currentDepositQuote,
   type DepositQuoteState,
@@ -52,6 +65,11 @@ import { readVaultPosition } from "@/vault/position";
 import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 import { buildVaultDepositTransactions, buildVaultWithdrawTransaction } from "@/vault/transactions";
 
+function fundingRefreshError(current: GoalFundingState, message: string): GoalFundingState {
+  const funding = current.kind === "loading" ? undefined : current.funding;
+  return funding ? { kind: "error", message, funding } : { kind: "error", message };
+}
+
 export function DashboardApp({ session }: { readonly session: Session }) {
   const [depositAmount, setDepositAmount] = useState("");
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
@@ -67,6 +85,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [creatingCommitment, setCreatingCommitment] = useState(false);
   const [commitmentStatus, setCommitmentStatus] = useState<string | null>(null);
   const [commitmentError, setCommitmentError] = useState<string | null>(null);
+  const [goalFundingState, setGoalFundingState] = useState<GoalFundingState>({ kind: "loading" });
+  const [allocatingGoal, setAllocatingGoal] = useState(false);
+  const [allocationStatus, setAllocationStatus] = useState<string | null>(null);
+  const [allocationError, setAllocationError] = useState<string | null>(null);
+  const allocationPending = useRef(false);
+  const pendingAllocationAttempt = useRef<PendingGoalAllocation | null>(null);
+  const pendingCommitmentAttempt = useRef<CommitmentCreationAttempt | null>(null);
 
   const wallet = useKeptEvmWallet();
   const sender = useKeptTransactionSender(wallet.address);
@@ -220,9 +245,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const refreshProductData = useCallback(async () => {
     const requestId = productRequestGate.begin();
     setProductState(beginProductRefresh);
+    setGoalFundingState((current) => current.kind === "ready" ? current : { kind: "loading" });
     if (!api) {
       if (productRequestGate.isCurrent(requestId)) {
         setProductState((current) => failProductRefresh(current, "Kept's service is not configured."));
+        setGoalFundingState({ kind: "error", message: "Goal balances are unavailable because Kept is not configured." });
       }
       return;
     }
@@ -234,6 +261,36 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       if (productRequestGate.isCurrent(requestId)) {
         setProductState({ kind: "ready", goals, commitments });
       }
+      if (!config || !publicClient) {
+        if (productRequestGate.isCurrent(requestId)) {
+          setGoalFundingState({
+            kind: "error",
+            message: "Goal balances are unavailable because Kept is not configured.",
+          });
+        }
+        return;
+      }
+      try {
+        const allocations = await Promise.all(goals.map((goal) => api.getGoalAllocation(goal.id)));
+        const funding = await readGoalFunding({
+          allocations,
+          publicClient: {
+            readContract: (input) => publicClient.readContract(input as never) as Promise<bigint>,
+          },
+          vault: config.vault,
+        });
+        if (productRequestGate.isCurrent(requestId)) {
+          setGoalFundingState({ kind: "ready", funding });
+        }
+      } catch (error) {
+        if (productRequestGate.isCurrent(requestId)) {
+          diagnostics.error("api.goal_funding_refresh_failed", error);
+          setGoalFundingState((current) => fundingRefreshError(
+            current,
+            "We could not reconcile your goal balances. Refresh before assigning more savings.",
+          ));
+        }
+      }
     } catch (error) {
       if (productRequestGate.isCurrent(requestId)) {
         diagnostics.error("api.product_refresh_failed", error);
@@ -241,9 +298,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           current,
           consumerErrorMessage(error, "We could not refresh your goals and commitments. Try again."),
         ));
+        setGoalFundingState((current) => fundingRefreshError(
+          current,
+          "We could not refresh your goal balances. Try again.",
+        ));
       }
     }
-  }, [api, productRequestGate]);
+  }, [api, config, productRequestGate, publicClient]);
 
   useEffect(() => {
     const requestId = depositQuoteRequestGate.begin();
@@ -444,6 +505,105 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [api, refreshProductData]);
 
+  const addToGoal = useCallback(async (goal: GoalDto, amount: string): Promise<boolean> => {
+    if (allocationPending.current) {
+      setAllocationError("An allocation request is already in progress.");
+      return false;
+    }
+    if (!api || !config || !publicClient || !account || goalFundingState.kind !== "ready") {
+      setAllocationError("Your goal balances are not ready yet. Refresh and try again.");
+      return false;
+    }
+    const parsed = parseUsdcDepositAmount(amount);
+    if ("error" in parsed || parsed.assets <= 0n) {
+      setAllocationError("Enter a valid amount greater than zero.");
+      return false;
+    }
+
+    allocationPending.current = true;
+    setAllocatingGoal(true);
+    setAllocationError(null);
+    setAllocationStatus("Checking your available savings…");
+    try {
+      await ensureTransactionNetwork();
+      const assetsAtomic = parsed.assets.toString();
+      const inMemoryAttempt = pendingAllocationAttempt.current;
+      const storedAttempt = inMemoryAttempt?.account.toLowerCase() === account.toLowerCase()
+        ? inMemoryAttempt
+        : loadPendingGoalAllocation(globalThis.localStorage, account);
+      const matchingAttempt = storedAttempt?.account.toLowerCase() === account.toLowerCase()
+        && storedAttempt.goalId === goal.id
+        && storedAttempt.assetsAtomic === assetsAtomic
+        ? storedAttempt
+        : null;
+      if (storedAttempt && !matchingAttempt) {
+        setAllocationStatus(null);
+        setAllocationError(
+          `A previous ${formatUsdc(BigInt(storedAttempt.assetsAtomic))} USDC request still needs confirmation. Retry that amount on the same goal first.`,
+        );
+        return false;
+      }
+      const requiredShares = matchingAttempt
+        ? BigInt(matchingAttempt.sharesAtomic)
+        : await previewAllocationShares({
+          assets: parsed.assets,
+          publicClient: {
+            readContract: (input) => publicClient.readContract(input as never) as Promise<bigint>,
+          },
+          vault: config.vault,
+        });
+      const validationError = matchingAttempt ? null : allocationInputError(
+        parsed.assets,
+        requiredShares,
+        goalFundingState.funding.unallocatedShares,
+      );
+      if (validationError) {
+        setAllocationStatus(null);
+        setAllocationError(validationError);
+        return false;
+      }
+
+      setAllocationStatus("Adding savings to your goal…");
+      const sharesAtomic = requiredShares.toString();
+      const attempt = matchingAttempt
+        ? matchingAttempt
+        : {
+          account,
+          goalId: goal.id,
+          assetsAtomic,
+          sharesAtomic,
+          idempotencyKey: globalThis.crypto.randomUUID(),
+        };
+      pendingAllocationAttempt.current = attempt;
+      if (!savePendingGoalAllocation(globalThis.localStorage, attempt)) {
+        pendingAllocationAttempt.current = null;
+        setAllocationStatus(null);
+        setAllocationError("Kept could not safely prepare this request in your browser. Check storage permissions and try again.");
+        return false;
+      }
+      await api.allocateGoalShares(goal.id, {
+        shareDeltaAtomic: sharesAtomic,
+        reason: "manual",
+      }, attempt.idempotencyKey);
+      pendingAllocationAttempt.current = null;
+      clearPendingGoalAllocation(globalThis.localStorage, account);
+      await refreshProductData();
+      setAllocationStatus(null);
+      return true;
+    } catch (error) {
+      diagnostics.error("api.goal_allocation_failed", error);
+      setAllocationStatus(null);
+      setAllocationError(consumerErrorMessage(
+        error,
+        "We could not add those savings to your goal. Refresh and try again.",
+      ));
+      return false;
+    } finally {
+      allocationPending.current = false;
+      setAllocatingGoal(false);
+    }
+  }, [account, api, config, ensureTransactionNetwork, goalFundingState, publicClient, refreshProductData]);
+
   const createCommitment = useCallback(async (goal: GoalDto, input: CreateCommitmentInput) => {
     if (!api || !config || !commitmentManagerConfig || !publicClient || !account) {
       setCommitmentError("Commitments are unavailable because Kept is not configured.");
@@ -640,6 +800,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       <DashboardPage
         walletAddress={wallet.address}
         positionState={positionState}
+        goalFundingState={goalFundingState}
         productState={productState}
         depositAmount={depositAmount}
         depositStatus={depositStatus}
@@ -654,6 +815,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         creatingCommitment={creatingCommitment}
         commitmentStatus={commitmentStatus}
         commitmentError={commitmentError}
+        allocatingGoal={allocatingGoal}
+        allocationStatus={allocationStatus}
+        allocationError={allocationError}
         onDepositAmountChange={setDepositAmount}
         onSubmitDeposit={() => void submitDeposit()}
         onDismissDeposit={dismissDeposit}
@@ -664,8 +828,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         onRefreshProductData={() => void refreshProductData()}
         onCreateGoal={createGoal}
         onCreateCommitment={createCommitment}
+        onAddToGoal={addToGoal}
         onDismissGoal={dismissGoal}
         onDismissCommitment={dismissCommitment}
+        onDismissAllocation={dismissAllocation}
       />
     </AppShell>
   );
