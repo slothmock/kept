@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPublicClient, getAddress, http, isAddress } from "viem";
 
 import { createKeptApi, readApiBaseUrl, type GoalDto } from "@/api/kept-api";
@@ -6,6 +6,22 @@ import { type Session } from "@/auth/session";
 import { useKeptEvmWallet } from "@/chain/evm-wallet";
 import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
+import {
+  buildCreateCommitmentTransaction,
+  confirmCommitmentCreation,
+  referenceIdForCommitment,
+  timestampSeconds,
+} from "@/commitments/commitment-manager";
+import {
+  runCommitmentCreation,
+  type CommitmentCreationAttempt,
+} from "@/commitments/creation-flow";
+import {
+  clearPendingCommitmentAttempt,
+  loadPendingCommitmentAttempt,
+  reconcilePendingAttempt,
+  savePendingCommitmentAttempt,
+} from "@/commitments/pending-attempt";
 import { AccountMenu } from "@/components/AccountMenu";
 import { AppShell } from "@/components/AppShell";
 import type { CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
@@ -28,7 +44,7 @@ import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
 import { diagnostics } from "@/lib/diagnostics";
 import { createLatestRequestGate } from "@/lib/latest-request";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { readVaultConfig } from "@/vault/config";
+import { readCommitmentManagerConfig, readVaultConfig } from "@/vault/config";
 import { minimumUsdcDepositError, parseUsdcDepositAmount } from "@/vault/deposit-input";
 import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
 import { readVaultDepositQuote } from "@/vault/fees";
@@ -49,6 +65,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [creatingCommitment, setCreatingCommitment] = useState(false);
+  const [commitmentStatus, setCommitmentStatus] = useState<string | null>(null);
   const [commitmentError, setCommitmentError] = useState<string | null>(null);
 
   const wallet = useKeptEvmWallet();
@@ -63,6 +80,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
   const productRequestGate = useMemo(() => createLatestRequestGate(), []);
   const config = useMemo(() => readVaultConfig(import.meta.env), []);
+  const commitmentManagerConfig = useMemo(
+    () => readCommitmentManagerConfig(import.meta.env),
+    [],
+  );
   const apiBaseUrl = useMemo(() => readApiBaseUrl(import.meta.env), []);
   const api = useMemo(
     () => apiBaseUrl ? createKeptApi({
@@ -76,6 +97,33 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     [config],
   );
   const account = wallet.address && isAddress(wallet.address) ? getAddress(wallet.address) : null;
+
+  useEffect(() => {
+    if (!account) {
+      pendingCommitmentAttempt.current = null;
+      return;
+    }
+    try {
+      pendingCommitmentAttempt.current = loadPendingCommitmentAttempt(
+        globalThis.localStorage,
+        account,
+      );
+    } catch {
+      pendingCommitmentAttempt.current = null;
+    }
+  }, [account]);
+  useEffect(() => {
+    if (!account || productState.kind !== "ready") return;
+    const attempt = pendingCommitmentAttempt.current;
+    if (!attempt) return;
+    const reconciled = reconcilePendingAttempt(attempt, productState.commitments);
+    pendingCommitmentAttempt.current = reconciled;
+    if (reconciled) {
+      savePendingCommitmentAttempt(globalThis.localStorage, account, reconciled);
+    } else {
+      clearPendingCommitmentAttempt(globalThis.localStorage, account);
+    }
+  }, [account, productState]);
   const positionState: PositionState = currentPositionState(storedPositionState, {
     account,
     chainId: wallet.liveChainId,
@@ -294,7 +342,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           ? "USDC approved and added. Refreshing your balance…"
           : "USDC added. Refreshing your balance…");
         setDepositAmount("");
-        await refreshPosition();
+        await Promise.all([refreshPosition(), refreshProductData()]);
         setDepositStatus("Deposit confirmed.");
       } catch (error) {
         diagnostics.warn("vault.deposit_failed", error);
@@ -302,7 +350,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setDepositError(consumerErrorMessage(error, "We could not add your money. Try again."));
       }
     });
-  }, [account, config, depositAmount, depositQuoteState, ensureTransactionNetwork, positionState, publicClient, refreshPosition, sender, transactionCoordinator]);
+  }, [account, config, depositAmount, depositQuoteState, ensureTransactionNetwork, positionState, publicClient, refreshPosition, refreshProductData, sender, transactionCoordinator]);
 
   const submitWithdrawal = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
@@ -345,7 +393,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         });
         setWithdrawStatus("Withdrawal confirmed. Refreshing your balance…");
         setWithdrawAmount("");
-        await refreshPosition();
+        await Promise.all([refreshPosition(), refreshProductData()]);
         setWithdrawStatus("Withdrawal confirmed.");
       } catch (error) {
         diagnostics.warn("vault.withdrawal_failed", error);
@@ -353,7 +401,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setWithdrawError(consumerErrorMessage(error, "We could not complete your withdrawal. Try again."));
       }
     });
-  }, [account, config, ensureTransactionNetwork, positionState, publicClient, refreshPosition, sender, transactionCoordinator, withdrawAmount]);
+  }, [account, config, ensureTransactionNetwork, positionState, publicClient, refreshPosition, refreshProductData, sender, transactionCoordinator, withdrawAmount]);
 
   const createGoal = useCallback(async (input: {
     readonly name: string;
@@ -397,8 +445,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [api, refreshProductData]);
 
   const createCommitment = useCallback(async (goal: GoalDto, input: CreateCommitmentInput) => {
-    if (!api) {
-      setCommitmentError("Kept's service is not configured.");
+    if (!api || !config || !commitmentManagerConfig || !publicClient || !account) {
+      setCommitmentError("Commitments are unavailable because Kept is not configured.");
       return false;
     }
 
@@ -408,29 +456,155 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       return false;
     }
     const parameters = { targetAmountAtomic: parsed.assets.toString(), periodDays: 7 };
+    const draftInput = {
+      goalId: goal.id,
+      definition: { code: input.code, version: 1 },
+      parameters,
+      epochStart: input.startAt.toISOString(),
+      epochEnd: input.endAt.toISOString(),
+      verificationDeadline: input.verificationDeadline.toISOString(),
+    };
+    const recoverableDraft = productState.commitments.find((commitment) =>
+      commitment.state === "DRAFT"
+      && commitment.savingsGoalId === goal.id
+      && commitment.definition.code === input.code
+      && commitment.parameters.targetAmountAtomic === parameters.targetAmountAtomic
+    );
+    const existingAttempt = pendingCommitmentAttempt.current
+      ?? (recoverableDraft ? {
+        draftInput: {
+          goalId: recoverableDraft.savingsGoalId,
+          definition: recoverableDraft.definition,
+          parameters: recoverableDraft.parameters,
+          epochStart: recoverableDraft.epochStart,
+          epochEnd: recoverableDraft.epochEnd,
+          verificationDeadline: recoverableDraft.verificationDeadline,
+        },
+        draftIdempotencyKey: globalThis.crypto.randomUUID(),
+        draft: recoverableDraft,
+      } : null);
+    if (existingAttempt?.terminalFailure) {
+      setCommitmentError(
+        "Kept could not safely reconcile this confirmed commitment. Contact support before trying again.",
+      );
+      return false;
+    }
+    if (
+      existingAttempt
+      && (
+        existingAttempt.draftInput.goalId !== goal.id
+        || existingAttempt.draftInput.definition.code !== input.code
+        || existingAttempt.draftInput.parameters.targetAmountAtomic !== parameters.targetAmountAtomic
+      )
+    ) {
+      setCommitmentError("Finish retrying your pending commitment before creating a different one.");
+      return false;
+    }
 
     setCreatingCommitment(true);
     setCommitmentError(null);
-    try {
-      const draft = await api.createCommitment({
-        goalId: goal.id,
-        definition: { code: input.code, version: 1 },
-        parameters,
-        epochStart: input.startAt.toISOString(),
-        epochEnd: input.endAt.toISOString(),
-        verificationDeadline: input.verificationDeadline.toISOString(),
+    let succeeded = false;
+    const acquired = await transactionCoordinator.run("commitment", async () => {
+      const result = await runCommitmentCreation(existingAttempt, {
+        draftInput,
+        draftIdempotencyKey: existingAttempt?.draftIdempotencyKey
+          ?? globalThis.crypto.randomUUID(),
+        createDraft: (request, idempotencyKey) => api.createCommitment(
+          request,
+          idempotencyKey,
+        ),
+        sendTransaction: async (draft) => {
+          await ensureTransactionNetwork();
+          return sender.sendTransaction(buildCreateCommitmentTransaction({
+            manager: commitmentManagerConfig.address,
+            chainId: config.chainId,
+            referenceId: referenceIdForCommitment(draft.id),
+            startAt: timestampSeconds(draft.epochStart),
+            endAt: timestampSeconds(draft.epochEnd),
+          }));
+        },
+        confirmTransaction: async (draft, transactionHash) => {
+          const receipt = await publicClient.waitForTransactionReceipt({
+            hash: transactionHash,
+            confirmations:
+              import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true"
+                ? 1
+                : 2,
+          });
+          return confirmCommitmentCreation({
+            manager: commitmentManagerConfig.address,
+            owner: account,
+            referenceId: referenceIdForCommitment(draft.id),
+            startAt: timestampSeconds(draft.epochStart),
+            endAt: timestampSeconds(draft.epochEnd),
+            transactionHash,
+            receipt: {
+              status: receipt.status === "success" ? "success" : "reverted",
+              logs: receipt.logs,
+            },
+            readContract: (request) => publicClient.readContract(request as never),
+          });
+        },
+        activateDraft: async (draft, settlement) => {
+          const result = await api.activateCommitment(draft, {
+            onchainCommitmentId: settlement.commitmentId.toString(),
+            transactionHash: settlement.transactionHash,
+          });
+
+          return result;
+        },
+        onStage: (stage) => setCommitmentStatus({
+          draft: "Preparing your commitment…",
+          wallet: "Confirm your commitment in your account.",
+          confirmation: "Confirming your commitment…",
+          activation: "Finishing your commitment…",
+        }[stage]),
+        onAttempt: (attempt) => {
+          pendingCommitmentAttempt.current = attempt;
+          if (!savePendingCommitmentAttempt(globalThis.localStorage, account, attempt)) {
+            throw new Error("Local commitment recovery state could not be saved");
+          }
+        },
       });
-      await api.activateCommitment(draft);
+
+      if (!result.ok) {
+        pendingCommitmentAttempt.current = result.attempt;
+        diagnostics.error("commitment.creation_failed", result.error, {
+          hasTransaction: Boolean(result.attempt?.transactionHash),
+          chainConfirmed: Boolean(result.attempt?.settlement),
+        });
+        setCommitmentStatus(null);
+        setCommitmentError(
+          result.attempt?.terminalFailure
+            ? "Kept could not safely reconcile this confirmed commitment. Contact support before trying again."
+            : consumerErrorMessage(
+              result.error,
+              result.attempt?.settlement
+                ? "Your commitment is confirmed, but Kept could not finish syncing it. Try again."
+                : "We could not create your commitment. Try again.",
+            ),
+        );
+        return;
+      }
+
+      pendingCommitmentAttempt.current = null;
+      try {
+        clearPendingCommitmentAttempt(globalThis.localStorage, account);
+      } catch {
+        // The API and contract are synchronized; stale local recovery data is ignored.
+      }
+      setCommitmentStatus("Commitment confirmed. Refreshing…");
       await refreshProductData();
-      return true;
-    } catch (error) {
-      diagnostics.error("api.commitment_create_failed", error);
-      setCommitmentError(consumerErrorMessage(error, "We could not create your commitment. Try again."));
-      return false;
-    } finally {
-      setCreatingCommitment(false);
+      setCommitmentStatus(null);
+      succeeded = true;
+    });
+    setCreatingCommitment(false);
+    if (!acquired) {
+      setCommitmentStatus(null);
+      setCommitmentError("Another account request is already in progress.");
     }
-  }, [api, refreshProductData]);
+    return succeeded;
+  }, [account, api, commitmentManagerConfig, config, ensureTransactionNetwork, productState.commitments, publicClient, refreshProductData, sender, transactionCoordinator]);
 
   const dismissDeposit = useCallback(() => {
     setDepositAmount("");
@@ -446,7 +620,14 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, []);
 
   const dismissGoal = useCallback(() => setGoalError(null), []);
-  const dismissCommitment = useCallback(() => setCommitmentError(null), []);
+  const dismissCommitment = useCallback(() => {
+    setCommitmentError(null);
+    setCommitmentStatus(null);
+  }, []);
+  const dismissAllocation = useCallback(() => {
+    setAllocationError(null);
+    setAllocationStatus(null);
+  }, []);
 
   if (!session.isReady) {
     return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground" aria-live="polite">Preparing your account…</main>;
@@ -471,6 +652,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         creatingGoal={creatingGoal}
         goalError={goalError}
         creatingCommitment={creatingCommitment}
+        commitmentStatus={commitmentStatus}
         commitmentError={commitmentError}
         onDepositAmountChange={setDepositAmount}
         onSubmitDeposit={() => void submitDeposit()}

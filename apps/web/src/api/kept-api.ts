@@ -31,8 +31,18 @@ export interface CommitmentDto {
   readonly stateVersion: number;
   readonly activatedAt: string | null;
   readonly finalizedAt: string | null;
+  readonly onchainCommitmentId: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface CreateCommitmentRequest {
+  readonly goalId: string;
+  readonly definition: { readonly code: string; readonly version: number };
+  readonly parameters: Readonly<Record<string, unknown>>;
+  readonly epochStart: string;
+  readonly epochEnd: string;
+  readonly verificationDeadline: string;
 }
 
 export interface KeptApi {
@@ -43,16 +53,15 @@ export interface KeptApi {
     readonly targetDate: string | null;
   }): Promise<GoalDto>;
   listCommitments(): Promise<readonly CommitmentDto[]>;
-  createCommitment(input: {
-    readonly goalId: string;
-    readonly definition: { readonly code: string; readonly version: number };
-    readonly parameters: Readonly<Record<string, unknown>>;
-    readonly epochStart: string;
-    readonly epochEnd: string;
-    readonly verificationDeadline: string;
-  }): Promise<CommitmentDto>;
-  activateCommitment(commitment: CommitmentDto): Promise<CommitmentDto>;
-  cancelCommitment(commitment: CommitmentDto): Promise<CommitmentDto>;
+  createCommitment(input: CreateCommitmentRequest, idempotencyKey?: string): Promise<CommitmentDto>;
+  activateCommitment(
+    commitment: CommitmentDto,
+    settlement: { readonly onchainCommitmentId: string; readonly transactionHash: string },
+  ): Promise<CommitmentDto>;
+  cancelCommitment(
+    commitment: CommitmentDto,
+    settlement: { readonly onchainCommitmentId: string; readonly owner: string },
+  ): Promise<CommitmentDto>;
 }
 
 type AccessTokenProvider = () => Promise<string | null>;
@@ -180,10 +189,10 @@ export function createKeptApi(input: {
     }
   }
 
-  function post<T>(path: string, body: unknown): Promise<T> {
+  function post<T>(path: string, body: unknown, requestIdempotencyKey = idempotencyKey()): Promise<T> {
     return request<T>(path, {
       method: "POST",
-      headers: { "idempotency-key": idempotencyKey() },
+      headers: { "idempotency-key": requestIdempotencyKey },
       body: JSON.stringify(body),
     });
   }
@@ -192,12 +201,18 @@ export function createKeptApi(input: {
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
     listCommitments: () => request<readonly CommitmentDto[]>("/v1/commitments"),
-    createCommitment: (commitment) => post<CommitmentDto>("/v1/commitments", commitment),
-    activateCommitment: (commitment) => post<CommitmentDto>(`/v1/commitments/${commitment.id}/activate`, {
+    createCommitment: (commitment, requestIdempotencyKey) => post<CommitmentDto>(
+      "/v1/commitments",
+      commitment,
+      requestIdempotencyKey,
+    ),
+    activateCommitment: (commitment, settlement) => post<CommitmentDto>(`/v1/commitments/${commitment.id}/activate`, {
       expectedVersion: commitment.stateVersion,
+      ...settlement,
     }),
-    cancelCommitment: (commitment) => post<CommitmentDto>(`/v1/commitments/${commitment.id}/cancel`, {
+    cancelCommitment: (commitment, settlement) => post<CommitmentDto>(`/v1/commitments/${commitment.id}/cancel`, {
       expectedVersion: commitment.stateVersion,
+      ...settlement,
     }),
   };
 }

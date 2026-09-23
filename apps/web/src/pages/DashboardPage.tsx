@@ -27,10 +27,11 @@ interface DashboardPageProps {
   readonly withdrawAmount: string;
   readonly withdrawStatus: string | null;
   readonly withdrawError: string | null;
-  readonly pendingTransaction: "deposit" | "withdraw" | null;
+  readonly pendingTransaction: "deposit" | "withdraw" | "commitment" | null;
   readonly creatingGoal: boolean;
   readonly goalError: string | null;
   readonly creatingCommitment: boolean;
+  readonly commitmentStatus: string | null;
   readonly commitmentError: string | null;
   readonly onDepositAmountChange: (value: string) => void;
   readonly onSubmitDeposit: () => void;
@@ -71,6 +72,7 @@ export function DashboardPage(props: DashboardPageProps) {
     creatingGoal,
     goalError,
     creatingCommitment,
+    commitmentStatus,
     commitmentError,
     onDepositAmountChange,
     onSubmitDeposit,
@@ -100,6 +102,9 @@ export function DashboardPage(props: DashboardPageProps) {
   const detailCommitments = detailGoal
     ? commitments.filter((commitment) => commitment.savingsGoalId === detailGoal.id)
     : [];
+  const commitmentForDialog = commitmentGoal
+    ? currentCommitment(commitmentGoal.id, commitments)
+    : undefined;
 
   return (
     <div className="space-y-10">
@@ -108,13 +113,9 @@ export function DashboardPage(props: DashboardPageProps) {
           <p className="text-sm font-medium text-primary">Dashboard</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Keep moving forward.</h1>
           <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Your goals and weekly commitments in one place. The financial plumbing stays in the background.
+            Your goals and weekly commitments in one place.
           </p>
         </div>
-        <Button variant="outline" onClick={() => setCreateGoalOpen(true)}>
-          <Plus className="size-4" />
-          New goal
-        </Button>
       </section>
 
       <BalanceCard
@@ -223,7 +224,9 @@ export function DashboardPage(props: DashboardPageProps) {
       <CreateCommitmentDialog
         open={commitmentGoal !== null}
         goal={commitmentGoal}
+        draft={commitmentForDialog?.state === "DRAFT" ? commitmentForDialog : null}
         submitting={creatingCommitment}
+        status={commitmentStatus}
         error={commitmentError}
         onOpenChange={(open) => {
           if (!open) {

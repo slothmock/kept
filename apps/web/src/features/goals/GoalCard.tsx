@@ -43,10 +43,10 @@ export function GoalCard({ goal, commitment, onAddCommitment, onOpen }: GoalCard
       <CardContent className="space-y-4 border-t bg-muted/10 pt-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium">Current commitment</p>
-          {!commitment && (
+          {(!commitment || commitment.state === "DRAFT") && (
             <Button variant="ghost" size="sm" onClick={() => onAddCommitment(goal)}>
               <Plus className="size-4" />
-              Add
+              {commitment ? "Retry setup" : "Add"}
             </Button>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Activity, PiggyBank } from "lucide-react";
 
-import type { GoalDto } from "@/api/kept-api";
+import type { CommitmentDto, GoalDto } from "@/api/kept-api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 import { COMMITMENT_OPTIONS } from "./options";
+import { commitmentSchedule } from "./commitment-schedule";
+import { formatUsdcPrecise } from "../savings/format";
 
 export interface CreateCommitmentInput {
   readonly code: "WEEKLY_SAVINGS_V1";
@@ -30,7 +32,9 @@ export interface CreateCommitmentInput {
 interface CreateCommitmentDialogProps {
   readonly open: boolean;
   readonly goal: GoalDto | null;
+  readonly draft: CommitmentDto | null;
   readonly submitting: boolean;
+  readonly status: string | null;
   readonly error: string | null;
 
   readonly onOpenChange: (open: boolean) => void;
@@ -46,7 +50,9 @@ type CommitmentCode = "WEEKLY_SAVINGS_V1";
 export function CreateCommitmentDialog({
   open,
   goal,
+  draft,
   submitting,
+  status,
   error,
   onOpenChange,
   onSubmit,
@@ -74,7 +80,14 @@ export function CreateCommitmentDialog({
     nextCode: CommitmentCode,
   ) {
     setCode(nextCode);
-    setTarget("");
+    const draftAmount = draft?.definition.code === nextCode
+      ? draft.parameters.targetAmountAtomic
+      : null;
+    setTarget(
+      typeof draftAmount === "string" && /^\d+$/.test(draftAmount)
+        ? formatUsdcPrecise(BigInt(draftAmount))
+        : "",
+    );
   }
 
   async function submit(
@@ -86,17 +99,7 @@ export function CreateCommitmentDialog({
       return;
     }
 
-    const startAt = new Date();
-
-    const endAt = new Date(
-      startAt.getTime() +
-      7 * 24 * 60 * 60 * 1000,
-    );
-
-    const verificationDeadline = new Date(
-      endAt.getTime() +
-      24 * 60 * 60 * 1000,
-    );
+    const { startAt, endAt, verificationDeadline } = commitmentSchedule();
 
     const created = await onSubmit(goal, {
       code,
@@ -227,6 +230,12 @@ export function CreateCommitmentDialog({
           {error && (
             <p className="text-sm text-destructive">
               {error}
+            </p>
+          )}
+
+          {status && (
+            <p className="text-sm text-muted-foreground" role="status">
+              {status}
             </p>
           )}
 
