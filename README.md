@@ -27,7 +27,7 @@ Kept adds a behavioural incentive layer:
 Base yield and behavioural rewards are separate.
 
 - **Base yield** comes from the underlying savings strategy.
-- **Behavioural rewards** are additional, bounded incentives funded separately.
+- **Behavioural rewards** are additional, bounded incentives funded separately from Kept revenue.
 - Missing a commitment does not remove legitimately earned base yield.
 - Users retain control of their savings.
 

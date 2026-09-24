@@ -2,6 +2,7 @@ import {
   PrivyClient,
   isEmbeddedWalletLinkedAccount,
   verifyAccessToken as privyVerifyAccessToken,
+  type LinkedAccount,
 } from "@privy-io/node";
 
 interface PrivyAccessTokenVerifier {
@@ -14,13 +15,6 @@ interface PrivyAccessTokenVerifier {
   }>;
 }
 
-export interface PrivyAuthenticatorOptions {
-  readonly appId: string;
-  readonly appSecret: string;
-  readonly verificationKey: string;
-  readonly verifyAccessToken?: PrivyAccessTokenVerifier;
-}
-
 export interface AuthenticatedWallet {
   readonly address: string;
 }
@@ -28,6 +22,26 @@ export interface AuthenticatedWallet {
 export interface AuthenticatedIdentity {
   readonly privyUserId: string;
   readonly wallet: string | null;
+}
+
+interface PrivyUserLookup {
+  (userId: string): Promise<{
+    readonly linked_accounts: readonly unknown[];
+  }>;
+}
+
+export interface PrivyAuthenticatorOptions {
+  readonly appId: string;
+  readonly appSecret: string;
+  readonly verificationKey: string;
+  readonly verifyAccessToken?: PrivyAccessTokenVerifier;
+  readonly getLinkedAccounts?: PrivyLinkedAccountsLookup;
+}
+
+interface PrivyLinkedAccountsLookup {
+  (
+    userId: string,
+  ): Promise<readonly LinkedAccount[]>;
 }
 
 export function createPrivyAuthenticator(
@@ -44,6 +58,13 @@ export function createPrivyAuthenticator(
     appId: options.appId,
     appSecret: options.appSecret,
   });
+
+  const getLinkedAccounts =
+    options.getLinkedAccounts ??
+    (async (userId: string) => {
+      const user = await privy.users()._get(userId);
+      return user.linked_accounts;
+    });
 
   return async (
     authorization: string | undefined,
@@ -67,11 +88,10 @@ export function createPrivyAuthenticator(
         verification_key: verificationKey,
       });
 
-      const user = await privy.users()._get(
-        verified.user_id,
-      );
+      const linkedAccounts =
+        await getLinkedAccounts(verified.user_id);
 
-      const wallet = user.linked_accounts.find(
+      const wallet = linkedAccounts.find(
         (account) =>
           isEmbeddedWalletLinkedAccount(account)
           && account.chain_type === "ethereum",

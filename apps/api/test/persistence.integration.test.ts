@@ -16,6 +16,9 @@ const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test";
 
+const ALLOCATION_WALLET =
+  "0x0000000000000000000000000000000000000001";
+
 let connection: DatabaseConnection;
 let service: KeptPersistenceService;
 
@@ -714,69 +717,139 @@ describe.sequential("idempotent write commands", () => {
 describe.sequential("goal share allocation ledger", () => {
   it("attributes existing onchain vault shares across goals with immutable deltas", async () => {
     const owner = await createUser("allocation-owner");
-    await service.createWallet({
-      userId: owner.id, walletKind: "PRIVY_EMBEDDED_MONAD", chainId: "143",
-      address: "0x0000000000000000000000000000000000000001", isPrimary: true,
-    });
+
     const firstGoal = await createGoal(owner.id);
     const secondGoal = await createGoal(owner.id);
+
     const allocationService = new KeptPersistenceService(connection.db, {
       chainId: 143n,
-      reader: { readShares: async () => 250_000_000_000_000n },
+      reader: {
+        readShares: async (address) => {
+          expect(address).toBe(ALLOCATION_WALLET);
+          return 250_000_000_000_000n;
+        },
+      },
     });
 
     const first = await allocationService.allocateGoalShares({
-      userId: owner.id, goalId: firstGoal.id, shareDeltaAtomic: "100000000000000",
-      reason: "manual", idempotencyKey: "first-allocation",
+      userId: owner.id,
+      goalId: firstGoal.id,
+      walletAddress: ALLOCATION_WALLET,
+      shareDeltaAtomic: "100000000000000",
+      reason: "manual",
+      idempotencyKey: "first-allocation",
     });
+
     const second = await allocationService.allocateGoalShares({
-      userId: owner.id, goalId: secondGoal.id, shareDeltaAtomic: "50000000000000",
-      reason: "manual", idempotencyKey: "second-allocation",
+      userId: owner.id,
+      goalId: secondGoal.id,
+      walletAddress: ALLOCATION_WALLET,
+      shareDeltaAtomic: "50000000000000",
+      reason: "manual",
+      idempotencyKey: "second-allocation",
     });
+
     const deallocated = await allocationService.allocateGoalShares({
-      userId: owner.id, goalId: firstGoal.id, shareDeltaAtomic: "-25000000000000",
-      reason: "manual", idempotencyKey: "first-deallocation",
+      userId: owner.id,
+      goalId: firstGoal.id,
+      walletAddress: ALLOCATION_WALLET,
+      shareDeltaAtomic: "-25000000000000",
+      reason: "manual",
+      idempotencyKey: "first-deallocation",
     });
 
     expect(first).toMatchObject({
-      allocatedSharesAtomic: "100000000000000", totalVaultSharesAtomic: "250000000000000",
-      totalAllocatedSharesAtomic: "100000000000000", unallocatedSharesAtomic: "150000000000000",
+      allocatedSharesAtomic: "100000000000000",
+      totalVaultSharesAtomic: "250000000000000",
+      totalAllocatedSharesAtomic: "100000000000000",
+      unallocatedSharesAtomic: "150000000000000",
     });
-    expect(second).toMatchObject({ totalAllocatedSharesAtomic: "150000000000000" });
+
+    expect(second).toMatchObject({
+      totalAllocatedSharesAtomic: "150000000000000",
+    });
+
     expect(deallocated).toMatchObject({
-      allocatedSharesAtomic: "75000000000000", totalAllocatedSharesAtomic: "125000000000000",
+      allocatedSharesAtomic: "75000000000000",
+      totalAllocatedSharesAtomic: "125000000000000",
       unallocatedSharesAtomic: "125000000000000",
     });
-    const history = await connection.pool.query<{ delta: string }>(
-      "SELECT share_delta_atomic::text AS delta FROM goal_share_allocations WHERE goal_id = $1 ORDER BY created_at, id",
+
+    const history = await connection.pool.query<{
+      delta: string;
+    }>(
+      `
+        SELECT share_delta_atomic::text AS delta
+        FROM goal_share_allocations
+        WHERE goal_id = $1
+        ORDER BY created_at, id
+      `,
       [firstGoal.id],
     );
-    expect(history.rows.map(({ delta }) => delta)).toEqual(["100000000000000", "-25000000000000"]);
+
+    expect(
+      history.rows.map(({ delta }) => delta),
+    ).toEqual([
+      "100000000000000",
+      "-25000000000000",
+    ]);
   });
 
   it("rejects allocations that would make a goal negative or exceed live vault shares", async () => {
     const owner = await createUser("allocation-limits");
-    await service.createWallet({
-      userId: owner.id, walletKind: "PRIVY_EMBEDDED_MONAD", chainId: "143",
-      address: "0x0000000000000000000000000000000000000002", isPrimary: true,
-    });
     const goal = await createGoal(owner.id);
     const allocationService = new KeptPersistenceService(connection.db, {
-      chainId: 143n, reader: { readShares: async () => 100n },
+      chainId: 143n,
+      reader: {
+        readShares: async (address) => {
+          expect(address).toBe(ALLOCATION_WALLET);
+          return 100n;
+        },
+      },
     });
 
-    await expect(allocationService.allocateGoalShares({
-      userId: owner.id, goalId: goal.id, shareDeltaAtomic: "101", reason: "manual", idempotencyKey: "over-balance",
-    })).rejects.toBeInstanceOf(PersistenceValidationError);
+    await expect(
+      allocationService.allocateGoalShares({
+        userId: owner.id,
+        goalId: goal.id,
+        walletAddress: ALLOCATION_WALLET,
+        shareDeltaAtomic: "101",
+        reason: "manual",
+        idempotencyKey: "over-balance",
+      }),
+    ).rejects.toBeInstanceOf(PersistenceValidationError);
+
     await allocationService.allocateGoalShares({
-      userId: owner.id, goalId: goal.id, shareDeltaAtomic: "100", reason: "manual", idempotencyKey: "within-balance",
+      userId: owner.id,
+      goalId: goal.id,
+      walletAddress: ALLOCATION_WALLET,
+      shareDeltaAtomic: "100",
+      reason: "manual",
+      idempotencyKey: "within-balance",
     });
-    await expect(allocationService.allocateGoalShares({
-      userId: owner.id, goalId: goal.id, shareDeltaAtomic: "-101", reason: "manual", idempotencyKey: "negative-goal",
-    })).rejects.toBeInstanceOf(PersistenceValidationError);
-    const rows = await connection.pool.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM goal_share_allocations WHERE goal_id = $1", [goal.id],
+
+    await expect(
+      allocationService.allocateGoalShares({
+        userId: owner.id,
+        goalId: goal.id,
+        walletAddress: ALLOCATION_WALLET,
+        shareDeltaAtomic: "-101",
+        reason: "manual",
+        idempotencyKey: "negative-goal",
+      }),
+    ).rejects.toBeInstanceOf(PersistenceValidationError);
+
+    const rows = await connection.pool.query<{
+      count: string;
+    }>(
+      `
+        SELECT count(*)::text AS count
+        FROM goal_share_allocations
+        WHERE goal_id = $1
+      `,
+      [goal.id],
     );
+
     expect(rows.rows[0]?.count).toBe("1");
   });
 });
