@@ -35,7 +35,7 @@ export interface CommitmentRecord {
 }
 
 export class KeptRepository {
-  constructor(private readonly db: PersistenceExecutor) {}
+  constructor(private readonly db: PersistenceExecutor) { }
 
   async createUser(input: {
     readonly id: string;
@@ -181,6 +181,27 @@ export class KeptRepository {
       goalAllocatedSharesAtomic: "0",
       totalAllocatedSharesAtomic: "0",
     };
+  }
+
+  async listPositiveGoalAllocationsForOwner(
+    userId: string,
+  ): Promise<readonly {
+    goalId: string;
+    allocatedSharesAtomic: string;
+  }[]> {
+    return this.db
+      .select({
+        goalId: goalShareAllocations.goalId,
+        allocatedSharesAtomic:
+          sql<string>`sum(${goalShareAllocations.shareDeltaAtomic})`,
+      })
+      .from(goalShareAllocations)
+      .where(eq(goalShareAllocations.userId, userId))
+      .groupBy(goalShareAllocations.goalId)
+      .having(
+        sql`sum(${goalShareAllocations.shareDeltaAtomic}) > 0`,
+      )
+      .orderBy(goalShareAllocations.goalId);
   }
 
   async findActiveDefinition(code: string, version: number) {

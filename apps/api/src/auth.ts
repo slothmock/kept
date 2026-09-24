@@ -1,6 +1,8 @@
-import { verifyAccessToken } from "@privy-io/node";
-
-import type { AuthenticatedIdentity } from "./app.js";
+import {
+  PrivyClient,
+  isEmbeddedWalletLinkedAccount,
+  verifyAccessToken as privyVerifyAccessToken,
+} from "@privy-io/node";
 
 interface PrivyAccessTokenVerifier {
   (input: {
@@ -14,20 +16,34 @@ interface PrivyAccessTokenVerifier {
 
 export interface PrivyAuthenticatorOptions {
   readonly appId: string;
+  readonly appSecret: string;
   readonly verificationKey: string;
   readonly verifyAccessToken?: PrivyAccessTokenVerifier;
+}
+
+export interface AuthenticatedWallet {
+  readonly address: string;
+}
+
+export interface AuthenticatedIdentity {
+  readonly privyUserId: string;
+  readonly wallet: string | null;
 }
 
 export function createPrivyAuthenticator(
   options: PrivyAuthenticatorOptions,
 ) {
-  const verify =
-    options.verifyAccessToken ?? verifyAccessToken;
+  const verificationKey = options.verificationKey
+    .replace(/\\n/g, "\n")
+    .trim();
 
-  const verificationKey =
-    options.verificationKey
-      .replace(/\\n/g, "\n")
-      .trim();
+  const verifyAccessToken =
+    options.verifyAccessToken ?? privyVerifyAccessToken;
+
+  const privy = new PrivyClient({
+    appId: options.appId,
+    appSecret: options.appSecret,
+  });
 
   return async (
     authorization: string | undefined,
@@ -45,14 +61,27 @@ export function createPrivyAuthenticator(
     }
 
     try {
-      const result = await verify({
+      const verified = await verifyAccessToken({
         access_token: accessToken,
         app_id: options.appId,
         verification_key: verificationKey,
       });
 
+      const user = await privy.users()._get(
+        verified.user_id,
+      );
+
+      const wallet = user.linked_accounts.find(
+        (account) =>
+          isEmbeddedWalletLinkedAccount(account)
+          && account.chain_type === "ethereum",
+      );
+
       return {
-        privyUserId: result.user_id,
+        privyUserId: verified.user_id,
+        wallet: wallet
+          ? wallet.address
+          : null,
       };
     } catch {
       return null;

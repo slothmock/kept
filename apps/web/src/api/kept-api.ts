@@ -63,7 +63,7 @@ export interface KeptApi {
   getGoalAllocation(goalId: string): Promise<GoalAllocationDto>;
   allocateGoalShares(
     goalId: string,
-    input: { readonly shareDeltaAtomic: string; readonly reason: string },
+    input: { readonly shareDeltaAtomic: string; readonly reason: string; },
     idempotencyKey?: string,
   ): Promise<GoalAllocationDto>;
   listCommitments(): Promise<readonly CommitmentDto[]>;
@@ -253,7 +253,7 @@ export function createKeptApi(input: {
     allocateGoalShares: async (goalId, allocation, requestIdempotencyKey) => parseGoalAllocation(
       await post<unknown>(
         `/v1/goals/${encodeURIComponent(goalId)}/allocations`,
-        allocation,
+        { ...allocation },
         requestIdempotencyKey,
       ),
       goalId,

@@ -21,6 +21,7 @@ import {
 
 export interface AuthenticatedIdentity {
   readonly privyUserId: string;
+  readonly wallet: string | null;
 }
 
 export interface ApiDependencies {
@@ -58,6 +59,7 @@ function allowedWebOrigins(webOrigin: string): string[] {
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: UserDto;
+  identity: AuthenticatedIdentity;
 }
 
 function asAuthenticatedRequest(request: FastifyRequest): AuthenticatedRequest {
@@ -195,9 +197,9 @@ export function buildApp(
   app.setErrorHandler((error, request, reply) => {
     const statusCode =
       error !== null &&
-      typeof error === "object" &&
-      "statusCode" in error &&
-      typeof error.statusCode === "number"
+        typeof error === "object" &&
+        "statusCode" in error &&
+        typeof error.statusCode === "number"
         ? error.statusCode
         : 500;
 
@@ -227,20 +229,40 @@ export function buildApp(
   app.addHook("onRequest", async (request, reply) => {
     if (request.routeOptions.url === "/health") return;
 
-    const identity = await dependencies.authenticate(request.headers.authorization);
+    const identity = await dependencies.authenticate(
+      request.headers.authorization,
+    );
+
     if (!identity) {
-      request.log.warn({ errorCode: "UNAUTHENTICATED" }, "API authentication failed");
-      await reply.code(401).send({ error: { code: "UNAUTHENTICATED" } });
+      request.log.warn(
+        { errorCode: "UNAUTHENTICATED" },
+        "API authentication failed",
+      );
+
+      await reply
+        .code(401)
+        .send({ error: { code: "UNAUTHENTICATED" } });
+
       return reply;
     }
 
     try {
-      asAuthenticatedRequest(request).user = await dependencies.persistence.createUser({
-        privyUserId: identity.privyUserId,
-      });
+      const authenticatedRequest =
+        asAuthenticatedRequest(request);
+
+      authenticatedRequest.user =
+        await dependencies.persistence.createUser({
+          privyUserId: identity.privyUserId,
+        });
+
+      authenticatedRequest.identity = identity;
     } catch (error) {
       const result = sendError(request, error);
-      await reply.code(result.statusCode).send(result.body);
+
+      await reply
+        .code(result.statusCode)
+        .send(result.body);
+
       return reply;
     }
   });
@@ -264,15 +286,29 @@ export function buildApp(
     }),
   );
 
-  app.get<{ Params: { id: string } }>("/v1/goals/:id/allocation", async (request, reply) =>
-    handle(request, reply, async () => {
-      const allocation = await dependencies.persistence.getGoalAllocation(
-        asAuthenticatedRequest(request).user.id,
-        request.params.id,
-      );
-      if (!allocation) throw new NotFoundError("Savings goal");
-      return allocation;
-    }),
+  app.get<{ Params: { id: string } }>(
+    "/v1/goals/:id/allocation",
+    async (request, reply) =>
+      handle(request, reply, async () => {
+        const auth = asAuthenticatedRequest(request);
+
+        if (!auth.identity.wallet) {
+          throw new NotFoundError("Privy embedded wallet");
+        }
+
+        const allocation =
+          await dependencies.persistence.getGoalAllocation(
+            auth.user.id,
+            request.params.id,
+            auth.identity.wallet,
+          );
+
+        if (!allocation) {
+          throw new NotFoundError("Savings goal");
+        }
+
+        return allocation;
+      }),
   );
 
   app.post("/v1/goals", async (request, reply) =>
@@ -298,17 +334,30 @@ export function buildApp(
     }),
   );
 
-  app.post<{ Params: { id: string } }>("/v1/goals/:id/allocations", async (request, reply) =>
-    handle(request, reply, async () => {
-      const body = requireObject(request.body);
-      return dependencies.persistence.allocateGoalShares({
-        userId: asAuthenticatedRequest(request).user.id,
-        goalId: request.params.id,
-        shareDeltaAtomic: requireSignedAtomicShareDelta(body, "shareDeltaAtomic"),
-        reason: requireString(body, "reason"),
-        idempotencyKey: requireIdempotencyKey(request),
-      });
-    }),
+  app.post<{ Params: { id: string } }>(
+    "/v1/goals/:id/allocations",
+    async (request, reply) =>
+      handle(request, reply, async () => {
+        const auth = asAuthenticatedRequest(request);
+
+        if (!auth.identity.wallet) {
+          throw new NotFoundError("Privy embedded wallet");
+        }
+
+        const body = requireObject(request.body);
+
+        return dependencies.persistence.allocateGoalShares({
+          userId: auth.user.id,
+          goalId: request.params.id,
+          walletAddress: auth.identity.wallet,
+          shareDeltaAtomic: requireSignedAtomicShareDelta(
+            body,
+            "shareDeltaAtomic",
+          ),
+          reason: requireString(body, "reason"),
+          idempotencyKey: requireIdempotencyKey(request),
+        });
+      }),
   );
 
   app.get("/v1/commitments", async (request, reply) =>

@@ -297,7 +297,7 @@ export class KeptPersistenceService {
       readonly reader: VaultShareBalanceReader;
       readonly chainId: bigint;
     },
-  ) {}
+  ) { }
 
   async createUser(input: {
     readonly privyUserId: string;
@@ -307,7 +307,7 @@ export class KeptPersistenceService {
     const repository = new KeptRepository(this.db);
     const user = await repository.createUser({
       id: randomUUID(),
-      privyUserId: requireNonBlank(input.privyUserId, "privyUserId"),
+      privyUserId: input.privyUserId,
       displayName: input.displayName?.trim() || null,
       now,
     });
@@ -412,15 +412,58 @@ export class KeptPersistenceService {
     return goals.map(mapGoal);
   }
 
-  async getGoalAllocation(userId: string, goalId: string): Promise<GoalAllocationDto | null> {
-    const repository = new KeptRepository(this.db);
-    if (!(await repository.findGoalForOwner(userId, goalId))) return null;
-    return this.readGoalAllocation(repository, userId, goalId);
+  async getGoalAllocation(
+    userId: string,
+    goalId: string,
+    walletAddress: string,
+  ): Promise<GoalAllocationDto | null> {
+    const { shares } =
+      await this.readVaultShares(walletAddress);
+
+    return this.db.transaction(async (transaction) => {
+      const repository =
+        new KeptRepository(transaction);
+
+      await repository.lockGoalsForOwner(userId);
+
+      if (
+        !(await repository.findGoalForOwner(
+          userId,
+          goalId,
+        ))
+      ) {
+        return null;
+      }
+
+      await this.reconcileGoalAllocationsToVaultBalance(
+        repository,
+        userId,
+        shares,
+      );
+
+      const allocationTotals =
+        await repository.getAllocationTotals(
+          userId,
+          goalId,
+        );
+
+      return this.toGoalAllocationDto(
+        goalId,
+        BigInt(
+          allocationTotals.goalAllocatedSharesAtomic,
+        ),
+        BigInt(
+          allocationTotals.totalAllocatedSharesAtomic,
+        ),
+        shares,
+      );
+    });
   }
 
   async allocateGoalShares(input: {
     readonly userId: string;
     readonly goalId: string;
+    readonly walletAddress: string;
     readonly shareDeltaAtomic: string;
     readonly reason: string;
     readonly idempotencyKey: string;
@@ -438,7 +481,14 @@ export class KeptPersistenceService {
         if (!(await repository.findGoalForOwner(input.userId, input.goalId))) {
           throw new NotFoundError("Savings goal");
         }
-        const { shares } = await this.readVaultShares(repository, input.userId);
+        const { shares } = await this.readVaultShares(input.walletAddress);
+
+        await this.reconcileGoalAllocationsToVaultBalance(
+          repository,
+          input.userId,
+          shares,
+        );
+
         const allocationTotals = await repository.getAllocationTotals(input.userId, input.goalId);
         const currentGoalAllocation = BigInt(allocationTotals.goalAllocatedSharesAtomic);
         const totalAllocation = BigInt(allocationTotals.totalAllocatedSharesAtomic);
@@ -462,6 +512,88 @@ export class KeptPersistenceService {
         return this.toGoalAllocationDto(input.goalId, nextGoalAllocation, nextTotalAllocation, shares);
       },
     );
+  }
+
+  private async reconcileGoalAllocationsToVaultBalance(
+    repository: KeptRepository,
+    userId: string,
+    vaultShares: bigint,
+  ): Promise<void> {
+    const rows =
+      await repository.listPositiveGoalAllocationsForOwner(
+        userId,
+      );
+
+    if (rows.length === 0) return;
+
+    const allocations = rows.map((row) => ({
+      goalId: row.goalId,
+      shares: BigInt(row.allocatedSharesAtomic),
+    }));
+
+    const totalAllocated = allocations.reduce(
+      (total, allocation) => total + allocation.shares,
+      0n,
+    );
+
+    if (totalAllocated <= vaultShares) {
+      return;
+    }
+
+    //
+    // Reduce allocations proportionally so that:
+    //
+    // sum(goal allocations) === vaultShares
+    //
+    // Integer division may leave a small remainder, so distribute
+    // that deterministically afterwards.
+    //
+    const reconciled = allocations.map((allocation) => ({
+      ...allocation,
+      targetShares:
+        allocation.shares * vaultShares / totalAllocated,
+    }));
+
+    let assigned = reconciled.reduce(
+      (total, allocation) => total + allocation.targetShares,
+      0n,
+    );
+
+    let remainder = vaultShares - assigned;
+
+    for (const allocation of reconciled) {
+      if (remainder === 0n) break;
+
+      if (allocation.targetShares < allocation.shares) {
+        allocation.targetShares += 1n;
+        remainder -= 1n;
+      }
+    }
+
+    if (remainder !== 0n) {
+      throw new Error(
+        "Goal allocation reconciliation could not distribute remainder",
+      );
+    }
+
+    const now = new Date();
+
+    for (const allocation of reconciled) {
+      const delta =
+        allocation.targetShares - allocation.shares;
+
+      if (delta === 0n) continue;
+
+      await repository.appendGoalShareAllocation({
+        id: randomUUID(),
+        userId,
+        goalId: allocation.goalId,
+        shareDeltaAtomic: delta.toString(),
+        reason: "vault_balance_reconciliation",
+        transactionHash: null,
+        createdAt: now,
+      });
+    }
   }
 
   async createCommitmentDraft(input: {
@@ -773,8 +905,9 @@ export class KeptPersistenceService {
     repository: KeptRepository,
     userId: string,
     goalId: string,
+    walletAddress: string,
   ): Promise<GoalAllocationDto> {
-    const { shares } = await this.readVaultShares(repository, userId);
+    const { shares } = await this.readVaultShares(walletAddress);
     const allocationTotals = await repository.getAllocationTotals(userId, goalId);
     const allocatedShares = BigInt(allocationTotals.goalAllocatedSharesAtomic);
     const totalAllocatedShares = BigInt(allocationTotals.totalAllocatedSharesAtomic);
@@ -782,18 +915,12 @@ export class KeptPersistenceService {
   }
 
   private async readVaultShares(
-    repository: KeptRepository,
-    userId: string,
+    walletAddress: string,
   ): Promise<{ readonly shares: bigint }> {
     if (!this.vaultShares) {
       throw new Error("Vault share reader is not configured");
     }
-    const wallet = await repository.findPrimaryWalletForOwnerOnChain(
-      userId,
-      this.vaultShares.chainId,
-    );
-    if (!wallet) throw new NotFoundError("Primary Monad wallet");
-    const shares = await this.vaultShares.reader.readShares(wallet.address);
+    const shares = await this.vaultShares.reader.readShares(walletAddress);
     if (shares < 0n) throw new Error("Vault returned a negative share balance");
     return { shares };
   }
@@ -804,12 +931,34 @@ export class KeptPersistenceService {
     totalAllocatedShares: bigint,
     vaultShares: bigint,
   ): GoalAllocationDto {
+    if (allocatedShares < 0n) {
+      throw new Error(
+        "Goal allocation cannot be negative",
+      );
+    }
+
+    if (totalAllocatedShares < 0n) {
+      throw new Error(
+        "Total goal allocation cannot be negative",
+      );
+    }
+
+    if (totalAllocatedShares > vaultShares) {
+      throw new Error(
+        "Goal allocations exceed current vault shares after reconciliation",
+      );
+    }
+
     return {
       goalId,
-      allocatedSharesAtomic: allocatedShares.toString(),
-      totalVaultSharesAtomic: vaultShares.toString(),
-      totalAllocatedSharesAtomic: totalAllocatedShares.toString(),
-      unallocatedSharesAtomic: (vaultShares - totalAllocatedShares).toString(),
+      allocatedSharesAtomic:
+        allocatedShares.toString(),
+      totalVaultSharesAtomic:
+        vaultShares.toString(),
+      totalAllocatedSharesAtomic:
+        totalAllocatedShares.toString(),
+      unallocatedSharesAtomic:
+        (vaultShares - totalAllocatedShares).toString(),
     };
   }
 

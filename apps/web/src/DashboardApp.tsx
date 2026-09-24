@@ -271,7 +271,22 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         return;
       }
       try {
-        const allocations = await Promise.all(goals.map((goal) => api.getGoalAllocation(goal.id)));
+        if (!account) {
+          if (productRequestGate.isCurrent(requestId)) {
+            setGoalFundingState({
+              kind: "error",
+              message: "Your Kept account is not ready yet.",
+            });
+          }
+
+          return;
+        }
+
+        const allocations = await Promise.all(
+          goals.map((goal) =>
+            api.getGoalAllocation(goal.id),
+          ),
+        );
         const funding = await readGoalFunding({
           allocations,
           publicClient: {
@@ -304,7 +319,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         ));
       }
     }
-  }, [api, config, productRequestGate, publicClient]);
+  }, [account, api, config, productRequestGate, publicClient]);
 
   useEffect(() => {
     const requestId = depositQuoteRequestGate.begin();
@@ -581,10 +596,14 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setAllocationError("Kept could not safely prepare this request in your browser. Check storage permissions and try again.");
         return false;
       }
-      await api.allocateGoalShares(goal.id, {
-        shareDeltaAtomic: sharesAtomic,
-        reason: "manual",
-      }, attempt.idempotencyKey);
+      await api.allocateGoalShares(
+        goal.id,
+        {
+          shareDeltaAtomic: sharesAtomic,
+          reason: "manual",
+        },
+        attempt.idempotencyKey,
+      );
       pendingAllocationAttempt.current = null;
       clearPendingGoalAllocation(globalThis.localStorage, account);
       await refreshProductData();
