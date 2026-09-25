@@ -4,6 +4,7 @@ export const COMMITMENT_STATES = [
   "COMPLETED",
   "FAILED",
   "CANCELLED",
+  "ARCHIVED",
 ] as const;
 
 export type CommitmentState = (typeof COMMITMENT_STATES)[number];

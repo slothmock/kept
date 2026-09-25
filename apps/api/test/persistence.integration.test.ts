@@ -420,9 +420,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
           commitmentId: inactiveDraft.id,
           expectedVersion: 1,
           onchainCommitmentId: "7",
-      settlementOwner: "0x2222222222222222222222222222222222222222",
-      settlementChainId: 143,
-      settlementStatus: 1,
+          settlementOwner: "0x2222222222222222222222222222222222222222",
+          settlementChainId: 143,
+          settlementStatus: 1,
           idempotencyKey: randomUUID(),
         }),
       ).rejects.toBeInstanceOf(PersistenceValidationError);
@@ -443,9 +443,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
         commitmentId: invalidDraft.id,
         expectedVersion: 1,
         onchainCommitmentId: "7",
-      settlementOwner: "0x2222222222222222222222222222222222222222",
-      settlementChainId: 143,
-      settlementStatus: 1,
+        settlementOwner: "0x2222222222222222222222222222222222222222",
+        settlementChainId: 143,
+        settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(PersistenceValidationError);
@@ -468,9 +468,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
         commitmentId: draft.id,
         expectedVersion: 1,
         onchainCommitmentId: "7",
-      settlementOwner: "0x2222222222222222222222222222222222222222",
-      settlementChainId: 143,
-      settlementStatus: 1,
+        settlementOwner: "0x2222222222222222222222222222222222222222",
+        settlementChainId: 143,
+        settlementStatus: 1,
         idempotencyKey: randomUUID(),
       });
 
@@ -495,9 +495,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
         commitmentId: draft.id,
         expectedVersion: 1,
         onchainCommitmentId: "7",
-      settlementOwner: "0x2222222222222222222222222222222222222222",
-      settlementChainId: 143,
-      settlementStatus: 1,
+        settlementOwner: "0x2222222222222222222222222222222222222222",
+        settlementChainId: 143,
+        settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -530,7 +530,7 @@ describe.sequential("commitment persistence and lifecycle", () => {
         onchainCommitmentId: "8",
         settlementOwner: "0x2222222222222222222222222222222222222222",
         settlementChainId: 143,
-      settlementStatus: 1,
+        settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(PersistenceValidationError);
@@ -550,9 +550,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
         commitmentId: draft.id,
         expectedVersion: 1,
         onchainCommitmentId: "7",
-      settlementOwner: "0x2222222222222222222222222222222222222222",
-      settlementChainId: 143,
-      settlementStatus: 1,
+        settlementOwner: "0x2222222222222222222222222222222222222222",
+        settlementChainId: 143,
+        settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
       service.activateCommitment({
@@ -560,9 +560,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
         commitmentId: draft.id,
         expectedVersion: 1,
         onchainCommitmentId: "7",
-      settlementOwner: "0x2222222222222222222222222222222222222222",
-      settlementChainId: 143,
-      settlementStatus: 1,
+        settlementOwner: "0x2222222222222222222222222222222222222222",
+        settlementChainId: 143,
+        settlementStatus: 1,
         idempotencyKey: randomUUID(),
       }),
     ]);
@@ -851,5 +851,113 @@ describe.sequential("goal share allocation ledger", () => {
     );
 
     expect(rows.rows[0]?.count).toBe("1");
+  });
+
+  it("atomically reallocates shares between goals", async () => {
+    const owner = await createUser("reallocation-owner");
+
+    await service.createWallet({
+      userId: owner.id,
+      walletKind: "PRIVY_EMBEDDED_MONAD",
+      chainId: "143",
+      address:
+        "0x0000000000000000000000000000000000000003",
+      isPrimary: true,
+    });
+
+    const firstGoal = await createGoal(owner.id);
+    const secondGoal = await createGoal(owner.id);
+
+    const allocationService =
+      new KeptPersistenceService(connection.db, {
+        chainId: 143n,
+        reader: {
+          readShares: async () => 250n,
+        },
+      });
+
+    await allocationService.allocateGoalShares({
+      userId: owner.id,
+      goalId: firstGoal.id,
+      walletAddress:
+        "0x0000000000000000000000000000000000000003",
+      shareDeltaAtomic: "150",
+      reason: "manual",
+      idempotencyKey: "initial-first",
+    });
+
+    await allocationService.allocateGoalShares({
+      userId: owner.id,
+      goalId: secondGoal.id,
+      walletAddress:
+        "0x0000000000000000000000000000000000000003",
+      shareDeltaAtomic: "50",
+      reason: "manual",
+      idempotencyKey: "initial-second",
+    });
+
+    const result =
+      await allocationService.reallocateGoalShares({
+        userId: owner.id,
+        walletAddress:
+          "0x0000000000000000000000000000000000000003",
+        fromGoalId: firstGoal.id,
+        toGoalId: secondGoal.id,
+        shareAmountAtomic: "40",
+        idempotencyKey: "move-40",
+      });
+
+    expect(result.from).toMatchObject({
+      goalId: firstGoal.id,
+      allocatedSharesAtomic: "110",
+      totalAllocatedSharesAtomic: "200",
+      totalVaultSharesAtomic: "250",
+      unallocatedSharesAtomic: "50",
+    });
+
+    expect(result.to).toMatchObject({
+      goalId: secondGoal.id,
+      allocatedSharesAtomic: "90",
+      totalAllocatedSharesAtomic: "200",
+      totalVaultSharesAtomic: "250",
+      unallocatedSharesAtomic: "50",
+    });
+
+    const history =
+      await connection.pool.query<{
+        goal_id: string;
+        delta: string;
+        reason: string;
+      }>(
+        `
+        SELECT
+          goal_id,
+          share_delta_atomic::text AS delta,
+          reason
+        FROM goal_share_allocations
+        WHERE goal_id = ANY($1::uuid[])
+        ORDER BY created_at, id
+      `,
+        [[firstGoal.id, secondGoal.id]],
+      );
+
+    expect(
+      history.rows.filter(
+        (row) => row.reason === "reallocation",
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          goal_id: firstGoal.id,
+          delta: "-40",
+          reason: "reallocation",
+        }),
+        expect.objectContaining({
+          goal_id: secondGoal.id,
+          delta: "40",
+          reason: "reallocation",
+        }),
+      ]),
+    );
   });
 });

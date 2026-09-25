@@ -1,7 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createKeptApi } from "../src/api/kept-api.js";
 import { ConsumerError } from "../src/lib/consumer-error.js";
+
+function allocation(goalId: string) {
+  return {
+    goalId,
+    allocatedSharesAtomic: "100",
+    totalVaultSharesAtomic: "300",
+    totalAllocatedSharesAtomic: "200",
+    unallocatedSharesAtomic: "100",
+  };
+}
 
 describe("Kept API consumer errors", () => {
   it("maps missing authentication to a safe session message", async () => {
@@ -70,26 +80,37 @@ describe("Kept API consumer errors", () => {
   });
 
   it("reuses a caller-supplied idempotency key for draft recovery", async () => {
-    let requestHeaders: Headers | null = null;
+    let idempotencyHeader: string | null = null;
+
     const api = createKeptApi({
       baseUrl: "https://api.example",
       getAccessToken: async () => "token",
       fetcher: async (_url, init) => {
-        requestHeaders = new Headers(init?.headers);
-        return new Response(JSON.stringify({ id: "draft-1" }), { status: 200 });
+        idempotencyHeader = new Headers(init?.headers).get("idempotency-key");
+
+        return new Response(
+          JSON.stringify({ id: "draft-1" }),
+          { status: 200 },
+        );
       },
     });
 
     await api.createCommitment({
       goalId: "goal-1",
-      definition: { code: "WEEKLY_SAVINGS_V1", version: 1 },
-      parameters: { targetAmountAtomic: "10000000", periodDays: 7 },
+      definition: {
+        code: "WEEKLY_SAVINGS_V1",
+        version: 1,
+      },
+      parameters: {
+        targetAmountAtomic: "10000000",
+        periodDays: 7,
+      },
       epochStart: "2026-09-23T00:05:00.000Z",
       epochEnd: "2026-09-30T00:05:00.000Z",
       verificationDeadline: "2026-10-01T00:05:00.000Z",
     }, "stable-draft-key");
 
-    expect(requestHeaders?.get("idempotency-key")).toBe("stable-draft-key");
+    expect(idempotencyHeader).toBe("stable-draft-key");
   });
 
   it("parses goal allocations and sends signed atomic deltas with idempotency", async () => {
@@ -156,6 +177,111 @@ describe("Kept API consumer errors", () => {
     });
 
     await expect(api.getGoalAllocation("goal-1")).rejects.toMatchObject({
+      code: "service_unavailable",
+    });
+  });
+});
+
+describe("Kept goal allocation API", () => {
+  it("sends an atomic goal reallocation request", async () => {
+    const fetcher = vi.fn(async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      expect(String(input)).toBe(
+        "http://kept.test/v1/goals/reallocate",
+      );
+
+      expect(init?.method).toBe("POST");
+
+      const headers = new Headers(init?.headers);
+
+      expect(headers.get("authorization")).toBe(
+        "Bearer test-token",
+      );
+
+      expect(headers.get("idempotency-key")).toBe(
+        "move-request-1",
+      );
+
+      expect(JSON.parse(String(init?.body))).toEqual({
+        fromGoalId: "goal-a",
+        toGoalId: "goal-b",
+        shareAmountAtomic: "50",
+      });
+
+      return new Response(
+        JSON.stringify({
+          from: allocation("goal-a"),
+          to: allocation("goal-b"),
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    });
+
+    const api = createKeptApi({
+      baseUrl: "http://kept.test",
+      getAccessToken: async () => "test-token",
+      fetcher: fetcher as typeof fetch,
+    });
+
+    await expect(
+      api.reallocateGoalShares(
+        {
+          fromGoalId: "goal-a",
+          toGoalId: "goal-b",
+          shareAmountAtomic: "50",
+        },
+        "move-request-1",
+      ),
+    ).resolves.toEqual({
+      from: allocation("goal-a"),
+      to: allocation("goal-b"),
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a malformed reallocation response", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          from: {
+            goalId: "goal-a",
+            allocatedSharesAtomic: "not-an-integer",
+          },
+          to: allocation("goal-b"),
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const api = createKeptApi({
+      baseUrl: "http://kept.test",
+      getAccessToken: async () => "test-token",
+      fetcher: fetcher as typeof fetch,
+    });
+
+    await expect(
+      api.reallocateGoalShares(
+        {
+          fromGoalId: "goal-a",
+          toGoalId: "goal-b",
+          shareAmountAtomic: "50",
+        },
+        "move-request-2",
+      ),
+    ).rejects.toMatchObject({
       code: "service_unavailable",
     });
   });

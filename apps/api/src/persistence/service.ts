@@ -514,6 +514,171 @@ export class KeptPersistenceService {
     );
   }
 
+  async reallocateGoalShares(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+    readonly fromGoalId: string;
+    readonly toGoalId: string;
+    readonly shareAmountAtomic: string;
+    readonly idempotencyKey: string;
+  }): Promise<{
+    readonly from: GoalAllocationDto;
+    readonly to: GoalAllocationDto;
+  }> {
+    const amount = requireSignedAtomicShareDelta(
+      input.shareAmountAtomic,
+    );
+
+    if (amount <= 0n) {
+      throw new PersistenceValidationError(
+        "Reallocation amount must be greater than zero",
+      );
+    }
+
+    if (input.fromGoalId === input.toGoalId) {
+      throw new PersistenceValidationError(
+        "Source and destination goals must be different",
+      );
+    }
+
+    const { idempotencyKey, ...request } = input;
+
+    return this.executeIdempotent(
+      input.userId,
+      "goal:share-reallocation",
+      idempotencyKey,
+      request,
+      async (repository) => {
+        /*
+         * Use the same owner-wide goal lock as normal
+         * allocation changes. This serializes changes
+         * affecting goal share attribution.
+         */
+        await repository.lockGoalsForOwner(input.userId);
+
+        const fromGoal =
+          await repository.findGoalForOwner(
+            input.userId,
+            input.fromGoalId,
+          );
+
+        if (!fromGoal) {
+          throw new NotFoundError("Source savings goal");
+        }
+
+        const toGoal =
+          await repository.findGoalForOwner(
+            input.userId,
+            input.toGoalId,
+          );
+
+        if (!toGoal) {
+          throw new NotFoundError(
+            "Destination savings goal",
+          );
+        }
+
+        const { shares } = await this.readVaultShares(
+          input.walletAddress,
+        );
+
+        const fromTotals =
+          await repository.getAllocationTotals(
+            input.userId,
+            input.fromGoalId,
+          );
+
+        const toTotals =
+          await repository.getAllocationTotals(
+            input.userId,
+            input.toGoalId,
+          );
+
+        const fromAllocated = BigInt(
+          fromTotals.goalAllocatedSharesAtomic,
+        );
+
+        const toAllocated = BigInt(
+          toTotals.goalAllocatedSharesAtomic,
+        );
+
+        /*
+         * Both calls should describe the same aggregate
+         * total because they are scoped to the same user.
+         */
+        const totalAllocated = BigInt(
+          fromTotals.totalAllocatedSharesAtomic,
+        );
+
+        if (fromAllocated < amount) {
+          throw new PersistenceValidationError(
+            "Source goal does not have enough allocated shares",
+          );
+        }
+
+        /*
+         * Reallocation does not change total allocation,
+         * but retain this invariant check so corrupted
+         * state cannot be propagated.
+         */
+        if (totalAllocated > shares) {
+          throw new PersistenceValidationError(
+            "Goal allocations exceed current vault shares",
+          );
+        }
+
+        const nextFromAllocated =
+          fromAllocated - amount;
+
+        const nextToAllocated =
+          toAllocated + amount;
+
+        const now = new Date();
+
+        /*
+         * These writes occur inside the transaction created
+         * by executeIdempotent(), so either both deltas are
+         * recorded or neither is.
+         */
+        await repository.appendGoalShareAllocation({
+          id: randomUUID(),
+          userId: input.userId,
+          goalId: input.fromGoalId,
+          shareDeltaAtomic: (-amount).toString(),
+          reason: "reallocation",
+          transactionHash: null,
+          createdAt: now,
+        });
+
+        await repository.appendGoalShareAllocation({
+          id: randomUUID(),
+          userId: input.userId,
+          goalId: input.toGoalId,
+          shareDeltaAtomic: amount.toString(),
+          reason: "reallocation",
+          transactionHash: null,
+          createdAt: now,
+        });
+
+        return {
+          from: this.toGoalAllocationDto(
+            input.fromGoalId,
+            nextFromAllocated,
+            totalAllocated,
+            shares,
+          ),
+
+          to: this.toGoalAllocationDto(
+            input.toGoalId,
+            nextToAllocated,
+            totalAllocated,
+            shares,
+          ),
+        };
+      },
+    );
+  }
+
   private async reconcileGoalAllocationsToVaultBalance(
     repository: KeptRepository,
     userId: string,
@@ -821,6 +986,109 @@ export class KeptPersistenceService {
     );
   }
 
+  private async cancelCommitmentWithRepository(
+    repository: KeptRepository,
+    input: {
+      readonly userId: string;
+      readonly commitmentId: string;
+      readonly expectedVersion: number;
+    },
+  ): Promise<CommitmentDto> {
+    if (
+      !Number.isSafeInteger(input.expectedVersion)
+      || input.expectedVersion < 1
+    ) {
+      throw new PersistenceValidationError(
+        "expectedVersion must be a positive safe integer",
+      );
+    }
+
+    const current =
+      await repository.findCommitmentForOwnerForUpdate(
+        input.userId,
+        input.commitmentId,
+      );
+
+    if (!current) {
+      throw new NotFoundError("Commitment");
+    }
+
+    if (current.state === "CANCELLED") {
+      return mapCommitment(current);
+    }
+
+    if (
+      current.state !== "DRAFT"
+      && current.state !== "ACTIVE"
+    ) {
+      throw new PersistenceValidationError(
+        "Only draft or active commitments can be cancelled",
+      );
+    }
+
+    const transitioned = transitionCommitment({
+      commitment: {
+        id: current.id,
+        definition: {
+          code: current.definitionCode,
+          version: current.definitionVersion,
+        },
+        parameters: current.parameters,
+        state: current.state,
+        version: current.stateVersion,
+      },
+      expectedState: current.state,
+      expectedVersion: input.expectedVersion,
+      targetState: "CANCELLED",
+    });
+
+    const now = new Date();
+
+    const updated =
+      await repository.updateCommitmentState({
+        userId: input.userId,
+        id: input.commitmentId,
+        expectedState: current.state,
+        expectedVersion: input.expectedVersion,
+        targetState: transitioned.state,
+        opaqueSettlementRef:
+          current.opaqueSettlementRef,
+        activatedAt: current.activatedAt,
+        finalizedAt: now,
+        updatedAt: now,
+      });
+
+    if (!updated) {
+      const latest =
+        await repository.findCommitmentForOwner(
+          input.userId,
+          input.commitmentId,
+        );
+
+      if (!latest) {
+        throw new NotFoundError("Commitment");
+      }
+
+      throw new StaleCommitmentVersionError(
+        input.expectedVersion,
+        latest.stateVersion,
+      );
+    }
+
+    const cancelled =
+      await repository.findCommitmentForOwner(
+        input.userId,
+        input.commitmentId,
+      );
+
+    if (!cancelled) {
+      throw new Error(
+        "Cancelled commitment could not be reloaded",
+      );
+    }
+
+    return mapCommitment(cancelled);
+  }
 
   async cancelCommitment(input: {
     readonly userId: string;
@@ -830,73 +1098,146 @@ export class KeptPersistenceService {
     readonly settlementOwner: string;
     readonly idempotencyKey: string;
   }): Promise<CommitmentDto> {
-    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
-      throw new PersistenceValidationError("expectedVersion must be a positive safe integer");
-    }
     const { idempotencyKey, ...request } = input;
+
     return this.executeIdempotent(
       input.userId,
       "commitment:cancel",
       idempotencyKey,
       request,
       async (repository) => {
-        const current = await repository.findCommitmentForOwnerForUpdate(
-          input.userId,
-          input.commitmentId,
-        );
-        if (!current) {
-          throw new NotFoundError("Commitment");
-        }
-        if (
-          current.state === "CANCELLED"
-          && current.opaqueSettlementRef
-          && decodeOnchainCommitmentId(current.opaqueSettlementRef) === input.onchainCommitmentId
-        ) {
-          return mapCommitment(current);
-        }
-        if (current.state !== "DRAFT" && current.state !== "ACTIVE") {
-          throw new PersistenceValidationError("Only draft or active commitments can be cancelled");
-        }
-
-        const transitioned = transitionCommitment({
-          commitment: {
-            id: current.id,
-            definition: { code: current.definitionCode, version: current.definitionVersion },
-            parameters: current.parameters,
-            state: current.state,
-            version: current.stateVersion,
-          },
-          expectedState: current.state,
-          expectedVersion: input.expectedVersion,
-          targetState: "CANCELLED",
-        });
-        const now = new Date();
-        const updated = await repository.updateCommitmentState({
-          userId: input.userId,
-          id: input.commitmentId,
-          expectedState: current.state,
-          expectedVersion: input.expectedVersion,
-          targetState: transitioned.state,
-          opaqueSettlementRef: current.opaqueSettlementRef,
-          activatedAt: current.activatedAt,
-          finalizedAt: now,
-          updatedAt: now,
-        });
-        if (!updated) {
-          const latest = await repository.findCommitmentForOwner(
+        const current =
+          await repository.findCommitmentForOwnerForUpdate(
             input.userId,
             input.commitmentId,
           );
-          if (!latest) throw new NotFoundError("Commitment");
-          throw new StaleCommitmentVersionError(input.expectedVersion, latest.stateVersion);
+
+        if (!current) {
+          throw new NotFoundError("Commitment");
         }
 
-        const cancelled = await repository.findCommitmentForOwner(
-          input.userId,
-          input.commitmentId,
+        if (
+          current.state === "CANCELLED"
+          && current.opaqueSettlementRef
+          && decodeOnchainCommitmentId(
+            current.opaqueSettlementRef,
+          ) === input.onchainCommitmentId
+        ) {
+          return mapCommitment(current);
+        }
+
+        return this.cancelCommitmentWithRepository(
+          repository,
+          {
+            userId: input.userId,
+            commitmentId: input.commitmentId,
+            expectedVersion: input.expectedVersion,
+          },
         );
-        if (!cancelled) throw new Error("Cancelled commitment could not be reloaded");
-        return mapCommitment(cancelled);
+      },
+    );
+  }
+
+  async archiveGoal(input: {
+    readonly userId: string;
+    readonly goalId: string;
+    readonly idempotencyKey: string;
+  }): Promise<GoalDto> {
+    const { idempotencyKey, ...request } = input;
+
+    return this.executeIdempotent(
+      input.userId,
+      "goal:archive",
+      idempotencyKey,
+      request,
+      async (repository) => {
+        await repository.lockGoalsForOwner(
+          input.userId,
+        );
+
+        const goal =
+          await repository.findGoalForOwner(
+            input.userId,
+            input.goalId,
+          );
+
+        if (!goal) {
+          throw new NotFoundError("Savings goal");
+        }
+
+        if (goal.status === "ARCHIVED") {
+          return mapGoal(goal);
+        }
+
+        const commitments =
+          await repository.listCommitmentsForGoal(
+            input.userId,
+            input.goalId,
+          );
+
+        const cancellable = commitments.filter(
+          (commitment) =>
+            commitment.state === "DRAFT"
+            || commitment.state === "ACTIVE",
+        );
+
+        for (const commitment of cancellable) {
+          /*
+           * Active on-chain commitments should only arrive
+           * here after the frontend/API has verified their
+           * on-chain cancellation.
+           */
+          if (commitment.state === "ACTIVE") {
+            throw new PersistenceValidationError(
+              "Active commitment must be cancelled on-chain before the goal can be archived",
+            );
+          }
+          await this.cancelCommitmentWithRepository(
+            repository,
+            {
+              userId: input.userId,
+              commitmentId: commitment.id,
+              expectedVersion:
+                commitment.stateVersion,
+            },
+          );
+        }
+
+        const allocationTotals =
+          await repository.getAllocationTotals(
+            input.userId,
+            input.goalId,
+          );
+
+        const allocatedShares = BigInt(
+          allocationTotals.goalAllocatedSharesAtomic,
+        );
+
+        if (allocatedShares > 0n) {
+          await repository.appendGoalShareAllocation({
+            id: randomUUID(),
+            userId: input.userId,
+            goalId: input.goalId,
+            shareDeltaAtomic:
+              (-allocatedShares).toString(),
+            reason: "goal_archived",
+            transactionHash: null,
+            createdAt: new Date(),
+          });
+        }
+
+        const archived =
+          await repository.archiveGoal({
+            userId: input.userId,
+            goalId: input.goalId,
+            updatedAt: new Date(),
+          });
+
+        if (!archived) {
+          throw new NotFoundError("Savings goal");
+        }
+
+        return mapGoal(archived);
       },
     );
   }

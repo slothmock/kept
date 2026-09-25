@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreateCommitmentDialog, type CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
 import type { ProductDataState } from "@/features/dashboard/product-data-state";
 import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
-import { AddToGoalDialog } from "@/features/goals/AddToGoalDialog";
+import { ManageGoalSavingsDialog } from "@/features/goals/ManageGoalSavingsDialog";
 import { CreateGoalDialog } from "@/features/goals/CreateGoalDialog";
 import { GoalCard } from "@/features/goals/GoalCard";
 import { GoalDetailsDialog } from "@/features/goals/GoalDetailsDialog";
@@ -32,6 +32,15 @@ interface DashboardPageProps {
   readonly withdrawError: string | null;
   readonly pendingTransaction: "deposit" | "withdraw" | "commitment" | null;
   readonly creatingGoal: boolean;
+  readonly deletingGoal: boolean;
+  readonly deleteGoalStatus: string | null;
+  readonly deleteGoalError: string | null;
+
+  readonly onDeleteGoal: (
+    goal: GoalDto,
+  ) => Promise<boolean>;
+
+  readonly onDismissGoalDeletion: () => void;
   readonly goalError: string | null;
   readonly creatingCommitment: boolean;
   readonly commitmentStatus: string | null;
@@ -54,6 +63,8 @@ interface DashboardPageProps {
   }) => Promise<boolean>;
   readonly onCreateCommitment: (goal: GoalDto, input: CreateCommitmentInput) => Promise<boolean>;
   readonly onAddToGoal: (goal: GoalDto, amount: string) => Promise<boolean>;
+  readonly onRemoveFromGoal: (goal: GoalDto, amount: string) => Promise<boolean>;
+  readonly onMoveBetweenGoals: (fromGoal: GoalDto, toGoal: GoalDto, amount: string) => Promise<boolean>;
   readonly onDismissGoal: () => void;
   readonly onDismissCommitment: () => void;
   readonly onDismissAllocation: () => void;
@@ -79,6 +90,11 @@ export function DashboardPage(props: DashboardPageProps) {
     withdrawError,
     pendingTransaction,
     creatingGoal,
+    deletingGoal,
+    deleteGoalStatus,
+    deleteGoalError,
+    onDeleteGoal,
+    onDismissGoalDeletion,
     goalError,
     creatingCommitment,
     commitmentStatus,
@@ -98,6 +114,8 @@ export function DashboardPage(props: DashboardPageProps) {
     onCreateCommitment,
     onAddToGoal,
     onDismissGoal,
+    onRemoveFromGoal,
+    onMoveBetweenGoals,
     onDismissCommitment,
     onDismissAllocation,
   } = props;
@@ -106,7 +124,7 @@ export function DashboardPage(props: DashboardPageProps) {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
   const [commitmentGoal, setCommitmentGoal] = useState<GoalDto | null>(null);
-  const [fundingGoal, setFundingGoal] = useState<GoalDto | null>(null);
+  const [savingsGoal, setSavingsGoal] = useState<GoalDto | null>(null);
   const [detailGoal, setDetailGoal] = useState<GoalDto | null>(null);
 
   const goals = productState.goals;
@@ -127,9 +145,6 @@ export function DashboardPage(props: DashboardPageProps) {
         <div>
           <p className="text-sm font-medium text-primary">Dashboard</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Keep moving forward.</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Your goals and weekly commitments in one place.
-          </p>
         </div>
       </section>
 
@@ -145,8 +160,7 @@ export function DashboardPage(props: DashboardPageProps) {
       <section className="space-y-5" aria-labelledby="goals-heading">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <h2 id="goals-heading" className="text-xl font-semibold tracking-tight">Your goals</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Focus on the outcome, then keep the weekly action small.</p>
+            <h2 id="goals-heading" className="text-xl font-semibold tracking-tight">Your Goals</h2>
           </div>
           {productState.kind === "error" && (
             <Button variant="ghost" size="sm" onClick={onRefreshProductData}>
@@ -188,17 +202,65 @@ export function DashboardPage(props: DashboardPageProps) {
               <GoalCard
                 key={goal.id}
                 goal={goal}
-                funding={goalFundingState.kind === "loading"
-                  ? null
-                  : goalFundingState.funding?.byGoal.get(goal.id) ?? null}
+                funding={
+                  goalFundingState.kind === "loading"
+                    ? null
+                    : goalFundingState.funding?.byGoal.get(goal.id) ?? null
+                }
                 commitment={currentCommitment(goal.id, commitments)}
-                onAddFunds={(selected) => setFundingGoal(selected)}
-                onAddCommitment={(selected) => setCommitmentGoal(selected)}
-                onOpen={(selected) => setDetailGoal(selected)}
+                onManageSavings={(selected) =>
+                  setSavingsGoal(selected)
+                }
+                onAddCommitment={(selected) =>
+                  setCommitmentGoal(selected)
+                }
+                onOpen={(selected) =>
+                  setDetailGoal(selected)
+                }
               />
             ))}
+
+            <button
+              type="button"
+              onClick={() => setCreateGoalOpen(true)}
+              className="
+      group flex min-h-80 flex-col items-center
+      justify-center gap-4 rounded-xl border
+      border-dashed bg-muted/10 p-8 text-center
+      transition
+      hover:border-primary/40
+      hover:bg-accent/30
+      focus-visible:outline-none
+      focus-visible:ring-2
+      focus-visible:ring-ring
+      focus-visible:ring-offset-2
+    "
+            >
+              <div
+                className="
+        grid size-12 place-items-center rounded-full
+        border bg-background text-muted-foreground
+        transition
+        group-hover:border-primary/30
+        group-hover:text-primary
+      "
+              >
+                <Plus className="size-5" />
+              </div>
+
+              <div>
+                <h3 className="font-semibold">
+                  Create another goal
+                </h3>
+
+                <p className="mt-1 max-w-xs text-sm leading-6 text-muted-foreground">
+                  Give more of your savings a purpose.
+                </p>
+              </div>
+            </button>
           </div>
         )}
+
       </section>
 
       <div className="flex flex-col gap-2 border-t pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
@@ -241,21 +303,33 @@ export function DashboardPage(props: DashboardPageProps) {
         onSubmit={onCreateGoal}
       />
 
-      <AddToGoalDialog
-        goal={fundingGoal}
-        unallocatedAssets={goalFundingState.kind === "ready"
-          ? goalFundingState.funding.unallocatedAssets
-          : null}
+      <ManageGoalSavingsDialog
+        goal={savingsGoal}
+        goals={activeGoals}
+        allocatedAssets={
+          savingsGoal && goalFundingState.kind === "ready"
+            ? goalFundingState.funding.byGoal.get(
+              savingsGoal.id,
+            )?.allocatedAssets ?? 0n
+            : null
+        }
+        unallocatedAssets={
+          goalFundingState.kind === "ready"
+            ? goalFundingState.funding.unallocatedAssets
+            : null
+        }
         submitting={allocatingGoal}
         status={allocationStatus}
         error={allocationError}
         onOpenChange={(open) => {
           if (!open) {
-            setFundingGoal(null);
+            setSavingsGoal(null);
             onDismissAllocation();
           }
         }}
-        onSubmit={onAddToGoal}
+        onAdd={onAddToGoal}
+        onRemove={onRemoveFromGoal}
+        onMove={onMoveBetweenGoals}
       />
 
       <CreateCommitmentDialog
@@ -277,9 +351,25 @@ export function DashboardPage(props: DashboardPageProps) {
       <GoalDetailsDialog
         open={detailGoal !== null}
         goal={detailGoal}
+        funding={
+          detailGoal && goalFundingState.kind !== "loading"
+            ? goalFundingState.funding?.byGoal.get(detailGoal.id) ?? null
+            : null
+        }
         commitments={detailCommitments}
+        deleting={deletingGoal}
+        deleteStatus={deleteGoalStatus}
+        deleteError={deleteGoalError}
+        onDelete={onDeleteGoal}
         onOpenChange={(open) => {
-          if (!open) setDetailGoal(null);
+          if (!open) {
+            setDetailGoal(null);
+            onDismissGoalDeletion();
+          }
+        }}
+        onManageSavings={(goal) => {
+          setDetailGoal(null);
+          setSavingsGoal(goal);
         }}
         onAddCommitment={(goal) => {
           setDetailGoal(null);

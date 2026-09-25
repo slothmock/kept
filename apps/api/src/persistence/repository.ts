@@ -286,6 +286,21 @@ export class KeptRepository {
       .orderBy(desc(userCommitments.createdAt), desc(userCommitments.id));
   }
 
+  async listCommitmentsForGoal(
+    userId: string,
+    goalId: string,
+  ) {
+    return this.db
+      .select()
+      .from(userCommitments)
+      .where(
+        and(
+          eq(userCommitments.userId, userId),
+          eq(userCommitments.savingsGoalId, goalId),
+        ),
+      );
+  }
+
   async findCommitmentForOwnerForUpdate(
     userId: string,
     id: string,
@@ -388,6 +403,29 @@ export class KeptRepository {
       .limit(1);
 
     return record ?? null;
+  }
+
+  async archiveGoal(input: {
+    readonly userId: string;
+    readonly goalId: string;
+    readonly updatedAt: Date;
+  }) {
+    const [updated] = await this.db
+      .update(savingsGoals)
+      .set({
+        status: "ARCHIVED",
+        updatedAt: input.updatedAt,
+      })
+      .where(
+        and(
+          eq(savingsGoals.id, input.goalId),
+          eq(savingsGoals.userId, input.userId),
+          eq(savingsGoals.status, "ACTIVE"),
+        ),
+      )
+      .returning();
+
+    return updated ?? null;
   }
 
   async updateCommitmentStateInternal(input: {

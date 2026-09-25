@@ -1,5 +1,5 @@
 import type { CommitmentDto, GoalDto } from "@/api/kept-api";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Plus, SlidersHorizontal } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,51 +25,102 @@ interface GoalCardProps {
   readonly goal: GoalDto;
   readonly funding: GoalFundingEntry | null;
   readonly commitment?: CommitmentDto | undefined;
-  readonly onAddFunds: (goal: GoalDto) => void;
+  readonly onManageSavings: (goal: GoalDto) => void;
   readonly onAddCommitment: (goal: GoalDto) => void;
   readonly onOpen: (goal: GoalDto) => void;
 }
 
-export function GoalCard({ goal, funding, commitment, onAddFunds, onAddCommitment, onOpen }: GoalCardProps) {
+export function GoalCard({
+  goal,
+  funding,
+  commitment,
+  onManageSavings,
+  onAddCommitment,
+  onOpen,
+}: GoalCardProps) {
   const target = targetAmountAtomic(goal);
   const allocatedAssets = funding?.allocatedAssets ?? null;
-  const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
+  const progress = goalFundingPercent(
+    allocatedAssets ?? 0n,
+    target,
+  );
+
   return (
     <Card className="overflow-hidden shadow-none transition-shadow hover:shadow-sm">
-      <CardHeader className="gap-4 pb-4">
+      <CardHeader className="gap-5 pb-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Goal</p>
-            <h3 className="truncate text-xl font-semibold tracking-tight">{goal.name}</h3>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Goal
+            </p>
+
+            <h3 className="truncate text-xl font-semibold tracking-tight">
+              {goal.name}
+            </h3>
           </div>
-          <Badge variant="outline">{goal.status === "ACTIVE" ? "Active" : goal.status}</Badge>
+
+          <Badge variant="outline">
+            {goal.status === "ACTIVE"
+              ? "Active"
+              : goal.status}
+          </Badge>
         </div>
 
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-2xl font-semibold tabular-nums">
-                {allocatedAssets === null ? "—" : `${formatUsdc(allocatedAssets)} USDC`}
-              </p>
-              <p className="text-sm text-muted-foreground">saved</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold tabular-nums">{targetAmount(goal)} USDC</p>
-              <p className="text-sm text-muted-foreground">target</p>
-            </div>
+        <div>
+          <div className="flex items-end gap-2">
+            <p className="text-3xl font-semibold tracking-tight tabular-nums">
+              {allocatedAssets === null
+                ? "—"
+                : formatUsdc(allocatedAssets)}
+            </p>
+
+            {allocatedAssets !== null && (
+              <span className="pb-1 text-sm text-muted-foreground">
+                USDC
+              </span>
+            )}
           </div>
-          <Progress value={progress.visualPercent} aria-label={`${progress.labelPercent}% funded`} />
-          <p className="text-sm font-medium tabular-nums">
-            {allocatedAssets === null ? "Funding unavailable" : `${progress.labelPercent}% funded`}
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            saved of {targetAmount(goal)} USDC
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <Progress
+            value={progress.visualPercent}
+            aria-label={`${progress.labelPercent}% funded`}
+          />
+
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="font-medium tabular-nums">
+              {allocatedAssets === null
+                ? "Savings unavailable"
+                : `${progress.labelPercent}% of target`}
+            </span>
+
+            {goal.targetDate && (
+              <span className="text-muted-foreground">
+                Target set
+              </span>
+            )}
+          </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4 border-t bg-muted/10 pt-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">Current commitment</p>
-          {(!commitment || commitment.state === "DRAFT") && (
-            <Button variant="ghost" size="sm" onClick={() => onAddCommitment(goal)}>
+          <p className="text-sm font-medium">
+            Current commitment
+          </p>
+
+          {(!commitment ||
+            commitment.state === "DRAFT") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onAddCommitment(goal)}
+            >
               <Plus className="size-4" />
               {commitment ? "Retry setup" : "Add"}
             </Button>
@@ -77,20 +128,35 @@ export function GoalCard({ goal, funding, commitment, onAddFunds, onAddCommitmen
         </div>
 
         {commitment ? (
-          <CommitmentCard commitment={commitment} compact />
+          <CommitmentCard
+            commitment={commitment}
+            compact
+          />
         ) : (
           <button
             type="button"
             className="w-full rounded-lg border border-dashed p-4 text-left text-sm text-muted-foreground transition hover:border-primary/40 hover:bg-accent/40 hover:text-foreground"
             onClick={() => onAddCommitment(goal)}
           >
-            Add a weekly savings commitment.
+            Add a commitment to help you keep moving
+            towards this goal.
           </button>
         )}
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button disabled={!funding} onClick={() => onAddFunds(goal)}>Add to goal</Button>
-          <Button variant="ghost" className="justify-between" onClick={() => onOpen(goal)}>
+          <Button
+            disabled={!funding}
+            onClick={() => onManageSavings(goal)}
+          >
+            <SlidersHorizontal className="size-4" />
+            Manage savings
+          </Button>
+
+          <Button
+            variant="ghost"
+            className="justify-between"
+            onClick={() => onOpen(goal)}
+          >
             Goal details
             <ArrowRight className="size-4" />
           </Button>

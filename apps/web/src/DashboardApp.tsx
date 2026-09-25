@@ -7,6 +7,7 @@ import { useKeptEvmWallet } from "@/chain/evm-wallet";
 import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import {
+  buildCancelCommitmentTransaction,
   buildCreateCommitmentTransaction,
   confirmCommitmentCreation,
   referenceIdForCommitment,
@@ -39,6 +40,7 @@ import type { PositionState } from "@/features/savings/BalanceCard";
 import { formatUsdc } from "@/features/savings/format";
 import {
   allocationInputError,
+  deallocationInputError,
   previewAllocationShares,
   readGoalFunding,
   type GoalFundingState,
@@ -81,6 +83,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [storedPositionState, setStoredPositionState] = useState<BoundPositionState>({ kind: "unavailable" });
   const [productState, setProductState] = useState<ProductDataState>(initialProductDataState);
   const [creatingGoal, setCreatingGoal] = useState(false);
+  const [deletingGoal, setDeletingGoal] = useState(false);
+  const [deleteGoalStatus, setDeleteGoalStatus] = useState<string | null>(null);
+  const [deleteGoalError, setDeleteGoalError] = useState<string | null>(null);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [creatingCommitment, setCreatingCommitment] = useState(false);
   const [commitmentStatus, setCommitmentStatus] = useState<string | null>(null);
@@ -137,6 +142,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       pendingCommitmentAttempt.current = null;
     }
   }, [account]);
+
   useEffect(() => {
     if (!account || productState.kind !== "ready") return;
     const attempt = pendingCommitmentAttempt.current;
@@ -149,10 +155,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       clearPendingCommitmentAttempt(globalThis.localStorage, account);
     }
   }, [account, productState]);
+
   const positionState: PositionState = currentPositionState(storedPositionState, {
     account,
     chainId: wallet.liveChainId,
   });
+
   const depositQuoteState = currentDepositQuote(storedDepositQuote, depositAmount);
   const getCurrentWalletChainId = wallet.getCurrentChainId;
   const ensureTransactionNetwork = useCallback(async () => {
@@ -520,108 +528,414 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [api, refreshProductData]);
 
-  const addToGoal = useCallback(async (goal: GoalDto, amount: string): Promise<boolean> => {
+  const deleteGoal = useCallback(
+    async (goal: GoalDto): Promise<boolean> => {
+      if (
+        !api
+        || !config
+        || !publicClient
+        || !account
+        || !commitmentManagerConfig
+      ) {
+        setDeleteGoalError(
+          "Your Kept account is not ready yet.",
+        );
+        return false;
+      }
+
+      const goalCommitments =
+        productState.commitments.filter(
+          (commitment) =>
+            commitment.savingsGoalId === goal.id,
+        );
+
+      const activeCommitments =
+        goalCommitments.filter(
+          (commitment) =>
+            commitment.state === "ACTIVE",
+        );
+
+      setDeletingGoal(true);
+      setDeleteGoalError(null);
+      setDeleteGoalStatus(null);
+
+      let succeeded = false;
+
+      const acquired =
+        await transactionCoordinator.run(
+          "commitment",
+          async () => {
+            try {
+              for (const commitment of activeCommitments) {
+                if (!commitment.onchainCommitmentId) {
+                  throw new Error(
+                    "Active commitment is missing its on-chain reference.",
+                  );
+                }
+
+                setDeleteGoalStatus(
+                  "Cancelling your commitment…",
+                );
+
+                await ensureTransactionNetwork();
+
+                const transactionHash =
+                  await sender.sendTransaction(
+                    buildCancelCommitmentTransaction({
+                      manager:
+                        commitmentManagerConfig.address,
+                      chainId: config.chainId,
+                      commitmentId:
+                        commitment.onchainCommitmentId,
+                    }),
+                  );
+
+                const receipt =
+                  await publicClient.waitForTransactionReceipt({
+                    hash: transactionHash,
+                    confirmations:
+                      import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true"
+                        ? 1
+                        : 2,
+                  });
+
+                if (receipt.status !== "success") {
+                  throw new Error(
+                    "Commitment cancellation transaction reverted.",
+                  );
+                }
+
+                setDeleteGoalStatus(
+                  "Confirming commitment cancellation…",
+                );
+
+                await api.cancelCommitment(
+                  commitment,
+                  {
+                    onchainCommitmentId:
+                      commitment.onchainCommitmentId,
+                    owner: account,
+                  },
+                );
+              }
+
+              setDeleteGoalStatus(
+                "Deleting goal…",
+              );
+
+              await api.archiveGoal(
+                goal.id,
+                globalThis.crypto.randomUUID(),
+              );
+
+              await refreshProductData();
+
+              setDeleteGoalStatus(null);
+              succeeded = true;
+            } catch (error) {
+              diagnostics.error(
+                "api.goal_archive_failed",
+                error,
+                {
+                  goalId: goal.id,
+                  activeCommitments:
+                    activeCommitments.length,
+                },
+              );
+
+              setDeleteGoalStatus(null);
+              setDeleteGoalError(
+                consumerErrorMessage(
+                  error,
+                  "We could not delete this goal. Try again.",
+                ),
+              );
+            }
+          },
+        );
+
+      if (!acquired) {
+        setDeleteGoalError(
+          "Another account action is still being processed. Try again in a moment.",
+        );
+      }
+
+      setDeletingGoal(false);
+
+      return succeeded;
+    },
+    [
+      account,
+      api,
+      commitmentManagerConfig,
+      config,
+      ensureTransactionNetwork,
+      productState.commitments,
+      publicClient,
+      refreshProductData,
+      sender,
+      transactionCoordinator,
+    ],
+  );
+
+  const dismissGoalDeletion = useCallback(() => {
+    setDeleteGoalError(null);
+    setDeleteGoalStatus(null);
+  }, []);
+
+  type GoalAllocationDirection = "fund" | "unfund";
+
+  const changeGoalAllocation = useCallback(async (
+    goal: GoalDto,
+    amount: string,
+    direction: GoalAllocationDirection,
+  ): Promise<boolean> => {
     if (allocationPending.current) {
       setAllocationError("An allocation request is already in progress.");
       return false;
     }
-    if (!api || !config || !publicClient || !account || goalFundingState.kind !== "ready") {
-      setAllocationError("Your goal balances are not ready yet. Refresh and try again.");
+
+    if (
+      !api
+      || !config
+      || !publicClient
+      || goalFundingState.kind !== "ready"
+    ) {
+      setAllocationError(
+        "Your goal balances are not ready yet. Refresh and try again.",
+      );
       return false;
     }
+
     const parsed = parseUsdcDepositAmount(amount);
+
     if ("error" in parsed || parsed.assets <= 0n) {
       setAllocationError("Enter a valid amount greater than zero.");
+      return false;
+    }
+
+    const goalFunding =
+      goalFundingState.funding.byGoal.get(goal.id);
+
+    if (!goalFunding) {
+      setAllocationError("This goal balance is not available.");
       return false;
     }
 
     allocationPending.current = true;
     setAllocatingGoal(true);
     setAllocationError(null);
-    setAllocationStatus("Checking your available savings…");
+
     try {
-      await ensureTransactionNetwork();
-      const assetsAtomic = parsed.assets.toString();
-      const inMemoryAttempt = pendingAllocationAttempt.current;
-      const storedAttempt = inMemoryAttempt?.account.toLowerCase() === account.toLowerCase()
-        ? inMemoryAttempt
-        : loadPendingGoalAllocation(globalThis.localStorage, account);
-      const matchingAttempt = storedAttempt?.account.toLowerCase() === account.toLowerCase()
-        && storedAttempt.goalId === goal.id
-        && storedAttempt.assetsAtomic === assetsAtomic
-        ? storedAttempt
-        : null;
-      if (storedAttempt && !matchingAttempt) {
-        setAllocationStatus(null);
-        setAllocationError(
-          `A previous ${formatUsdc(BigInt(storedAttempt.assetsAtomic))} USDC request still needs confirmation. Retry that amount on the same goal first.`,
-        );
+      const requiredShares = await previewAllocationShares({
+        assets: parsed.assets,
+        publicClient: {
+          readContract: (input) =>
+            publicClient.readContract(input as never) as Promise<bigint>,
+        },
+        vault: config.vault,
+      });
+
+      const validationError =
+        direction === "fund"
+          ? allocationInputError(
+            parsed.assets,
+            requiredShares,
+            goalFundingState.funding.unallocatedShares,
+          )
+          : deallocationInputError(
+            parsed.assets,
+            requiredShares,
+            goalFunding.allocatedShares,
+          );
+
+      if (validationError) {
+        setAllocationError(validationError);
         return false;
       }
-      const requiredShares = matchingAttempt
-        ? BigInt(matchingAttempt.sharesAtomic)
-        : await previewAllocationShares({
-          assets: parsed.assets,
-          publicClient: {
-            readContract: (input) => publicClient.readContract(input as never) as Promise<bigint>,
-          },
-          vault: config.vault,
-        });
-      const validationError = matchingAttempt ? null : allocationInputError(
-        parsed.assets,
-        requiredShares,
-        goalFundingState.funding.unallocatedShares,
+
+      setAllocationStatus(
+        direction === "fund"
+          ? "Adding savings to your goal…"
+          : "Moving savings out of your goal…",
       );
+
+      await api.allocateGoalShares(
+        goal.id,
+        {
+          shareDeltaAtomic:
+            direction === "fund"
+              ? requiredShares.toString()
+              : (-requiredShares).toString(),
+          reason: "manual",
+        },
+        globalThis.crypto.randomUUID(),
+      );
+
+      await refreshProductData();
+
+      setAllocationStatus(null);
+      return true;
+    } catch (error) {
+      diagnostics.error(
+        direction === "fund"
+          ? "api.goal_allocation_failed"
+          : "api.goal_deallocation_failed",
+        error,
+      );
+
+      setAllocationStatus(null);
+
+      setAllocationError(
+        consumerErrorMessage(
+          error,
+          direction === "fund"
+            ? "We could not add those savings to your goal. Refresh and try again."
+            : "We could not move those savings out of your goal. Refresh and try again.",
+        ),
+      );
+
+      return false;
+    } finally {
+      allocationPending.current = false;
+      setAllocatingGoal(false);
+    }
+  }, [
+    api,
+    config,
+    goalFundingState,
+    publicClient,
+    refreshProductData,
+  ]);
+
+  const addToGoal = useCallback(
+    (goal: GoalDto, amount: string) =>
+      changeGoalAllocation(goal, amount, "fund"),
+    [changeGoalAllocation],
+  );
+
+  const removeFromGoal = useCallback(
+    (goal: GoalDto, amount: string) =>
+      changeGoalAllocation(goal, amount, "unfund"),
+    [changeGoalAllocation],
+  );
+
+  const moveBetweenGoals = useCallback(async (
+    fromGoal: GoalDto,
+    toGoal: GoalDto,
+    amount: string,
+  ): Promise<boolean> => {
+    if (allocationPending.current) {
+      setAllocationError(
+        "A savings change is already in progress.",
+      );
+      return false;
+    }
+
+    if (
+      !api
+      || !config
+      || !publicClient
+      || goalFundingState.kind !== "ready"
+    ) {
+      setAllocationError(
+        "Your goal balances are not ready yet. Refresh and try again.",
+      );
+      return false;
+    }
+
+    if (fromGoal.id === toGoal.id) {
+      setAllocationError("Choose a different goal.");
+      return false;
+    }
+
+    const parsed = parseUsdcDepositAmount(amount);
+
+    if ("error" in parsed || parsed.assets <= 0n) {
+      setAllocationError(
+        "Enter a valid amount greater than zero.",
+      );
+      return false;
+    }
+
+    const sourceFunding =
+      goalFundingState.funding.byGoal.get(fromGoal.id);
+
+    if (!sourceFunding) {
+      setAllocationError(
+        "This goal balance is not available.",
+      );
+      return false;
+    }
+
+    allocationPending.current = true;
+    setAllocatingGoal(true);
+    setAllocationError(null);
+
+
+    try {
+      const shares = await previewAllocationShares({
+        assets: parsed.assets,
+        publicClient: {
+          readContract: (input) =>
+            publicClient.readContract(input as never) as Promise<bigint>
+        },
+        vault: config.vault,
+      });
+
+      const validationError = deallocationInputError(
+        parsed.assets,
+        shares,
+        sourceFunding.allocatedShares,
+      );
+
       if (validationError) {
         setAllocationStatus(null);
         setAllocationError(validationError);
         return false;
       }
 
-      setAllocationStatus("Adding savings to your goal…");
-      const sharesAtomic = requiredShares.toString();
-      const attempt = matchingAttempt
-        ? matchingAttempt
-        : {
-          account,
-          goalId: goal.id,
-          assetsAtomic,
-          sharesAtomic,
-          idempotencyKey: globalThis.crypto.randomUUID(),
-        };
-      pendingAllocationAttempt.current = attempt;
-      if (!savePendingGoalAllocation(globalThis.localStorage, attempt)) {
-        pendingAllocationAttempt.current = null;
-        setAllocationStatus(null);
-        setAllocationError("Kept could not safely prepare this request in your browser. Check storage permissions and try again.");
-        return false;
-      }
-      await api.allocateGoalShares(
-        goal.id,
+      setAllocationStatus("Moving savings…");
+
+      await api.reallocateGoalShares(
         {
-          shareDeltaAtomic: sharesAtomic,
-          reason: "manual",
+          fromGoalId: fromGoal.id,
+          toGoalId: toGoal.id,
+          shareAmountAtomic: shares.toString(),
         },
-        attempt.idempotencyKey,
+        globalThis.crypto.randomUUID(),
       );
-      pendingAllocationAttempt.current = null;
-      clearPendingGoalAllocation(globalThis.localStorage, account);
+
       await refreshProductData();
+
       setAllocationStatus(null);
       return true;
     } catch (error) {
-      diagnostics.error("api.goal_allocation_failed", error);
-      setAllocationStatus(null);
-      setAllocationError(consumerErrorMessage(
+      diagnostics.error(
+        "api.goal_reallocation_failed",
         error,
-        "We could not add those savings to your goal. Refresh and try again.",
-      ));
+      );
+
+      setAllocationStatus(null);
+      setAllocationError(
+        consumerErrorMessage(
+          error,
+          "We could not move those savings. Refresh and try again.",
+        ),
+      );
+
       return false;
     } finally {
       allocationPending.current = false;
       setAllocatingGoal(false);
     }
-  }, [account, api, config, ensureTransactionNetwork, goalFundingState, publicClient, refreshProductData]);
+  }, [
+    api,
+    config,
+    goalFundingState,
+    publicClient,
+    refreshProductData,
+  ]);
 
   const createCommitment = useCallback(async (goal: GoalDto, input: CreateCommitmentInput) => {
     if (!api || !config || !commitmentManagerConfig || !publicClient || !account) {
@@ -830,6 +1144,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         withdrawError={withdrawError}
         pendingTransaction={pendingTransaction}
         creatingGoal={creatingGoal}
+        deletingGoal={deletingGoal}
+        deleteGoalStatus={deleteGoalStatus}
+        deleteGoalError={deleteGoalError}
+        onDeleteGoal={deleteGoal}
+        onDismissGoalDeletion={dismissGoalDeletion}
         goalError={goalError}
         creatingCommitment={creatingCommitment}
         commitmentStatus={commitmentStatus}
@@ -851,7 +1170,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         onDismissGoal={dismissGoal}
         onDismissCommitment={dismissCommitment}
         onDismissAllocation={dismissAllocation}
+        onRemoveFromGoal={removeFromGoal}
+        onMoveBetweenGoals={moveBetweenGoals}
       />
     </AppShell>
   );
 }
+

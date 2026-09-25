@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   allocationInputError,
+  deallocationInputError,
   goalFundingPercent,
   previewAllocationShares,
   readGoalFunding,
@@ -112,5 +113,49 @@ describe("goal allocation funding", () => {
       sharesAtomic: "100000000000000",
       idempotencyKey: "allocation-key",
     })).toBe(false);
+  });
+});
+
+describe("goal allocation validation", () => {
+  it("allows removing shares up to the amount assigned to the goal", () => {
+    expect(
+      deallocationInputError(
+        50_000_000n,
+        50n,
+        100n,
+      ),
+    ).toBeNull();
+  });
+
+  it("allows removing the entire goal allocation", () => {
+    expect(
+      deallocationInputError(
+        100_000_000n,
+        100n,
+        100n,
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects removing more shares than are assigned to the goal", () => {
+    expect(
+      deallocationInputError(
+        101_000_000n,
+        101n,
+        100n,
+      ),
+    ).toBe(
+      "Enter an amount no greater than the savings assigned to this goal.",
+    );
+  });
+
+  it("rejects a zero deallocation amount", () => {
+    expect(
+      deallocationInputError(
+        0n,
+        0n,
+        100n,
+      ),
+    ).not.toBeNull();
   });
 });

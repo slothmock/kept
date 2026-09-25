@@ -34,8 +34,10 @@ export interface ApiDependencies {
     | "createGoal"
     | "getGoal"
     | "listGoals"
+    | "archiveGoal"
     | "getGoalAllocation"
     | "allocateGoalShares"
+    | "reallocateGoalShares"
     | "createCommitmentDraft"
     | "getCommitment"
     | "listCommitments"
@@ -335,6 +337,20 @@ export function buildApp(
   );
 
   app.post<{ Params: { id: string } }>(
+    "/v1/goals/:id/archive",
+    async (request, reply) =>
+      handle(request, reply, () => {
+        return dependencies.persistence.archiveGoal({
+          userId:
+            asAuthenticatedRequest(request).user.id,
+          goalId: request.params.id,
+          idempotencyKey:
+            requireIdempotencyKey(request),
+        });
+      }),
+  );
+
+  app.post<{ Params: { id: string } }>(
     "/v1/goals/:id/allocations",
     async (request, reply) =>
       handle(request, reply, async () => {
@@ -356,6 +372,54 @@ export function buildApp(
           ),
           reason: requireString(body, "reason"),
           idempotencyKey: requireIdempotencyKey(request),
+        });
+      }),
+  );
+
+  app.post(
+    "/v1/goals/reallocate",
+    async (request, reply) =>
+      handle(request, reply, async () => {
+        const auth = asAuthenticatedRequest(request);
+
+        if (!auth.identity.wallet) {
+          throw new NotFoundError("Privy embedded wallet");
+        }
+
+        const body = requireObject(request.body);
+
+        const fromGoalId = requireString(
+          body,
+          "fromGoalId",
+        );
+
+        const toGoalId = requireString(
+          body,
+          "toGoalId",
+        );
+
+        const shareAmountAtomic = requireString(
+          body,
+          "shareAmountAtomic",
+        );
+
+        if (
+          !/^\d{1,78}$/.test(shareAmountAtomic)
+          || BigInt(shareAmountAtomic) <= 0n
+        ) {
+          throw new PersistenceValidationError(
+            "shareAmountAtomic must be a positive integer",
+          );
+        }
+
+        return dependencies.persistence.reallocateGoalShares({
+          userId: auth.user.id,
+          walletAddress: auth.identity.wallet,
+          fromGoalId,
+          toGoalId,
+          shareAmountAtomic,
+          idempotencyKey:
+            requireIdempotencyKey(request),
         });
       }),
   );

@@ -53,6 +53,12 @@ export interface GoalAllocationDto {
   readonly unallocatedSharesAtomic: string;
 }
 
+export interface ReallocateGoalSharesInput {
+  readonly fromGoalId: string;
+  readonly toGoalId: string;
+  readonly shareAmountAtomic: string;
+}
+
 export interface KeptApi {
   listGoals(): Promise<readonly GoalDto[]>;
   createGoal(input: {
@@ -60,12 +66,23 @@ export interface KeptApi {
     readonly targetAmountAtomic: string;
     readonly targetDate: string | null;
   }): Promise<GoalDto>;
+  archiveGoal(
+    goalId: string,
+    idempotencyKey?: string,
+  ): Promise<GoalDto>;
   getGoalAllocation(goalId: string): Promise<GoalAllocationDto>;
   allocateGoalShares(
     goalId: string,
     input: { readonly shareDeltaAtomic: string; readonly reason: string; },
     idempotencyKey?: string,
   ): Promise<GoalAllocationDto>;
+  reallocateGoalShares(
+    input: ReallocateGoalSharesInput,
+    idempotencyKey?: string,
+  ): Promise<{
+    readonly from: GoalAllocationDto;
+    readonly to: GoalAllocationDto;
+  }>;
   listCommitments(): Promise<readonly CommitmentDto[]>;
   createCommitment(input: CreateCommitmentRequest, idempotencyKey?: string): Promise<CommitmentDto>;
   activateCommitment(
@@ -246,6 +263,15 @@ export function createKeptApi(input: {
   return {
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
+    archiveGoal: (
+      goalId,
+      requestIdempotencyKey,
+    ) =>
+      post<GoalDto>(
+        `/v1/goals/${encodeURIComponent(goalId)}/archive`,
+        {},
+        requestIdempotencyKey,
+      ),
     getGoalAllocation: async (goalId) => parseGoalAllocation(
       await request<unknown>(`/v1/goals/${encodeURIComponent(goalId)}/allocation`),
       goalId,
@@ -258,6 +284,30 @@ export function createKeptApi(input: {
       ),
       goalId,
     ),
+    reallocateGoalShares: async (
+      input,
+      requestIdempotencyKey,
+    ) => {
+      const result = await post<{
+        readonly from: unknown;
+        readonly to: unknown;
+      }>(
+        "/v1/goals/reallocate",
+        input,
+        requestIdempotencyKey,
+      );
+
+      return {
+        from: parseGoalAllocation(
+          result.from,
+          input.fromGoalId,
+        ),
+        to: parseGoalAllocation(
+          result.to,
+          input.toGoalId,
+        ),
+      };
+    },
     listCommitments: () => request<readonly CommitmentDto[]>("/v1/commitments"),
     createCommitment: (commitment, requestIdempotencyKey) => post<CommitmentDto>(
       "/v1/commitments",

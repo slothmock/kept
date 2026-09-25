@@ -139,6 +139,22 @@ export function previewAllocationShares(input: {
   });
 }
 
+export function deallocationInputError(
+  assets: bigint,
+  shares: bigint,
+  goalAllocatedShares: bigint,
+): string | null {
+  if (assets <= 0n) {
+    return "Enter an amount greater than zero.";
+  }
+
+  if (shares > goalAllocatedShares) {
+    return "Enter an amount no greater than the savings assigned to this goal.";
+  }
+
+  return null;
+}
+
 export function goalFundingPercent(
   allocatedAssets: bigint,
   targetAssets: bigint,
