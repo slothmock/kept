@@ -9,6 +9,7 @@ import {
 
 import {
   buildCreateCommitmentTransaction,
+  buildCancelCommitmentTransaction,
   commitmentManagerAbi,
   confirmCommitmentCreation,
   referenceIdForCommitment,
@@ -20,15 +21,24 @@ const hash = `0x${"a".repeat(64)}` as Hex;
 const referenceId = "0x27df9e4f396b049a38fecd6237c650c5df3f372785585cd7ced3fae81d61e5cd" as Hex;
 
 function createdLog(commitmentId = 7n) {
+  const topics = encodeEventTopics({
+    abi: commitmentManagerAbi,
+    eventName: "CommitmentCreated",
+    args: {
+      commitmentId,
+      owner,
+      referenceId,
+    },
+  }) as readonly Hex[];
+
   return {
     address: manager,
-    topics: encodeEventTopics({
-      abi: commitmentManagerAbi,
-      eventName: "CommitmentCreated",
-      args: { commitmentId, owner, referenceId },
-    }),
+    topics,
     data: encodeAbiParameters(
-      [{ type: "uint64" }, { type: "uint64" }],
+      [
+        { type: "uint64" },
+        { type: "uint64" },
+      ],
       [2_000n, 3_000n],
     ),
   };
@@ -118,5 +128,72 @@ describe("CommitmentManager browser integration", () => {
       receipt: { status: "success", logs: [] },
       readContract: vi.fn(),
     })).rejects.toThrow("creation event was not found");
+  });
+
+  it("encodes the exact cancel call", () => {
+    const transaction =
+      buildCancelCommitmentTransaction({
+        manager,
+        chainId: 143,
+        commitmentId: "7",
+      });
+
+    expect(transaction).toMatchObject({
+      to: manager,
+      chainId: 143,
+    });
+
+    expect(
+      decodeFunctionData({
+        abi: commitmentManagerAbi,
+        data: transaction.data,
+      }),
+    ).toEqual({
+      functionName: "cancelCommitment",
+      args: [7n],
+    });
+  });
+
+  it.each([
+    "",
+    "-1",
+    "1.5",
+    "abc",
+  ])(
+    "rejects invalid onchain commitment id %j",
+    (commitmentId) => {
+      expect(() =>
+        buildCancelCommitmentTransaction({
+          manager,
+          chainId: 143,
+          commitmentId,
+        }),
+      ).toThrow();
+    },
+  );
+
+  it("rejects commitment id zero", () => {
+    expect(() =>
+      buildCancelCommitmentTransaction({
+        manager,
+        chainId: 143,
+        commitmentId: "0",
+      }),
+    ).toThrow(
+      "Onchain commitment ID is outside uint256 range.",
+    );
+  });
+
+  it("rejects commitment ids above uint256", () => {
+    expect(() =>
+      buildCancelCommitmentTransaction({
+        manager,
+        chainId: 143,
+        commitmentId:
+          (1n << 256n).toString(),
+      }),
+    ).toThrow(
+      "Onchain commitment ID is outside uint256 range.",
+    );
   });
 });

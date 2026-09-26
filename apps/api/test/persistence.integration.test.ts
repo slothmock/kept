@@ -961,3 +961,310 @@ describe.sequential("goal share allocation ledger", () => {
     );
   });
 });
+
+describe.sequential("goal archiving", () => {
+  it("archives an active goal", async () => {
+    const owner = await createUser("archive-basic");
+    const goal = await createGoal(owner.id);
+
+    const archived = await service.archiveGoal({
+      userId: owner.id,
+      goalId: goal.id,
+      idempotencyKey: "archive-basic",
+    });
+
+    expect(archived.status).toBe("ARCHIVED");
+
+    const reloaded = await service.getGoal(
+      owner.id,
+      goal.id,
+    );
+
+    expect(reloaded?.status).toBe("ARCHIVED");
+  });
+
+  it("cancels draft commitments when archiving a goal", async () => {
+    const owner = await createUser("archive-draft");
+    const goal = await createGoal(owner.id);
+    const draft = await createDraft(
+      owner.id,
+      goal.id,
+    );
+
+    await service.archiveGoal({
+      userId: owner.id,
+      goalId: goal.id,
+      idempotencyKey: "archive-draft",
+    });
+
+    const commitment =
+      await service.getCommitment(
+        owner.id,
+        draft.id,
+      );
+
+    expect(commitment).toMatchObject({
+      id: draft.id,
+      state: "CANCELLED",
+      stateVersion: draft.stateVersion + 1,
+    });
+  });
+
+  it("releases the full goal allocation while preserving allocation history", async () => {
+    const owner = await createUser(
+      "archive-allocation",
+    );
+
+    await service.createWallet({
+      userId: owner.id,
+      walletKind: "PRIVY_EMBEDDED_MONAD",
+      chainId: "143",
+      address: ALLOCATION_WALLET,
+      isPrimary: true,
+    });
+
+    const goal = await createGoal(owner.id);
+
+    const allocationService =
+      new KeptPersistenceService(
+        connection.db,
+        {
+          chainId: 143n,
+          reader: {
+            readShares: async () =>
+              250_000_000_000_000n,
+          },
+        },
+      );
+
+    await allocationService.allocateGoalShares({
+      userId: owner.id,
+      goalId: goal.id,
+      walletAddress: ALLOCATION_WALLET,
+      shareDeltaAtomic:
+        "100000000000000",
+      reason: "manual",
+      idempotencyKey:
+        "archive-allocation-add",
+    });
+
+    await allocationService.archiveGoal({
+      userId: owner.id,
+      goalId: goal.id,
+      idempotencyKey:
+        "archive-allocation-goal",
+    });
+
+    const history =
+      await connection.pool.query<{
+        delta: string;
+        reason: string;
+      }>(
+        `
+          SELECT
+            share_delta_atomic::text AS delta,
+            reason
+          FROM goal_share_allocations
+          WHERE goal_id = $1
+          ORDER BY created_at, id
+        `,
+        [goal.id],
+      );
+
+    expect(history.rows).toEqual([
+      {
+        delta: "100000000000000",
+        reason: "manual",
+      },
+      {
+        delta: "-100000000000000",
+        reason: "goal_archived",
+      },
+    ]);
+
+    const totals =
+      await connection.pool.query<{
+        allocated: string;
+      }>(
+        `
+          SELECT
+            COALESCE(
+              SUM(share_delta_atomic),
+              0
+            )::text AS allocated
+          FROM goal_share_allocations
+          WHERE goal_id = $1
+        `,
+        [goal.id],
+      );
+
+    expect(
+      totals.rows[0]?.allocated,
+    ).toBe("0");
+  });
+
+  it("rejects archiving while an active commitment is still persisted as active", async () => {
+    const owner = await createUser(
+      "archive-active",
+    );
+
+    const goal = await createGoal(owner.id);
+
+    const draft = await createDraft(
+      owner.id,
+      goal.id,
+    );
+
+    const active =
+      await service.activateCommitment({
+        userId: owner.id,
+        commitmentId: draft.id,
+        expectedVersion: draft.stateVersion,
+        onchainCommitmentId: "1",
+        settlementOwner:
+          "0x0000000000000000000000000000000000000001",
+        settlementChainId: 143,
+        settlementStatus: 1,
+        idempotencyKey:
+          "archive-active-activate",
+      });
+
+    expect(active.state).toBe("ACTIVE");
+
+    await expect(
+      service.archiveGoal({
+        userId: owner.id,
+        goalId: goal.id,
+        idempotencyKey:
+          "archive-active-goal",
+      }),
+    ).rejects.toBeInstanceOf(
+      PersistenceValidationError,
+    );
+
+    const reloadedGoal =
+      await service.getGoal(
+        owner.id,
+        goal.id,
+      );
+
+    expect(reloadedGoal?.status).toBe(
+      "ACTIVE",
+    );
+
+    const reloadedCommitment =
+      await service.getCommitment(
+        owner.id,
+        draft.id,
+      );
+
+    expect(reloadedCommitment?.state).toBe(
+      "ACTIVE",
+    );
+  });
+
+  it("is idempotent and does not append duplicate release entries", async () => {
+    const owner = await createUser(
+      "archive-idempotent",
+    );
+
+    await service.createWallet({
+      userId: owner.id,
+      walletKind: "PRIVY_EMBEDDED_MONAD",
+      chainId: "143",
+      address: ALLOCATION_WALLET,
+      isPrimary: true,
+    });
+
+    const goal = await createGoal(owner.id);
+
+    const allocationService =
+      new KeptPersistenceService(
+        connection.db,
+        {
+          chainId: 143n,
+          reader: {
+            readShares: async () => 100n,
+          },
+        },
+      );
+
+    await allocationService.allocateGoalShares({
+      userId: owner.id,
+      goalId: goal.id,
+      walletAddress: ALLOCATION_WALLET,
+      shareDeltaAtomic: "60",
+      reason: "manual",
+      idempotencyKey:
+        "archive-idempotent-add",
+    });
+
+    const first =
+      await allocationService.archiveGoal({
+        userId: owner.id,
+        goalId: goal.id,
+        idempotencyKey:
+          "archive-idempotent-key",
+      });
+
+    const second =
+      await allocationService.archiveGoal({
+        userId: owner.id,
+        goalId: goal.id,
+        idempotencyKey:
+          "archive-idempotent-key",
+      });
+
+    expect(second).toEqual(first);
+
+    const rows =
+      await connection.pool.query<{
+        count: string;
+      }>(
+        `
+          SELECT count(*)::text AS count
+          FROM goal_share_allocations
+          WHERE goal_id = $1
+            AND reason = 'goal_archived'
+        `,
+        [goal.id],
+      );
+
+    expect(rows.rows[0]?.count).toBe(
+      "1",
+    );
+  });
+
+  it("does not allow another user to archive the goal", async () => {
+    const owner = await createUser(
+      "archive-owner",
+    );
+
+    const other = await createUser(
+      "archive-other",
+    );
+
+    const goal = await createGoal(owner.id);
+
+    await expect(
+      service.archiveGoal({
+        userId: other.id,
+        goalId: goal.id,
+        idempotencyKey:
+          "archive-not-owner",
+      }),
+    ).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+
+    const reloaded =
+      await service.getGoal(
+        owner.id,
+        goal.id,
+      );
+
+    expect(reloaded?.status).toBe(
+      "ACTIVE",
+    );
+  });
+});

@@ -1,8 +1,21 @@
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(
+        new URL("./apps/web/src", import.meta.url),
+      ),
+    },
+  },
+
   test: {
-    exclude: ["**/node_modules/**", "**/dist/**", "packages/contracts/lib/**"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "packages/contracts/lib/**",
+    ],
     fileParallelism: false,
   },
 });

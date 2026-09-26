@@ -144,6 +144,123 @@ describe("Kept API consumer errors", () => {
     }));
   });
 
+  it("archives a goal with the supplied idempotency key", async () => {
+    const requests: Array<{
+      url: string;
+      init: RequestInit | undefined;
+    }> = [];
+
+    const archivedGoal = {
+      id: "goal-1",
+      userId: "user-1",
+      name: "Laptop",
+      targetAmountAtomic: "1000000000",
+      targetAsset: "USDC",
+      targetDate: null,
+      status: "ARCHIVED",
+      createdAt: "2026-09-18T00:00:00.000Z",
+      updatedAt: "2026-09-25T20:00:00.000Z",
+    };
+
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: async (url, init) => {
+        requests.push({
+          url: String(url),
+          init,
+        });
+
+        return new Response(
+          JSON.stringify(archivedGoal),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      },
+    });
+
+    await expect(
+      api.archiveGoal(
+        "goal-1",
+        "archive-goal-key",
+      ),
+    ).resolves.toEqual(archivedGoal);
+
+    expect(requests).toHaveLength(1);
+
+    expect(requests[0]?.url).toBe(
+      "https://api.example/v1/goals/goal-1/archive",
+    );
+
+    expect(requests[0]?.init?.method).toBe(
+      "POST",
+    );
+
+    const headers = new Headers(
+      requests[0]?.init?.headers,
+    );
+
+    expect(
+      headers.get("authorization"),
+    ).toBe("Bearer token");
+
+    expect(
+      headers.get("idempotency-key"),
+    ).toBe("archive-goal-key");
+
+    expect(requests[0]?.init?.body).toBe(
+      JSON.stringify({}),
+    );
+  });
+
+  it("encodes the goal id when archiving", async () => {
+    const fetcher = vi.fn(async (
+      input: RequestInfo | URL,
+    ) => {
+      expect(String(input)).toBe(
+        "https://api.example/v1/goals/goal%2Fwith%20spaces/archive",
+      );
+
+      return new Response(
+        JSON.stringify({
+          id: "goal/with spaces",
+          userId: "user-1",
+          name: "Laptop",
+          targetAmountAtomic: "1000000000",
+          targetAsset: "USDC",
+          targetDate: null,
+          status: "ARCHIVED",
+          createdAt: "2026-09-18T00:00:00.000Z",
+          updatedAt: "2026-09-25T20:00:00.000Z",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type":
+              "application/json",
+          },
+        },
+      );
+    });
+
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: fetcher as typeof fetch,
+    });
+
+    await api.archiveGoal(
+      "goal/with spaces",
+      "archive-key",
+    );
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects malformed allocation atomic values", async () => {
     const api = createKeptApi({
       baseUrl: "https://api.example",

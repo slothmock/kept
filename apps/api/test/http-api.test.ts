@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { buildApp, type ApiDependencies } from "../src/app.js";
 import { CommitmentSettlementMismatchError } from "../src/commitment-settlement.js";
 import type { CommitmentDto } from "../src/persistence/index.js";
+import {
+  NotFoundError,
+  PersistenceValidationError,
+} from "../src/persistence/index.js";
 
 const user = {
   id: "user-1",
@@ -47,13 +51,21 @@ function buildDependencies(overrides: Partial<ApiDependencies> = {}): ApiDepende
   return {
     authenticate: async (authorization) =>
       authorization === "Bearer valid-token"
-        ? { privyUserId: user.privyUserId }
+        ? {
+          privyUserId: user.privyUserId,
+          wallet:
+            "0x0000000000000000000000000000000000000001",
+        }
         : null,
     persistence: {
       createUser: async () => user,
       createGoal: async () => goal,
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],
+      archiveGoal: async () => ({
+        ...goal,
+        status: "ARCHIVED" as const,
+      }),
       getGoalAllocation: async (_userId, id) => (id === goal.id ? {
         goalId: goal.id,
         allocatedSharesAtomic: "0",
@@ -67,6 +79,22 @@ function buildDependencies(overrides: Partial<ApiDependencies> = {}): ApiDepende
         totalVaultSharesAtomic: "0",
         totalAllocatedSharesAtomic: "0",
         unallocatedSharesAtomic: "0",
+      }),
+      reallocateGoalShares: async () => ({
+        from: {
+          goalId: goal.id,
+          allocatedSharesAtomic: "0",
+          totalVaultSharesAtomic: "0",
+          totalAllocatedSharesAtomic: "0",
+          unallocatedSharesAtomic: "0",
+        },
+        to: {
+          goalId: goal.id,
+          allocatedSharesAtomic: "0",
+          totalVaultSharesAtomic: "0",
+          totalAllocatedSharesAtomic: "0",
+          unallocatedSharesAtomic: "0",
+        },
       }),
       createCommitmentDraft: async () => commitment,
       getCommitment: async (_userId, id) => (id === commitment.id ? currentCommitment : null),
@@ -168,6 +196,79 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("archives a goal with the authenticated user and idempotency key", async () => {
+    const dependencies = buildDependencies();
+
+    const archiveGoal = vi.spyOn(
+      dependencies.persistence,
+      "archiveGoal",
+    );
+
+    const app = buildApp(dependencies);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.id}/archive`,
+      headers: {
+        ...auth,
+        "idempotency-key": "archive-goal-key",
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    expect(response.json()).toEqual({
+      ...goal,
+      status: "ARCHIVED",
+    });
+
+    expect(archiveGoal).toHaveBeenCalledOnce();
+
+    expect(archiveGoal).toHaveBeenCalledWith({
+      userId: user.id,
+      goalId: goal.id,
+      idempotencyKey: "archive-goal-key",
+    });
+
+    await app.close();
+  });
+
+  it("does not allow the request body to override goal archive ownership", async () => {
+    const dependencies = buildDependencies();
+
+    const archiveGoal = vi.spyOn(
+      dependencies.persistence,
+      "archiveGoal",
+    );
+
+    const app = buildApp(dependencies);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.id}/archive`,
+      headers: {
+        ...auth,
+        "idempotency-key": "archive-owner-key",
+      },
+      payload: {
+        userId: "attacker-user",
+        walletAddress:
+          "0x9999999999999999999999999999999999999999",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    expect(archiveGoal).toHaveBeenCalledWith({
+      userId: user.id,
+      goalId: goal.id,
+      idempotencyKey: "archive-owner-key",
+    });
+
+    await app.close();
+  });
+
   it("lists, creates, activates, and cancels commitments", async () => {
     const app = buildApp(buildDependencies());
 
@@ -242,6 +343,105 @@ describe("Kept HTTP API", () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: { code: "VALIDATION_ERROR" } });
+    await app.close();
+  });
+
+  it("requires an idempotency key when archiving a goal", async () => {
+    const dependencies = buildDependencies();
+
+    const archiveGoal = vi.spyOn(
+      dependencies.persistence,
+      "archiveGoal",
+    );
+
+    const app = buildApp(dependencies);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.id}/archive`,
+      headers: auth,
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    expect(response.json()).toEqual({
+      error: {
+        code: "VALIDATION_ERROR",
+      },
+    });
+
+    expect(archiveGoal).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it("returns not found when the goal cannot be archived for the authenticated user", async () => {
+    const dependencies = buildDependencies();
+
+    vi.spyOn(
+      dependencies.persistence,
+      "archiveGoal",
+    ).mockRejectedValue(
+      new NotFoundError("Savings goal"),
+    );
+
+    const app = buildApp(dependencies);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/goals/missing-goal/archive",
+      headers: {
+        ...auth,
+        "idempotency-key": "archive-missing-key",
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(404);
+
+    expect(response.json()).toEqual({
+      error: {
+        code: "NOT_FOUND",
+      },
+    });
+
+    await app.close();
+  });
+
+  it("returns validation error when an active commitment still blocks goal archival", async () => {
+    const dependencies = buildDependencies();
+
+    vi.spyOn(
+      dependencies.persistence,
+      "archiveGoal",
+    ).mockRejectedValue(
+      new PersistenceValidationError(
+        "Active commitment must be cancelled before the goal can be archived",
+      ),
+    );
+
+    const app = buildApp(dependencies);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.id}/archive`,
+      headers: {
+        ...auth,
+        "idempotency-key":
+          "archive-active-commitment",
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    expect(response.json()).toEqual({
+      error: {
+        code: "VALIDATION_ERROR",
+      },
+    });
+
     await app.close();
   });
 

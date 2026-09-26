@@ -9,6 +9,7 @@ import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import {
   buildCancelCommitmentTransaction,
   buildCreateCommitmentTransaction,
+  commitmentManagerAbi,
   confirmCommitmentCreation,
   referenceIdForCommitment,
   timestampSeconds,
@@ -37,7 +38,6 @@ import {
   type BoundPositionState,
 } from "@/features/dashboard/position-context";
 import type { PositionState } from "@/features/savings/BalanceCard";
-import { formatUsdc } from "@/features/savings/format";
 import {
   allocationInputError,
   deallocationInputError,
@@ -51,6 +51,9 @@ import {
   savePendingGoalAllocation,
   type PendingGoalAllocation,
 } from "@/features/goals/pending-allocation";
+import {
+  runGoalDeletion,
+} from "@/features/goals/delete-goal-flow";
 import {
   currentDepositQuote,
   type DepositQuoteState,
@@ -540,20 +543,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         setDeleteGoalError(
           "Your Kept account is not ready yet.",
         );
+
         return false;
       }
-
-      const goalCommitments =
-        productState.commitments.filter(
-          (commitment) =>
-            commitment.savingsGoalId === goal.id,
-        );
-
-      const activeCommitments =
-        goalCommitments.filter(
-          (commitment) =>
-            commitment.state === "ACTIVE",
-        );
 
       setDeletingGoal(true);
       setDeleteGoalError(null);
@@ -566,69 +558,148 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           "commitment",
           async () => {
             try {
-              for (const commitment of activeCommitments) {
-                if (!commitment.onchainCommitmentId) {
-                  throw new Error(
-                    "Active commitment is missing its on-chain reference.",
-                  );
-                }
+              await runGoalDeletion(
+                goal,
+                {
+                  commitments:
+                    productState.commitments,
 
-                setDeleteGoalStatus(
-                  "Cancelling your commitment…",
-                );
+                  readOnchainStatus:
+                    async (commitment) => {
+                      if (!commitment.onchainCommitmentId) {
+                        throw new Error(
+                          "Active commitment is missing its on-chain reference.",
+                        );
+                      }
 
-                await ensureTransactionNetwork();
+                      const record =
+                        await publicClient.readContract({
+                          address:
+                            commitmentManagerConfig.address,
+                          abi:
+                            commitmentManagerAbi,
+                          functionName:
+                            "commitments",
+                          args: [
+                            BigInt(
+                              commitment.onchainCommitmentId,
+                            ),
+                          ],
+                        });
 
-                const transactionHash =
-                  await sender.sendTransaction(
-                    buildCancelCommitmentTransaction({
-                      manager:
-                        commitmentManagerConfig.address,
-                      chainId: config.chainId,
-                      commitmentId:
-                        commitment.onchainCommitmentId,
-                    }),
-                  );
+                      const rawStatus = record[6];
 
-                const receipt =
-                  await publicClient.waitForTransactionReceipt({
-                    hash: transactionHash,
-                    confirmations:
-                      import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true"
-                        ? 1
-                        : 2,
-                  });
+                      const status =
+                        typeof rawStatus === "bigint"
+                          ? Number(rawStatus)
+                          : rawStatus;
 
-                if (receipt.status !== "success") {
-                  throw new Error(
-                    "Commitment cancellation transaction reverted.",
-                  );
-                }
+                      switch (status) {
+                        case 1:
+                          return "ACTIVE";
+                        case 2:
+                          return "COMPLETED";
+                        case 3:
+                          return "FAILED";
+                        case 4:
+                          return "CANCELLED";
+                        default:
+                          throw new Error(
+                            `Unknown on-chain commitment status: ${status}`,
+                          );
+                      }
+                    },
 
-                setDeleteGoalStatus(
-                  "Confirming commitment cancellation…",
-                );
+                  cancelOnchain:
+                    async (commitment) => {
+                      if (
+                        !commitment.onchainCommitmentId
+                      ) {
+                        throw new Error(
+                          "Active commitment is missing its on-chain reference.",
+                        );
+                      }
 
-                await api.cancelCommitment(
-                  commitment,
-                  {
-                    onchainCommitmentId:
-                      commitment.onchainCommitmentId,
-                    owner: account,
+                      await ensureTransactionNetwork();
+
+                      const transactionHash =
+                        await sender.sendTransaction(
+                          buildCancelCommitmentTransaction({
+                            manager:
+                              commitmentManagerConfig.address,
+                            chainId:
+                              config.chainId,
+                            commitmentId:
+                              commitment.onchainCommitmentId,
+                          }),
+                        );
+
+                      const receipt =
+                        await publicClient.waitForTransactionReceipt(
+                          {
+                            hash:
+                              transactionHash,
+                            confirmations:
+                              import.meta.env
+                                .VITE_ENABLE_LOCAL_ANVIL
+                                === "true"
+                                ? 1
+                                : 2,
+                          },
+                        );
+
+                      if (
+                        receipt.status !== "success"
+                      ) {
+                        throw new Error(
+                          "Commitment cancellation transaction reverted.",
+                        );
+                      }
+                    },
+
+                  persistCancellation:
+                    async (commitment) => {
+                      if (
+                        !commitment.onchainCommitmentId
+                      ) {
+                        throw new Error(
+                          "Active commitment is missing its on-chain reference.",
+                        );
+                      }
+
+                      await api.cancelCommitment(
+                        commitment,
+                        {
+                          onchainCommitmentId:
+                            commitment.onchainCommitmentId,
+                          owner: account,
+                        },
+                      );
+                    },
+
+                  archiveGoal:
+                    async (goalToArchive) => {
+                      await api.archiveGoal(
+                        goalToArchive.id,
+                        globalThis.crypto.randomUUID(),
+                      );
+                    },
+
+                  refresh:
+                    refreshProductData,
+
+                  onStage: (stage) => {
+                    setDeleteGoalStatus({
+                      cancelling:
+                        "Cancelling your commitment…",
+                      confirming:
+                        "Confirming commitment cancellation…",
+                      archiving:
+                        "Deleting goal…",
+                    }[stage]);
                   },
-                );
-              }
-
-              setDeleteGoalStatus(
-                "Deleting goal…",
+                },
               );
-
-              await api.archiveGoal(
-                goal.id,
-                globalThis.crypto.randomUUID(),
-              );
-
-              await refreshProductData();
 
               setDeleteGoalStatus(null);
               succeeded = true;
@@ -639,11 +710,18 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                 {
                   goalId: goal.id,
                   activeCommitments:
-                    activeCommitments.length,
+                    productState.commitments.filter(
+                      (commitment) =>
+                        commitment.savingsGoalId
+                        === goal.id
+                        && commitment.state
+                        === "ACTIVE",
+                    ).length,
                 },
               );
 
               setDeleteGoalStatus(null);
+
               setDeleteGoalError(
                 consumerErrorMessage(
                   error,
