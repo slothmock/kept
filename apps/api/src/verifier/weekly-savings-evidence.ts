@@ -1,4 +1,3 @@
-import type { KeptDatabase } from "../db/client.js";
 import { KeptRepository } from "../persistence/repository.js";
 import type {
     VaultShareBalanceReader,
@@ -11,6 +10,34 @@ import type {
     WeeklySavingsEvidence,
     WeeklySavingsEvidenceSource,
 } from "./types.js";
+
+interface WeeklySavingsRepository {
+    findPrimaryWalletForOwnerOnChain(
+        userId: string,
+        chainId: bigint,
+    ): Promise<{
+        readonly address: string;
+    } | null>;
+
+    getGoalAllocatedSharesAt(
+        userId: string,
+        goalId: string,
+        at: Date,
+    ): Promise<string>;
+
+    listGoalAllocationDeltasForPeriod(
+        userId: string,
+        goalId: string,
+        startAt: Date,
+        endAt: Date,
+    ): Promise<
+        readonly {
+            readonly id: string;
+            readonly shareDeltaAtomic: string;
+            readonly createdAt: Date;
+        }[]
+    >;
+}
 
 function positive(value: bigint): bigint {
     return value > 0n ? value : 0n;
@@ -29,7 +56,7 @@ export class PersistenceWeeklySavingsEvidenceSource
     implements WeeklySavingsEvidenceSource {
     constructor(
         private readonly dependencies: {
-            readonly db: KeptDatabase;
+            readonly repository: WeeklySavingsRepository;
 
             readonly vaultShares:
             VaultShareBalanceReader;
@@ -56,10 +83,7 @@ export class PersistenceWeeklySavingsEvidenceSource
             );
         }
 
-        const repository =
-            new KeptRepository(
-                this.dependencies.db,
-            );
+        const repository = this.dependencies.repository;
 
         const wallet =
             await repository
