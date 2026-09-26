@@ -22,6 +22,7 @@ function commitment(overrides: Partial<VerifiableCommitment> = {}): VerifiableCo
     state: "ACTIVE",
     stateVersion: 2,
     settlementRef: new Uint8Array([1]),
+    savingsGoalId: "goal-id-1",
     ...overrides,
   };
 }
@@ -29,7 +30,7 @@ function commitment(overrides: Partial<VerifiableCommitment> = {}): VerifiableCo
 class MemoryStore implements CommitmentVerificationStore {
   public finalized: { targetState: "COMPLETED" | "FAILED"; now: Date } | null = null;
 
-  constructor(public value: VerifiableCommitment | null) {}
+  constructor(public value: VerifiableCommitment | null) { }
 
   async getCommitment(): Promise<VerifiableCommitment | null> {
     return this.value;
@@ -63,14 +64,27 @@ function createVerifier(input: {
   activities?: number;
   now?: Date;
 }) {
-  const store = new MemoryStore(input.commitment);
-  const settlement = new SettlementSpy();
-  const weeklySavings: WeeklySavingsEvidenceSource = {
-    async totalDepositedAtomic() {
-      return input.deposited ?? 0n;
-    },
+  const store =
+    new MemoryStore(input.commitment);
+
+  const settlement =
+    new SettlementSpy();
+
+  const weeklySavings:
+    WeeklySavingsEvidenceSource = {
+    evaluatePeriod: vi.fn(
+      async () => ({
+        netSavedAtomic:
+          input.deposited ?? 0n,
+
+        averageEligibleBalanceAtomic:
+          100_000_000n,
+      }),
+    ),
   };
-  const activity: ActivityEvidenceSource = {
+
+  const activity:
+    ActivityEvidenceSource = {
     async countActivities() {
       return input.activities ?? 0;
     },
@@ -79,14 +93,22 @@ function createVerifier(input: {
   return {
     store,
     settlement,
-    verifier: new CommitmentVerifier({
-      store,
-      settlement,
-      weeklySavings,
-      activity,
-      rewards: new FixedRewardPolicy(5_000_000n),
-      now: () => input.now ?? new Date("2026-09-08T12:00:00.000Z"),
-    }),
+    verifier:
+      new CommitmentVerifier({
+        store,
+        settlement,
+        weeklySavings,
+        activity,
+        rewards:
+          new FixedRewardPolicy(
+            5_000_000n,
+          ),
+        now: () =>
+          input.now
+          ?? new Date(
+            "2026-09-08T12:00:00.000Z",
+          ),
+      }),
   };
 }
 
@@ -156,9 +178,14 @@ describe("CommitmentVerifier", () => {
       store,
       settlement,
       weeklySavings: {
-        async totalDepositedAtomic() {
+        async evaluatePeriod() {
           evidenceCalls += 1;
-          return 50_000_000n;
+
+          return {
+            netSavedAtomic: 50_000_000n,
+            averageEligibleBalanceAtomic:
+              100_000_000n,
+          };
         },
       },
       activity: { async countActivities() { return 0; } },
@@ -182,7 +209,7 @@ describe("CommitmentVerifier", () => {
       store,
       settlement,
       weeklySavings: {
-        async totalDepositedAtomic() {
+        async evaluatePeriod() {
           throw sourceError;
         },
       },

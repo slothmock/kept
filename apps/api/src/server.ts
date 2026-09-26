@@ -15,6 +15,7 @@ const app = buildApp({
   authenticate: createPrivyAuthenticator({
     appId: config.privyAppId,
     verificationKey: config.privyJwtVerificationKey,
+    appSecret: config.privyAppSecret
   }),
   persistence: new KeptPersistenceService(database.db, {
     chainId: BigInt(config.monadChainId),

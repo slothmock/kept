@@ -12,6 +12,7 @@ export interface VerifiableCommitment {
   readonly state: CommitmentState;
   readonly stateVersion: number;
   readonly settlementRef: Uint8Array | null;
+  readonly savingsGoalId: string;
 }
 
 export type VerificationDecision =
@@ -28,12 +29,18 @@ export type VerificationDecision =
       readonly reason: string;
     };
 
+export interface WeeklySavingsEvidence {
+  readonly netSavedAtomic: bigint;
+  readonly averageEligibleBalanceAtomic: bigint;
+}
+
 export interface WeeklySavingsEvidenceSource {
-  totalDepositedAtomic(input: {
+  evaluatePeriod(input: {
     readonly userId: string;
+    readonly goalId: string;
     readonly startAt: Date;
     readonly endAt: Date;
-  }): Promise<bigint>;
+  }): Promise<WeeklySavingsEvidence>;
 }
 
 export interface ActivityEvidenceSource {

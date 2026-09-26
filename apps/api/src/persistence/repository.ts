@@ -1,4 +1,4 @@
-import { and, desc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lte, sql } from "drizzle-orm";
 
 import type { CommitmentState, JsonValue } from "../domain/commitments/index.js";
 import type { KeptDatabase } from "../db/client.js";
@@ -181,6 +181,99 @@ export class KeptRepository {
       goalAllocatedSharesAtomic: "0",
       totalAllocatedSharesAtomic: "0",
     };
+  }
+
+  async getGoalAllocatedSharesAt(
+    userId: string,
+    goalId: string,
+    at: Date,
+  ): Promise<string> {
+    const [result] = await this.db
+      .select({
+        allocatedSharesAtomic:
+          sql<string>`
+          coalesce(
+            sum(${goalShareAllocations.shareDeltaAtomic}),
+            0
+          )
+        `,
+      })
+      .from(goalShareAllocations)
+      .where(
+        and(
+          eq(
+            goalShareAllocations.userId,
+            userId,
+          ),
+          eq(
+            goalShareAllocations.goalId,
+            goalId,
+          ),
+          lte(
+            goalShareAllocations.createdAt,
+            at,
+          ),
+        ),
+      );
+
+    return (
+      result?.allocatedSharesAtomic
+      ?? "0"
+    );
+  }
+
+  async listGoalAllocationDeltasForPeriod(
+    userId: string,
+    goalId: string,
+    startAt: Date,
+    endAt: Date,
+  ): Promise<
+    readonly {
+      readonly id: string;
+      readonly shareDeltaAtomic: string;
+      readonly createdAt: Date;
+    }[]
+  > {
+    return this.db
+      .select({
+        id:
+          goalShareAllocations.id,
+
+        shareDeltaAtomic:
+          goalShareAllocations.shareDeltaAtomic,
+
+        createdAt:
+          goalShareAllocations.createdAt,
+      })
+      .from(goalShareAllocations)
+      .where(
+        and(
+          eq(
+            goalShareAllocations.userId,
+            userId,
+          ),
+          eq(
+            goalShareAllocations.goalId,
+            goalId,
+          ),
+          gt(
+            goalShareAllocations.createdAt,
+            startAt,
+          ),
+          lte(
+            goalShareAllocations.createdAt,
+            endAt,
+          ),
+        ),
+      )
+      .orderBy(
+        asc(
+          goalShareAllocations.createdAt,
+        ),
+        asc(
+          goalShareAllocations.id,
+        ),
+      );
   }
 
   async listPositiveGoalAllocationsForOwner(

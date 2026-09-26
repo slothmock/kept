@@ -23,30 +23,49 @@ export async function evaluateWeeklySavings(
   commitment: VerifiableCommitment,
   source: WeeklySavingsEvidenceSource,
 ): Promise<VerificationDecision> {
-  const targetAmountAtomic = requireAtomicAmount(
-    commitment.parameters.targetAmountAtomic,
-    "targetAmountAtomic",
-  );
-  const actualAmountAtomic = await source.totalDepositedAtomic({
-    userId: commitment.userId,
-    startAt: commitment.epochStart,
-    endAt: commitment.epochEnd,
-  });
+  const targetAmountAtomic =
+    requireAtomicAmount(
+      commitment.parameters.targetAmountAtomic,
+      "targetAmountAtomic",
+    );
 
-  return actualAmountAtomic >= targetAmountAtomic
+  const evidence =
+    await source.evaluatePeriod({
+      userId: commitment.userId,
+      goalId: commitment.savingsGoalId,
+      startAt: commitment.epochStart,
+      endAt: commitment.epochEnd,
+    });
+
+  if (
+    evidence.netSavedAtomic < 0n
+    || evidence.averageEligibleBalanceAtomic < 0n
+  ) {
+    throw new Error(
+      "Weekly savings evidence source returned invalid values",
+    );
+  }
+
+  const sharedEvidence = {
+    targetAmountAtomic:
+      targetAmountAtomic.toString(),
+
+    netSavedAtomic:
+      evidence.netSavedAtomic.toString(),
+
+    averageEligibleBalanceAtomic:
+      evidence.averageEligibleBalanceAtomic.toString(),
+  };
+
+  return evidence.netSavedAtomic
+      >= targetAmountAtomic
     ? {
         outcome: "COMPLETED",
-        evidence: {
-          targetAmountAtomic: targetAmountAtomic.toString(),
-          actualAmountAtomic: actualAmountAtomic.toString(),
-        },
+        evidence: sharedEvidence,
       }
     : {
         outcome: "FAILED",
-        evidence: {
-          targetAmountAtomic: targetAmountAtomic.toString(),
-          actualAmountAtomic: actualAmountAtomic.toString(),
-        },
+        evidence: sharedEvidence,
       };
 }
 

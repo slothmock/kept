@@ -4,6 +4,7 @@ export interface ApiConfig {
   readonly databaseUrl: string;
   readonly privyAppId: string;
   readonly privyJwtVerificationKey: string;
+  readonly privyAppSecret: string;
   readonly port: number;
   readonly webOrigin: string;
   readonly monadRpcUrl: string;
@@ -65,6 +66,7 @@ export function loadApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     databaseUrl: requireValue(environment, "DATABASE_URL"),
     privyAppId: requireValue(environment, "PRIVY_APP_ID"),
     privyJwtVerificationKey: requireValue(environment, "PRIVY_JWT_VERIFICATION_KEY"),
+    privyAppSecret: requireValue(environment, "PRIVY_APP_SECRET"),
     port: parsePort(environment.PORT),
     webOrigin: environment.WEB_ORIGIN?.trim() || "http://localhost:5173",
     monadRpcUrl: requireHttpUrl(environment, "MONAD_RPC_URL"),

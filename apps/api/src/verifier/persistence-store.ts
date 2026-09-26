@@ -18,6 +18,7 @@ function mapCommitment(record: CommitmentRecord): VerifiableCommitment {
     state: record.state,
     stateVersion: record.stateVersion,
     settlementRef: record.opaqueSettlementRef,
+    savingsGoalId: record.savingsGoalId,
   };
 }
 
