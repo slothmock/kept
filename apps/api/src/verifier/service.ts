@@ -42,6 +42,12 @@ export class CommitmentVerifier {
       throw new Error(`Commitment is not active: ${commitmentId}`);
     }
 
+    if (!commitment.settlementRef) {
+      throw new Error(
+        `Commitment has no settlement reference: ${commitment.id}`,
+      );
+    }
+
     const now = this.now();
 
     if (now < commitment.epochEnd) {
@@ -132,15 +138,27 @@ export class CommitmentVerifier {
     decision: Exclude<VerificationDecision, { readonly outcome: "RETRY" }>,
     now: Date,
   ): Promise<void> {
-    if (!commitment.settlementRef) {
-      throw new Error(`Commitment has no settlement reference: ${commitment.id}`);
-    }
-
     if (decision.outcome === "COMPLETED") {
-      const rewardAssets = this.dependencies.rewards.rewardAssetsFor({ commitment, decision });
-      await this.dependencies.settlement.completeCommitment({ commitment, rewardAssets });
+      const rewardAssets =
+        this.dependencies.rewards.rewardAssetsFor({
+          commitment,
+          decision,
+        });
+
+      if (rewardAssets <= 0n) {
+        throw new Error(
+          `Completed commitment produced no reward: ${commitment.id}`,
+        );
+      }
+
+      await this.dependencies.settlement.completeCommitment({
+        commitment,
+        rewardAssets,
+      });
     } else {
-      await this.dependencies.settlement.failCommitment({ commitment });
+      await this.dependencies.settlement.failCommitment({
+        commitment,
+      });
     }
 
     const updated = await this.dependencies.store.finalize({

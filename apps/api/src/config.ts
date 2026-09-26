@@ -10,6 +10,7 @@ export interface ApiConfig {
   readonly monadRpcUrl: string;
   readonly monadChainId: 143 | 31337;
   readonly commitmentManagerAddress: Address;
+  readonly commitmentVerifierPrivateKey: Address;
   readonly keptSavingsVaultAddress: Address;
 }
 
@@ -19,6 +20,24 @@ function requireValue(environment: NodeJS.ProcessEnv, key: string): string {
     throw new Error(`${key} is required`);
   }
   return value;
+}
+
+function requirePrivateKey(
+  environment: NodeJS.ProcessEnv,
+  key: string,
+): `0x${string}` {
+  const value = requireValue(
+    environment,
+    key,
+  );
+
+  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(
+      `${key} must be a 32-byte hex private key`,
+    );
+  }
+
+  return value as `0x${string}`;
 }
 
 function parsePort(value: string | undefined): number {
@@ -72,6 +91,7 @@ export function loadApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     monadRpcUrl: requireHttpUrl(environment, "MONAD_RPC_URL"),
     monadChainId: parseChainId(environment),
     commitmentManagerAddress: requireAddress(environment, "COMMITMENT_MANAGER_ADDRESS"),
+    commitmentVerifierPrivateKey: requirePrivateKey(environment, "COMMITMENT_VERIFIER_PRIVATE_KEY"),
     keptSavingsVaultAddress: requireAddress(environment, "KEPT_SAVINGS_VAULT_ADDRESS"),
   };
 }

@@ -10,6 +10,7 @@ const requiredEnvironment = {
   MONAD_RPC_URL: "https://rpc.monad.example",
   MONAD_CHAIN_ID: "143",
   COMMITMENT_MANAGER_ADDRESS: "0x0000000000000000000000000000000000000001",
+  COMMITMENT_VERIFIER_PRIVATE_KEY: `0x${"11".repeat(32)}`,
   KEPT_SAVINGS_VAULT_ADDRESS: "0x0000000000000000000000000000000000000002",
 } satisfies NodeJS.ProcessEnv;
 
@@ -31,6 +32,7 @@ describe("API configuration", () => {
       monadRpcUrl: "https://rpc.monad.example/",
       monadChainId: 143,
       commitmentManagerAddress: "0x0000000000000000000000000000000000000001",
+      commitmentVerifierPrivateKey: "0x1111111111111111111111111111111111111111111111111111111111111111",
       keptSavingsVaultAddress: "0x0000000000000000000000000000000000000002",
     });
   });

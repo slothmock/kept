@@ -1,4 +1,16 @@
-import { createPublicClient, http } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+} from "viem";
+
+import {
+  privateKeyToAccount,
+} from "viem/accounts";
+
+import {
+  ViemCommitmentSettlementGateway,
+} from "./verifier/index.js";
 
 import { createPrivyAuthenticator } from "./auth.js";
 import { buildApp } from "./app.js";
@@ -8,26 +20,122 @@ import { KeptPersistenceService } from "./persistence/index.js";
 import { createCommitmentSettlementVerifier } from "./commitment-settlement.js";
 import { createVaultShareBalanceReader } from "./vault-shares.js";
 
+import { KeptRepository } from "./persistence/repository.js";
+
+import {
+  PersistenceWeeklySavingsEvidenceSource,
+} from "./verifier/index.js";
+
+import {
+  createVaultSavingsActivityReader,
+} from "./vault-activity.js";
+
 const config = loadApiConfig();
 const database = connectDatabase(config.databaseUrl);
 const publicClient = createPublicClient({ transport: http(config.monadRpcUrl) });
+const verifierAccount = privateKeyToAccount(config.commitmentVerifierPrivateKey);
+const verifierWalletClient = createWalletClient({
+  account: verifierAccount,
+  transport:
+    http(config.monadRpcUrl),
+});
+
+const commitmentSettlementGateway = new ViemCommitmentSettlementGateway({
+  publicClient,
+  walletClient:
+    verifierWalletClient,
+  manager:
+    config.commitmentManagerAddress,
+});
+
+const vaultShares = createVaultShareBalanceReader({
+  publicClient: {
+    getChainId:
+      () => publicClient.getChainId(),
+
+    readContract:
+      async (request) =>
+        publicClient.readContract(
+          request as never,
+        ) as Promise<bigint>,
+  },
+
+  vault:
+    config.keptSavingsVaultAddress,
+
+  chainId:
+    config.monadChainId,
+});
+const vaultActivity = createVaultSavingsActivityReader({
+  publicClient: {
+    getChainId:
+      () => publicClient.getChainId(),
+
+    getBlockNumber:
+      () => publicClient.getBlockNumber(),
+
+    getBlock:
+      async (request) => {
+        const block =
+          await publicClient.getBlock(
+            request,
+          );
+
+        return {
+          number: block.number,
+          timestamp:
+            block.timestamp,
+        };
+      },
+
+    getLogs:
+      async (request) =>
+        publicClient.getLogs(
+          request as never,
+        ) as never,
+  },
+
+  vault:
+    config.keptSavingsVaultAddress,
+
+  chainId:
+    config.monadChainId,
+});
+
+const weeklySavingsEvidence = new PersistenceWeeklySavingsEvidenceSource({
+  repository:
+    new KeptRepository(
+      database.db,
+    ),
+
+  vaultShares,
+
+  vaultActivity,
+
+  chainId:
+    BigInt(
+      config.monadChainId,
+    ),
+});
 const app = buildApp({
   authenticate: createPrivyAuthenticator({
     appId: config.privyAppId,
     verificationKey: config.privyJwtVerificationKey,
     appSecret: config.privyAppSecret
   }),
-  persistence: new KeptPersistenceService(database.db, {
-    chainId: BigInt(config.monadChainId),
-    reader: createVaultShareBalanceReader({
-      publicClient: {
-        getChainId: () => publicClient.getChainId(),
-        readContract: async (request) => publicClient.readContract(request as never) as Promise<bigint>,
+  persistence:
+    new KeptPersistenceService(
+      database.db,
+      {
+        chainId:
+          BigInt(
+            config.monadChainId,
+          ),
+
+        reader:
+          vaultShares,
       },
-      vault: config.keptSavingsVaultAddress,
-      chainId: config.monadChainId,
-    }),
-  }),
+    ),
   commitmentSettlementVerifier: createCommitmentSettlementVerifier({
     publicClient: {
       getChainId: () => publicClient.getChainId(),
