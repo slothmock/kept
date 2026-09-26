@@ -16,9 +16,7 @@ contract MockKeptTreasury is IKeptTreasury {
         bytes32 rewardId,
         address recipient,
         uint256 assets
-    )
-        external
-    {
+    ) external {
         lastRewardId = rewardId;
         lastRecipient = recipient;
         lastAssets = assets;
@@ -30,72 +28,47 @@ contract CommitmentManagerTest is Test {
     MockKeptTreasury internal treasury;
     CommitmentManager internal manager;
 
-    address internal owner =
-        makeAddr("owner");
+    address internal owner = makeAddr("owner");
 
-    address internal verifier =
-        makeAddr("verifier");
+    address internal verifier = makeAddr("verifier");
 
-    address internal alice =
-        makeAddr("alice");
+    address internal alice = makeAddr("alice");
 
-    address internal bob =
-        makeAddr("bob");
+    address internal bob = makeAddr("bob");
 
     function setUp() public {
-        treasury =
-            new MockKeptTreasury();
+        treasury = new MockKeptTreasury();
 
-        manager =
-            new CommitmentManager(
-                IKeptTreasury(
-                    address(treasury)
-                ),
-                owner,
-                verifier
-            );
+        manager = new CommitmentManager(
+            IKeptTreasury(address(treasury)),
+            owner,
+            verifier
+        );
     }
 
     function _createAliceCommitment()
         internal
-        returns (
-            uint256 commitmentId,
-            bytes32 referenceId
-        )
+        returns (uint256 commitmentId, bytes32 referenceId)
     {
-        referenceId =
-            keccak256(
-                "alice-run-week-one"
-            );
+        referenceId = keccak256("alice-run-week-one");
 
-        uint64 startAt =
-            uint64(
-                block.timestamp + 1
-            );
+        uint64 startAt = uint64(block.timestamp + 1);
 
-        uint64 endAt =
-            uint64(
-                block.timestamp + 7 days
-            );
+        uint64 endAt = uint64(block.timestamp + 7 days);
 
         vm.prank(alice);
 
-        commitmentId =
-            manager.createCommitment(
-                referenceId,
-                startAt,
-                endAt
-            );
+        commitmentId = manager.createCommitment(referenceId, startAt, endAt);
     }
 
-    function test_UserCanCreateCommitment()
-        public
-    {
-        (
-            uint256 id,
-            bytes32 referenceId
-        ) =
-            _createAliceCommitment();
+    function _warpToCommitmentEnd(uint256 commitmentId) internal {
+        (, , , , uint64 endAt, , , ) = manager.commitments(commitmentId);
+
+        vm.warp(endAt);
+    }
+
+    function test_UserCanCreateCommitment() public {
+        (uint256 id, bytes32 referenceId) = _createAliceCommitment();
 
         (
             address commitmentOwner,
@@ -104,57 +77,32 @@ contract CommitmentManagerTest is Test {
             ,
             ,
             uint256 rewardAssets,
-            CommitmentManager
-                .CommitmentStatus status,
+            CommitmentManager.CommitmentStatus status,
             bool rewardClaimed
-        ) =
-            manager.commitments(id);
+        ) = manager.commitments(id);
 
-        assertEq(
-            commitmentOwner,
-            alice
-        );
+        assertEq(commitmentOwner, alice);
 
-        assertEq(
-            storedReference,
-            referenceId
-        );
+        assertEq(storedReference, referenceId);
 
-        assertEq(
-            rewardAssets,
-            0
-        );
+        assertEq(rewardAssets, 0);
 
         assertEq(
             uint256(status),
-            uint256(
-                CommitmentManager
-                    .CommitmentStatus
-                    .Active
-            )
+            uint256(CommitmentManager.CommitmentStatus.Active)
         );
 
-        assertFalse(
-            rewardClaimed
-        );
+        assertFalse(rewardClaimed);
     }
 
-    function test_DuplicateReferenceFails()
-        public
-    {
-        (
-            ,
-            bytes32 referenceId
-        ) =
-            _createAliceCommitment();
+    function test_DuplicateReferenceFails() public {
+        (, bytes32 referenceId) = _createAliceCommitment();
 
         vm.prank(bob);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                CommitmentManager
-                    .ReferenceAlreadyUsed
-                    .selector,
+                CommitmentManager.ReferenceAlreadyUsed.selector,
                 referenceId
             )
         );
@@ -166,45 +114,31 @@ contract CommitmentManagerTest is Test {
         );
     }
 
-    function test_OnlyVerifierCanComplete()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_OnlyVerifierCanComplete() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
 
         vm.prank(alice);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                CommitmentManager
-                    .UnauthorizedVerifier
-                    .selector,
+                CommitmentManager.UnauthorizedVerifier.selector,
                 alice
             )
         );
 
-        manager.completeCommitment(
-            id,
-            5e6
-        );
+        manager.completeCommitment(id, 5e6);
     }
 
-    function test_VerifierCanComplete()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_VerifierCanComplete() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
 
         vm.prank(verifier);
 
-        manager.completeCommitment(
-            id,
-            5e6
-        );
+        manager.completeCommitment(id, 5e6);
 
         (
             ,
@@ -213,295 +147,233 @@ contract CommitmentManagerTest is Test {
             ,
             ,
             uint256 rewardAssets,
-            CommitmentManager
-                .CommitmentStatus status,
-        ) =
-            manager.commitments(id);
+            CommitmentManager.CommitmentStatus status,
 
-        assertEq(
-            rewardAssets,
-            5e6
-        );
+        ) = manager.commitments(id);
+
+        assertEq(rewardAssets, 5e6);
 
         assertEq(
             uint256(status),
-            uint256(
-                CommitmentManager
-                    .CommitmentStatus
-                    .Completed
-            )
+            uint256(CommitmentManager.CommitmentStatus.Completed)
         );
     }
 
-    function test_VerifierCanFailCommitment()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_VerifierCanFailCommitment() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
 
         vm.prank(verifier);
 
         manager.failCommitment(id);
 
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            CommitmentManager
-                .CommitmentStatus status,
-        ) =
-            manager.commitments(id);
+        (, , , , , , CommitmentManager.CommitmentStatus status, ) = manager
+            .commitments(id);
 
         assertEq(
             uint256(status),
-            uint256(
-                CommitmentManager
-                    .CommitmentStatus
-                    .Failed
-            )
+            uint256(CommitmentManager.CommitmentStatus.Failed)
         );
     }
 
-    function test_OwnerCanCancelActiveCommitment()
-        public
-    {
+    function test_VerifierCannotCompleteBeforeEnd() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        vm.prank(verifier);
+
+        vm.expectRevert(CommitmentManager.CommitmentNotEnded.selector);
+
+        manager.completeCommitment(id, 1e6);
+    }
+
+    function test_VerifierCannotFailBeforeEnd() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        vm.prank(verifier);
+
+        vm.expectRevert(CommitmentManager.CommitmentNotEnded.selector);
+
+        manager.failCommitment(id);
+    }
+
+    function test_VerifierCanCompleteAtEnd() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
+
+        vm.prank(verifier);
+
+        manager.completeCommitment(id, 1e6);
+
         (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint256 rewardAssets,
+            CommitmentManager.CommitmentStatus status,
+            bool rewardClaimed
+        ) = manager.commitments(id);
+
+        assertEq(
+            uint256(status),
+            uint256(CommitmentManager.CommitmentStatus.Completed)
+        );
+
+        assertEq(rewardAssets, 1e6);
+
+        assertFalse(rewardClaimed);
+    }
+
+    function test_VerifierCanFailAtEnd() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
+
+        vm.prank(verifier);
+
+        manager.failCommitment(id);
+
+        (, , , , , , CommitmentManager.CommitmentStatus status, ) = manager
+            .commitments(id);
+
+        assertEq(
+            uint256(status),
+            uint256(CommitmentManager.CommitmentStatus.Failed)
+        );
+    }
+
+    function test_OwnerCanCancelActiveCommitment() public {
+        (uint256 id, ) = _createAliceCommitment();
 
         vm.prank(alice);
 
         manager.cancelCommitment(id);
 
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            CommitmentManager
-                .CommitmentStatus status,
-        ) =
-            manager.commitments(id);
+        (, , , , , , CommitmentManager.CommitmentStatus status, ) = manager
+            .commitments(id);
 
         assertEq(
             uint256(status),
-            uint256(
-                CommitmentManager
-                    .CommitmentStatus
-                    .Cancelled
-            )
+            uint256(CommitmentManager.CommitmentStatus.Cancelled)
         );
     }
 
-    function test_OtherUserCannotCancelCommitment()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_OtherUserCannotCancelCommitment() public {
+        (uint256 id, ) = _createAliceCommitment();
 
         vm.prank(bob);
 
-        vm.expectRevert(
-            CommitmentManager
-                .CommitmentNotOwner
-                .selector
-        );
+        vm.expectRevert(CommitmentManager.CommitmentNotOwner.selector);
 
         manager.cancelCommitment(id);
     }
 
-    function test_CompletedCommitmentCanClaimReward()
-        public
-    {
-        (
-            uint256 id,
-            bytes32 referenceId
-        ) =
-            _createAliceCommitment();
-
+    function test_CompletedCommitmentCanClaimReward() public {
+        (uint256 id, bytes32 referenceId) = _createAliceCommitment();
+        
+        _warpToCommitmentEnd(id);
+        
         vm.prank(verifier);
 
-        manager.completeCommitment(
-            id,
-            5e6
-        );
+        manager.completeCommitment(id, 5e6);
 
         vm.prank(alice);
 
         manager.claimReward(id);
 
-        assertEq(
-            treasury.lastRecipient(),
-            alice
+        assertEq(treasury.lastRecipient(), alice);
+
+        assertEq(treasury.lastAssets(), 5e6);
+
+        bytes32 expectedRewardId = keccak256(
+            abi.encode(address(manager), id, referenceId)
         );
 
-        assertEq(
-            treasury.lastAssets(),
-            5e6
-        );
+        assertEq(treasury.lastRewardId(), expectedRewardId);
 
-        bytes32 expectedRewardId =
-            keccak256(
-                abi.encode(
-                    address(manager),
-                    id,
-                    referenceId
-                )
-            );
-
-        assertEq(
-            treasury.lastRewardId(),
-            expectedRewardId
-        );
-
-        assertEq(
-            treasury.paymentCount(),
-            1
-        );
+        assertEq(treasury.paymentCount(), 1);
     }
 
-    function test_RewardCannotBeClaimedTwice()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_RewardCannotBeClaimedTwice() public {
+        (uint256 id, ) = _createAliceCommitment();
 
+        _warpToCommitmentEnd(id);
         vm.prank(verifier);
 
-        manager.completeCommitment(
-            id,
-            5e6
-        );
+        manager.completeCommitment(id, 5e6);
 
         vm.prank(alice);
         manager.claimReward(id);
 
         vm.prank(alice);
 
-        vm.expectRevert(
-            CommitmentManager
-                .RewardAlreadyClaimed
-                .selector
-        );
+        vm.expectRevert(CommitmentManager.RewardAlreadyClaimed.selector);
 
         manager.claimReward(id);
     }
 
-    function test_FailedCommitmentCannotClaimReward()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_FailedCommitmentCannotClaimReward() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
 
         vm.prank(verifier);
         manager.failCommitment(id);
 
         vm.prank(alice);
 
-        vm.expectRevert(
-            CommitmentManager
-                .CommitmentNotCompleted
-                .selector
-        );
+        vm.expectRevert(CommitmentManager.CommitmentNotCompleted.selector);
 
         manager.claimReward(id);
     }
 
-    function test_CancelledCommitmentCannotClaimReward()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_CancelledCommitmentCannotClaimReward() public {
+        (uint256 id, ) = _createAliceCommitment();
 
         vm.prank(alice);
         manager.cancelCommitment(id);
 
         vm.prank(alice);
 
-        vm.expectRevert(
-            CommitmentManager
-                .CommitmentNotCompleted
-                .selector
-        );
+        vm.expectRevert(CommitmentManager.CommitmentNotCompleted.selector);
 
         manager.claimReward(id);
     }
 
-    function test_CompletedCommitmentWithZeroRewardCannotClaim()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_ZeroRewardCannotCompleteCommitment() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
 
         vm.prank(verifier);
 
-        manager.completeCommitment(
-            id,
-            0
-        );
+        vm.expectRevert(CommitmentManager.NoReward.selector);
 
-        vm.prank(alice);
-
-        vm.expectRevert(
-            CommitmentManager
-                .NoReward
-                .selector
-        );
-
-        manager.claimReward(id);
+        manager.completeCommitment(id, 0);
     }
 
-    function test_OwnerCanRotateVerifier()
-        public
-    {
-        address newVerifier =
-            makeAddr("newVerifier");
+    function test_OwnerCanRotateVerifier() public {
+        address newVerifier = makeAddr("newVerifier");
 
         vm.prank(owner);
 
-        manager.setVerifier(
-            newVerifier
-        );
+        manager.setVerifier(newVerifier);
 
-        assertEq(
-            manager.verifier(),
-            newVerifier
-        );
+        assertEq(manager.verifier(), newVerifier);
     }
 
-    function test_NonOwnerCannotRotateVerifier()
-        public
-    {
+    function test_NonOwnerCannotRotateVerifier() public {
         vm.prank(alice);
 
         vm.expectRevert();
 
-        manager.setVerifier(
-            makeAddr("newVerifier")
-        );
+        manager.setVerifier(makeAddr("newVerifier"));
     }
 
-    function test_PauseBlocksCommitmentCreation()
-        public
-    {
+    function test_PauseBlocksCommitmentCreation() public {
         vm.prank(owner);
         manager.pause();
 
@@ -515,13 +387,8 @@ contract CommitmentManagerTest is Test {
         );
     }
 
-    function test_PauseBlocksVerification()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_PauseBlocksVerification() public {
+        (uint256 id, ) = _createAliceCommitment();
 
         vm.prank(owner);
         manager.pause();
@@ -529,26 +396,17 @@ contract CommitmentManagerTest is Test {
         vm.prank(verifier);
         vm.expectRevert();
 
-        manager.completeCommitment(
-            id,
-            5e6
-        );
+        manager.completeCommitment(id, 5e6);
     }
 
-    function test_PauseBlocksRewardClaim()
-        public
-    {
-        (
-            uint256 id,
-        ) =
-            _createAliceCommitment();
+    function test_PauseBlocksRewardClaim() public {
+        (uint256 id, ) = _createAliceCommitment();
+
+        _warpToCommitmentEnd(id);
 
         vm.prank(verifier);
 
-        manager.completeCommitment(
-            id,
-            5e6
-        );
+        manager.completeCommitment(id, 5e6);
 
         vm.prank(owner);
         manager.pause();

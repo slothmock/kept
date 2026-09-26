@@ -20,15 +20,11 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     struct Commitment {
         address owner;
         bytes32 referenceId;
-
         uint64 createdAt;
         uint64 startAt;
         uint64 endAt;
-
         uint256 rewardAssets;
-
         CommitmentStatus status;
-
         bool rewardClaimed;
     }
 
@@ -55,23 +51,38 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     error CommitmentNotOwner();
     error CommitmentNotActive();
     error CommitmentNotCompleted();
+    error CommitmentNotEnded();
 
     error RewardAlreadyClaimed();
     error NoReward();
 
-    event VerifierUpdated(address indexed previousVerifier, address indexed newVerifier);
-
-    event CommitmentCreated(
-        uint256 indexed commitmentId, address indexed owner, bytes32 indexed referenceId, uint64 startAt, uint64 endAt
+    event VerifierUpdated(
+        address indexed previousVerifier,
+        address indexed newVerifier
     );
 
-    event CommitmentCompleted(uint256 indexed commitmentId, uint256 rewardAssets);
+    event CommitmentCreated(
+        uint256 indexed commitmentId,
+        address indexed owner,
+        bytes32 indexed referenceId,
+        uint64 startAt,
+        uint64 endAt
+    );
+
+    event CommitmentCompleted(
+        uint256 indexed commitmentId,
+        uint256 rewardAssets
+    );
 
     event CommitmentFailed(uint256 indexed commitmentId);
 
     event CommitmentCancelled(uint256 indexed commitmentId);
 
-    event RewardClaimed(uint256 indexed commitmentId, address indexed owner, uint256 assets);
+    event RewardClaimed(
+        uint256 indexed commitmentId,
+        address indexed owner,
+        uint256 assets
+    );
 
     modifier onlyVerifier() {
         if (msg.sender != verifier) {
@@ -81,7 +92,11 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
         _;
     }
 
-    constructor(IKeptTreasury treasury_, address initialOwner, address verifier_) Ownable(initialOwner) {
+    constructor(
+        IKeptTreasury treasury_,
+        address initialOwner,
+        address verifier_
+    ) Ownable(initialOwner) {
         if (address(treasury_) == address(0)) {
             revert InvalidTreasury();
         }
@@ -112,11 +127,11 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     ///
     /// @dev referenceId should point to private/offchain
     /// commitment metadata without exposing that metadata.
-    function createCommitment(bytes32 referenceId, uint64 startAt, uint64 endAt)
-        external
-        whenNotPaused
-        returns (uint256 commitmentId)
-    {
+    function createCommitment(
+        bytes32 referenceId,
+        uint64 startAt,
+        uint64 endAt
+    ) external whenNotPaused returns (uint256 commitmentId) {
         if (referenceId == bytes32(0)) {
             revert InvalidReferenceId();
         }
@@ -144,7 +159,13 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
             rewardClaimed: false
         });
 
-        emit CommitmentCreated(commitmentId, msg.sender, referenceId, startAt, endAt);
+        emit CommitmentCreated(
+            commitmentId,
+            msg.sender,
+            referenceId,
+            startAt,
+            endAt
+        );
     }
 
     /// @notice Mark a commitment as successfully
@@ -152,7 +173,10 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     ///
     /// @dev Reward size is chosen by the trusted verifier,
     /// not by the user.
-    function completeCommitment(uint256 commitmentId, uint256 rewardAssets) external onlyVerifier whenNotPaused {
+    function completeCommitment(
+        uint256 commitmentId,
+        uint256 rewardAssets
+    ) external onlyVerifier whenNotPaused {
         Commitment storage commitment = commitments[commitmentId];
 
         if (commitment.owner == address(0)) {
@@ -161,6 +185,14 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
 
         if (commitment.status != CommitmentStatus.Active) {
             revert CommitmentNotActive();
+        }
+
+        if (block.timestamp < commitment.endAt) {
+            revert CommitmentNotEnded();
+        }
+
+        if (rewardAssets == 0) {
+            revert NoReward();
         }
 
         commitment.status = CommitmentStatus.Completed;
@@ -171,7 +203,9 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     }
 
     /// @notice Mark a commitment as unsuccessful.
-    function failCommitment(uint256 commitmentId) external onlyVerifier whenNotPaused {
+    function failCommitment(
+        uint256 commitmentId
+    ) external onlyVerifier whenNotPaused {
         Commitment storage commitment = commitments[commitmentId];
 
         if (commitment.owner == address(0)) {
@@ -180,6 +214,10 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
 
         if (commitment.status != CommitmentStatus.Active) {
             revert CommitmentNotActive();
+        }
+
+        if (block.timestamp < commitment.endAt) {
+            revert CommitmentNotEnded();
         }
 
         commitment.status = CommitmentStatus.Failed;
@@ -211,7 +249,9 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
 
     /// @notice Claim the reward assigned to a
     /// successfully verified commitment.
-    function claimReward(uint256 commitmentId) external whenNotPaused nonReentrant {
+    function claimReward(
+        uint256 commitmentId
+    ) external whenNotPaused nonReentrant {
         Commitment storage commitment = commitments[commitmentId];
 
         if (commitment.owner == address(0)) {
@@ -242,11 +282,17 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
          */
         commitment.rewardClaimed = true;
 
-        bytes32 rewardId = keccak256(abi.encode(address(this), commitmentId, commitment.referenceId));
+        bytes32 rewardId = keccak256(
+            abi.encode(address(this), commitmentId, commitment.referenceId)
+        );
 
         treasury.payReward(rewardId, commitment.owner, commitment.rewardAssets);
 
-        emit RewardClaimed(commitmentId, commitment.owner, commitment.rewardAssets);
+        emit RewardClaimed(
+            commitmentId,
+            commitment.owner,
+            commitment.rewardAssets
+        );
     }
 
     function pause() external onlyOwner {
