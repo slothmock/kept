@@ -1,5 +1,11 @@
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from "fastify";
+
 import type { Hex } from "viem";
+
 import cors from "@fastify/cors";
 
 import {
@@ -8,19 +14,24 @@ import {
   NotFoundError,
   PersistenceValidationError,
 } from "./persistence/errors.js";
-import type {
-  KeptPersistenceService,
-  UserDto,
-} from "./persistence/index.js";
+
+import type { KeptPersistenceService, UserDto } from "./persistence/index.js";
+
 import type { JsonValue } from "./domain/commitments/index.js";
+
 import {
   CommitmentSettlementMismatchError,
   CommitmentSettlementUnavailableError,
   type CommitmentSettlementVerifier,
 } from "./commitment-settlement.js";
 
+import type { SavingsPerformanceReader } from "./savings-performance.js";
+
+import type { SavingsMarketStatusReader } from "./savings-market-status.js";
+
 export interface AuthenticatedIdentity {
   readonly privyUserId: string;
+
   readonly wallet: string | null;
 }
 
@@ -50,10 +61,15 @@ export interface ApiDependencies {
   >;
 
   readonly commitmentSettlementVerifier?: CommitmentSettlementVerifier;
+
+  readonly savingsPerformance: SavingsPerformanceReader;
+
+  readonly savingsMarketStatus: SavingsMarketStatusReader;
 }
 
 export interface BuildAppOptions {
   readonly enableLogging?: boolean;
+
   readonly webOrigin?: string;
 }
 
@@ -61,11 +77,13 @@ function allowedWebOrigins(webOrigin: string): string[] {
   if (webOrigin === "http://localhost:5173") {
     return [webOrigin, "http://127.0.0.1:5173"];
   }
+
   return [webOrigin];
 }
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: UserDto;
+
   identity: AuthenticatedIdentity;
 }
 
@@ -75,46 +93,81 @@ function asAuthenticatedRequest(request: FastifyRequest): AuthenticatedRequest {
 
 function sendError(
   request: FastifyRequest,
+
   error: unknown,
 ): {
   readonly statusCode: number;
+
   readonly body: { readonly error: { readonly code: string } };
 } {
   if (error instanceof NotFoundError) {
-    request.log.warn({ err: error, errorCode: "NOT_FOUND" }, "API request rejected");
+    request.log.warn(
+      { err: error, errorCode: "NOT_FOUND" },
+      "API request rejected",
+    );
+
     return { statusCode: 404, body: { error: { code: "NOT_FOUND" } } };
   }
+
   if (error instanceof PersistenceValidationError) {
-    request.log.warn({ err: error, errorCode: "VALIDATION_ERROR" }, "API request rejected");
+    request.log.warn(
+      { err: error, errorCode: "VALIDATION_ERROR" },
+      "API request rejected",
+    );
+
     return { statusCode: 400, body: { error: { code: "VALIDATION_ERROR" } } };
   }
+
   if (error instanceof IdempotencyConflictError) {
-    request.log.warn({ err: error, errorCode: "IDEMPOTENCY_CONFLICT" }, "API request rejected");
-    return { statusCode: 409, body: { error: { code: "IDEMPOTENCY_CONFLICT" } } };
+    request.log.warn(
+      { err: error, errorCode: "IDEMPOTENCY_CONFLICT" },
+      "API request rejected",
+    );
+
+    return {
+      statusCode: 409,
+      body: { error: { code: "IDEMPOTENCY_CONFLICT" } },
+    };
   }
+
   if (error instanceof IncompleteIdempotencyRecordError) {
-    request.log.warn({ err: error, errorCode: "REQUEST_IN_PROGRESS" }, "API request rejected");
-    return { statusCode: 409, body: { error: { code: "REQUEST_IN_PROGRESS" } } };
+    request.log.warn(
+      { err: error, errorCode: "REQUEST_IN_PROGRESS" },
+      "API request rejected",
+    );
+
+    return {
+      statusCode: 409,
+      body: { error: { code: "REQUEST_IN_PROGRESS" } },
+    };
   }
+
   if (error instanceof CommitmentSettlementMismatchError) {
     request.log.warn(
       { err: error, errorCode: "COMMITMENT_SETTLEMENT_MISMATCH" },
+
       "API request rejected",
     );
+
     return {
       statusCode: 409,
+
       body: { error: { code: "COMMITMENT_SETTLEMENT_MISMATCH" } },
     };
   }
+
   if (error instanceof CommitmentSettlementUnavailableError) {
     request.log.error(error, "commitment settlement verification unavailable");
+
     return {
       statusCode: 503,
+
       body: { error: { code: "SERVICE_UNAVAILABLE" } },
     };
   }
 
   request.log.error(error, "unhandled API error");
+
   return { statusCode: 500, body: { error: { code: "INTERNAL_ERROR" } } };
 }
 
@@ -122,38 +175,52 @@ function requireObject(body: unknown): Record<string, unknown> {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     throw new PersistenceValidationError("request body must be an object");
   }
+
   return body as Record<string, unknown>;
 }
 
 function requireString(body: Record<string, unknown>, key: string): string {
   const value = body[key];
+
   if (typeof value !== "string") {
     throw new PersistenceValidationError(`${key} must be a string`);
   }
+
   return value;
 }
 
 function requireInteger(body: Record<string, unknown>, key: string): number {
   const value = body[key];
+
   if (!Number.isSafeInteger(value)) {
     throw new PersistenceValidationError(`${key} must be a safe integer`);
   }
+
   return value as number;
 }
 
-function requireSignedAtomicShareDelta(body: Record<string, unknown>, key: string): string {
+function requireSignedAtomicShareDelta(
+  body: Record<string, unknown>,
+  key: string,
+): string {
   const value = requireString(body, key);
+
   if (!/^-?\d{1,78}$/.test(value) || BigInt(value) === 0n) {
-    throw new PersistenceValidationError(`${key} must be a non-zero signed integer`);
+    throw new PersistenceValidationError(
+      `${key} must be a non-zero signed integer`,
+    );
   }
+
   return value;
 }
 
 function requireIdempotencyKey(request: FastifyRequest): string {
   const value = request.headers["idempotency-key"];
+
   if (typeof value !== "string" || !value.trim()) {
     throw new PersistenceValidationError("idempotency-key header is required");
   }
+
   return value;
 }
 
@@ -162,30 +229,35 @@ async function settlementRequest<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (
-      error instanceof CommitmentSettlementMismatchError
-      || error instanceof CommitmentSettlementUnavailableError
+      error instanceof CommitmentSettlementMismatchError ||
+      error instanceof CommitmentSettlementUnavailableError
     ) {
       throw error;
     }
+
     throw new CommitmentSettlementUnavailableError();
   }
 }
 
 async function handle<T>(
   request: FastifyRequest,
+
   reply: { code(statusCode: number): { send(body: unknown): unknown } },
+
   operation: () => Promise<T>,
 ): Promise<T | unknown> {
   try {
     return await operation();
   } catch (error) {
     const result = sendError(request, error);
+
     return reply.code(result.statusCode).send(result.body);
   }
 }
 
 export function buildApp(
   dependencies: ApiDependencies,
+
   options: BuildAppOptions = {},
 ): FastifyInstance {
   const app = Fastify({
@@ -195,35 +267,55 @@ export function buildApp(
   });
 
   const webOrigin = options.webOrigin ?? "http://localhost:5173";
+
   app.register(cors, {
     origin: allowedWebOrigins(webOrigin),
+
     methods: ["GET", "POST"],
+
     allowedHeaders: ["authorization", "content-type", "idempotency-key"],
   });
 
   app.setErrorHandler((error, request, reply) => {
     const statusCode =
       error !== null &&
-        typeof error === "object" &&
-        "statusCode" in error &&
-        typeof error.statusCode === "number"
+      typeof error === "object" &&
+      "statusCode" in error &&
+      typeof error.statusCode === "number"
         ? error.statusCode
         : 500;
 
     if (statusCode === 400) {
-      request.log.warn({ err: error, errorCode: "VALIDATION_ERROR" }, "API framework request rejected");
+      request.log.warn(
+        { err: error, errorCode: "VALIDATION_ERROR" },
+        "API framework request rejected",
+      );
+
       return reply.code(400).send({ error: { code: "VALIDATION_ERROR" } });
     }
+
     if (statusCode === 415) {
-      request.log.warn({ err: error, errorCode: "UNSUPPORTED_MEDIA_TYPE" }, "API framework request rejected");
-      return reply.code(415).send({ error: { code: "UNSUPPORTED_MEDIA_TYPE" } });
+      request.log.warn(
+        { err: error, errorCode: "UNSUPPORTED_MEDIA_TYPE" },
+        "API framework request rejected",
+      );
+
+      return reply
+        .code(415)
+        .send({ error: { code: "UNSUPPORTED_MEDIA_TYPE" } });
     }
+
     if (statusCode === 413) {
-      request.log.warn({ err: error, errorCode: "PAYLOAD_TOO_LARGE" }, "API framework request rejected");
+      request.log.warn(
+        { err: error, errorCode: "PAYLOAD_TOO_LARGE" },
+        "API framework request rejected",
+      );
+
       return reply.code(413).send({ error: { code: "PAYLOAD_TOO_LARGE" } });
     }
 
     request.log.error(error, "unhandled framework error");
+
     return reply.code(500).send({ error: { code: "INTERNAL_ERROR" } });
   });
 
@@ -243,29 +335,32 @@ export function buildApp(
     if (!identity) {
       request.log.warn(
         { errorCode: "UNAUTHENTICATED" },
+
         "API authentication failed",
       );
 
       await reply
+
         .code(401)
+
         .send({ error: { code: "UNAUTHENTICATED" } });
 
       return reply;
     }
 
     try {
-      const authenticatedRequest =
-        asAuthenticatedRequest(request);
+      const authenticatedRequest = asAuthenticatedRequest(request);
 
-      authenticatedRequest.user =
-        await dependencies.persistence.createUser({
-          privyUserId: identity.privyUserId,
-        });
+      authenticatedRequest.user = await dependencies.persistence.createUser({
+        privyUserId: identity.privyUserId,
+      });
 
       if (identity.wallet) {
         await dependencies.persistence.ensureEmbeddedWallet({
           userId: authenticatedRequest.user.id,
+
           chainId: dependencies.chainId,
+
           address: identity.wallet,
         });
       }
@@ -275,7 +370,9 @@ export function buildApp(
       const result = sendError(request, error);
 
       await reply
+
         .code(result.statusCode)
+
         .send(result.body);
 
       return reply;
@@ -284,9 +381,46 @@ export function buildApp(
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 
+  app.get(
+    "/v1/savings/performance",
+
+    async (request, reply) =>
+      handle(
+        request,
+
+        reply,
+
+        async () => {
+          const auth = asAuthenticatedRequest(request);
+
+          if (!auth.identity.wallet) {
+            throw new NotFoundError("Privy embedded wallet");
+          }
+
+          const nowMilliseconds = Math.floor(Date.now() / 1_000) * 1_000;
+
+          return dependencies.savingsPerformance.readPerformance({
+            account: auth.identity.wallet,
+
+            // TODO: Replace with the vault deployment date/block.
+
+            startAt: new Date(0),
+
+            endAt: new Date(nowMilliseconds),
+          });
+        },
+      ),
+  );
+
+  app.get("/v1/savings/market-status", async (request, reply) =>
+    handle(request, reply, () => dependencies.savingsMarketStatus.readStatus()),
+  );
+
   app.get("/v1/goals", async (request, reply) =>
     handle(request, reply, () =>
-      dependencies.persistence.listGoals(asAuthenticatedRequest(request).user.id),
+      dependencies.persistence.listGoals(
+        asAuthenticatedRequest(request).user.id,
+      ),
     ),
   );
 
@@ -294,15 +428,19 @@ export function buildApp(
     handle(request, reply, async () => {
       const goal = await dependencies.persistence.getGoal(
         asAuthenticatedRequest(request).user.id,
+
         request.params.id,
       );
+
       if (!goal) throw new NotFoundError("Savings goal");
+
       return goal;
     }),
   );
 
   app.get<{ Params: { id: string } }>(
     "/v1/goals/:id/allocation",
+
     async (request, reply) =>
       handle(request, reply, async () => {
         const auth = asAuthenticatedRequest(request);
@@ -311,12 +449,13 @@ export function buildApp(
           throw new NotFoundError("Privy embedded wallet");
         }
 
-        const allocation =
-          await dependencies.persistence.getGoalAllocation(
-            auth.user.id,
-            request.params.id,
-            auth.identity.wallet,
-          );
+        const allocation = await dependencies.persistence.getGoalAllocation(
+          auth.user.id,
+
+          request.params.id,
+
+          auth.identity.wallet,
+        );
 
         if (!allocation) {
           throw new NotFoundError("Savings goal");
@@ -329,21 +468,31 @@ export function buildApp(
   app.post("/v1/goals", async (request, reply) =>
     handle(request, reply, async () => {
       const body = requireObject(request.body);
+
       const targetDateValue = body.targetDate;
+
       if (
         targetDateValue !== undefined &&
         targetDateValue !== null &&
         typeof targetDateValue !== "string"
       ) {
-        throw new PersistenceValidationError("targetDate must be a string or null");
+        throw new PersistenceValidationError(
+          "targetDate must be a string or null",
+        );
       }
+
       const targetDate: string | null =
         typeof targetDateValue === "string" ? targetDateValue : null;
+
       return dependencies.persistence.createGoal({
         userId: asAuthenticatedRequest(request).user.id,
+
         idempotencyKey: requireIdempotencyKey(request),
+
         name: requireString(body, "name"),
+
         targetAmountAtomic: requireString(body, "targetAmountAtomic"),
+
         targetDate,
       });
     }),
@@ -351,20 +500,22 @@ export function buildApp(
 
   app.post<{ Params: { id: string } }>(
     "/v1/goals/:id/archive",
+
     async (request, reply) =>
       handle(request, reply, () => {
         return dependencies.persistence.archiveGoal({
-          userId:
-            asAuthenticatedRequest(request).user.id,
+          userId: asAuthenticatedRequest(request).user.id,
+
           goalId: request.params.id,
-          idempotencyKey:
-            requireIdempotencyKey(request),
+
+          idempotencyKey: requireIdempotencyKey(request),
         });
       }),
   );
 
   app.post<{ Params: { id: string } }>(
     "/v1/goals/:id/allocations",
+
     async (request, reply) =>
       handle(request, reply, async () => {
         const auth = asAuthenticatedRequest(request);
@@ -377,13 +528,19 @@ export function buildApp(
 
         return dependencies.persistence.allocateGoalShares({
           userId: auth.user.id,
+
           goalId: request.params.id,
+
           walletAddress: auth.identity.wallet,
+
           shareDeltaAtomic: requireSignedAtomicShareDelta(
             body,
+
             "shareDeltaAtomic",
           ),
+
           reason: requireString(body, "reason"),
+
           idempotencyKey: requireIdempotencyKey(request),
         });
       }),
@@ -391,6 +548,7 @@ export function buildApp(
 
   app.post(
     "/v1/goals/reallocate",
+
     async (request, reply) =>
       handle(request, reply, async () => {
         const auth = asAuthenticatedRequest(request);
@@ -403,22 +561,25 @@ export function buildApp(
 
         const fromGoalId = requireString(
           body,
+
           "fromGoalId",
         );
 
         const toGoalId = requireString(
           body,
+
           "toGoalId",
         );
 
         const shareAmountAtomic = requireString(
           body,
+
           "shareAmountAtomic",
         );
 
         if (
-          !/^\d{1,78}$/.test(shareAmountAtomic)
-          || BigInt(shareAmountAtomic) <= 0n
+          !/^\d{1,78}$/.test(shareAmountAtomic) ||
+          BigInt(shareAmountAtomic) <= 0n
         ) {
           throw new PersistenceValidationError(
             "shareAmountAtomic must be a positive integer",
@@ -427,12 +588,16 @@ export function buildApp(
 
         return dependencies.persistence.reallocateGoalShares({
           userId: auth.user.id,
+
           walletAddress: auth.identity.wallet,
+
           fromGoalId,
+
           toGoalId,
+
           shareAmountAtomic,
-          idempotencyKey:
-            requireIdempotencyKey(request),
+
+          idempotencyKey: requireIdempotencyKey(request),
         });
       }),
   );
@@ -442,184 +607,283 @@ export function buildApp(
       const commitments = await dependencies.persistence.listCommitments(
         asAuthenticatedRequest(request).user.id,
       );
-      const reconciled = await Promise.all(commitments.map(async (commitment) => {
-        if (commitment.state !== "ACTIVE" || !commitment.onchainCommitmentId) return commitment;
-        if (!dependencies.commitmentSettlementVerifier) {
-          throw new CommitmentSettlementUnavailableError();
-        }
-        const settlement = await settlementRequest(() => (
-          dependencies.commitmentSettlementVerifier!.inspect({
-            offchainCommitmentId: commitment.id,
-            onchainCommitmentId: commitment.onchainCommitmentId!,
-            startAt: new Date(commitment.epochStart),
-            endAt: new Date(commitment.epochEnd),
-          })
-        ));
-        const targetState = ({
-          2: "COMPLETED",
-          3: "FAILED",
-          4: "CANCELLED",
-        } as const)[settlement.status as 2 | 3 | 4];
-        if (settlement.status === 1) return commitment;
-        if (!targetState) {
-          throw new CommitmentSettlementMismatchError(
-            "Onchain commitment has an invalid active lifecycle status",
+
+      const reconciled = await Promise.all(
+        commitments.map(async (commitment) => {
+          if (commitment.state !== "ACTIVE" || !commitment.onchainCommitmentId)
+            return commitment;
+
+          if (!dependencies.commitmentSettlementVerifier) {
+            throw new CommitmentSettlementUnavailableError();
+          }
+
+          const settlement = await settlementRequest(() =>
+            dependencies.commitmentSettlementVerifier!.inspect({
+              offchainCommitmentId: commitment.id,
+
+              onchainCommitmentId: commitment.onchainCommitmentId!,
+
+              startAt: new Date(commitment.epochStart),
+
+              endAt: new Date(commitment.epochEnd),
+            }),
           );
-        }
-        return { ...commitment, state: targetState };
-      }));
+
+          const targetState = (
+            {
+              2: "COMPLETED",
+
+              3: "FAILED",
+
+              4: "CANCELLED",
+            } as const
+          )[settlement.status as 2 | 3 | 4];
+
+          if (settlement.status === 1) return commitment;
+
+          if (!targetState) {
+            throw new CommitmentSettlementMismatchError(
+              "Onchain commitment has an invalid active lifecycle status",
+            );
+          }
+
+          return { ...commitment, state: targetState };
+        }),
+      );
+
       return reconciled;
     }),
   );
 
-  app.get<{ Params: { id: string } }>("/v1/commitments/:id", async (request, reply) =>
-    handle(request, reply, async () => {
-      const commitment = await dependencies.persistence.getCommitment(
-        asAuthenticatedRequest(request).user.id,
-        request.params.id,
-      );
-      if (!commitment) throw new NotFoundError("Commitment");
-      if (commitment.state === "ACTIVE" && commitment.onchainCommitmentId) {
-        if (!dependencies.commitmentSettlementVerifier) {
-          throw new CommitmentSettlementUnavailableError();
-        }
-        const settlement = await settlementRequest(() => (
-          dependencies.commitmentSettlementVerifier!.inspect({
-            offchainCommitmentId: commitment.id,
-            onchainCommitmentId: commitment.onchainCommitmentId!,
-            startAt: new Date(commitment.epochStart),
-            endAt: new Date(commitment.epochEnd),
-          })
-        ));
-        const targetState = ({
-          2: "COMPLETED",
-          3: "FAILED",
-          4: "CANCELLED",
-        } as const)[settlement.status as 2 | 3 | 4];
-        if (settlement.status === 1) return commitment;
-        if (!targetState) {
-          throw new CommitmentSettlementMismatchError(
-            "Onchain commitment has an invalid active lifecycle status",
+  app.get<{ Params: { id: string } }>(
+    "/v1/commitments/:id",
+    async (request, reply) =>
+      handle(request, reply, async () => {
+        const commitment = await dependencies.persistence.getCommitment(
+          asAuthenticatedRequest(request).user.id,
+
+          request.params.id,
+        );
+
+        if (!commitment) throw new NotFoundError("Commitment");
+
+        if (commitment.state === "ACTIVE" && commitment.onchainCommitmentId) {
+          if (!dependencies.commitmentSettlementVerifier) {
+            throw new CommitmentSettlementUnavailableError();
+          }
+
+          const settlement = await settlementRequest(() =>
+            dependencies.commitmentSettlementVerifier!.inspect({
+              offchainCommitmentId: commitment.id,
+
+              onchainCommitmentId: commitment.onchainCommitmentId!,
+
+              startAt: new Date(commitment.epochStart),
+
+              endAt: new Date(commitment.epochEnd),
+            }),
           );
+
+          const targetState = (
+            {
+              2: "COMPLETED",
+
+              3: "FAILED",
+
+              4: "CANCELLED",
+            } as const
+          )[settlement.status as 2 | 3 | 4];
+
+          if (settlement.status === 1) return commitment;
+
+          if (!targetState) {
+            throw new CommitmentSettlementMismatchError(
+              "Onchain commitment has an invalid active lifecycle status",
+            );
+          }
+
+          return { ...commitment, state: targetState };
         }
-        return { ...commitment, state: targetState };
-      }
-      return commitment;
-    }),
+
+        return commitment;
+      }),
   );
 
   app.post("/v1/commitments", async (request, reply) =>
     handle(request, reply, async () => {
       const body = requireObject(request.body);
+
       const definition = requireObject(body.definition);
-      const parameters = requireObject(body.parameters) as Record<string, JsonValue>;
+
+      const parameters = requireObject(body.parameters) as Record<
+        string,
+        JsonValue
+      >;
+
       return dependencies.persistence.createCommitmentDraft({
         userId: asAuthenticatedRequest(request).user.id,
+
         idempotencyKey: requireIdempotencyKey(request),
+
         goalId: requireString(body, "goalId"),
+
         definition: {
           code: requireString(definition, "code"),
+
           version: requireInteger(definition, "version"),
         },
+
         parameters,
+
         epochStart: requireString(body, "epochStart"),
+
         epochEnd: requireString(body, "epochEnd"),
+
         verificationDeadline: requireString(body, "verificationDeadline"),
       });
     }),
   );
 
-  app.post<{ Params: { id: string } }>("/v1/commitments/:id/activate", async (request, reply) =>
-    handle(request, reply, async () => {
-      if (!dependencies.commitmentSettlementVerifier) {
-        throw new CommitmentSettlementUnavailableError();
-      }
-      const body = requireObject(request.body);
-      const onchainCommitmentId = requireString(body, "onchainCommitmentId");
-      const transactionHash = requireString(body, "transactionHash") as Hex;
-      const userId = asAuthenticatedRequest(request).user.id;
-      const commitment = await dependencies.persistence.getCommitment(
-        userId,
-        request.params.id,
-      );
-      if (!commitment) throw new NotFoundError("Commitment");
+  app.post<{ Params: { id: string } }>(
+    "/v1/commitments/:id/activate",
+    async (request, reply) =>
+      handle(request, reply, async () => {
+        if (!dependencies.commitmentSettlementVerifier) {
+          throw new CommitmentSettlementUnavailableError();
+        }
 
-      const verifiedSettlement = await settlementRequest(() => (
-        dependencies.commitmentSettlementVerifier!.verifyActive({
-          offchainCommitmentId: commitment.id,
+        const body = requireObject(request.body);
+
+        const onchainCommitmentId = requireString(body, "onchainCommitmentId");
+
+        const transactionHash = requireString(body, "transactionHash") as Hex;
+
+        const userId = asAuthenticatedRequest(request).user.id;
+
+        const commitment = await dependencies.persistence.getCommitment(
+          userId,
+
+          request.params.id,
+        );
+
+        if (!commitment) throw new NotFoundError("Commitment");
+
+        const verifiedSettlement = await settlementRequest(() =>
+          dependencies.commitmentSettlementVerifier!.verifyActive({
+            offchainCommitmentId: commitment.id,
+
+            onchainCommitmentId,
+
+            transactionHash,
+
+            startAt: new Date(commitment.epochStart),
+
+            endAt: new Date(commitment.epochEnd),
+          }),
+        );
+
+        const activated = await dependencies.persistence.activateCommitment({
+          userId,
+
+          commitmentId: request.params.id,
+
+          expectedVersion: requireInteger(body, "expectedVersion"),
+
           onchainCommitmentId,
-          transactionHash,
-          startAt: new Date(commitment.epochStart),
-          endAt: new Date(commitment.epochEnd),
-        })
-      ));
 
-      const activated = await dependencies.persistence.activateCommitment({
-        userId,
-        commitmentId: request.params.id,
-        expectedVersion: requireInteger(body, "expectedVersion"),
-        onchainCommitmentId,
-        settlementOwner: verifiedSettlement.owner,
-        settlementChainId: verifiedSettlement.chainId,
-        settlementStatus: verifiedSettlement.status as 1 | 2 | 3 | 4,
-        idempotencyKey: requireIdempotencyKey(request),
-      });
-      const settledState = ({
-        2: "COMPLETED",
-        3: "FAILED",
-        4: "CANCELLED",
-      } as const)[verifiedSettlement.status as 2 | 3 | 4];
-      return settledState ? { ...activated, state: settledState } : activated;
-    }),
+          settlementOwner: verifiedSettlement.owner,
+
+          settlementChainId: verifiedSettlement.chainId,
+
+          settlementStatus: verifiedSettlement.status as 1 | 2 | 3 | 4,
+
+          idempotencyKey: requireIdempotencyKey(request),
+        });
+
+        const settledState = (
+          {
+            2: "COMPLETED",
+
+            3: "FAILED",
+
+            4: "CANCELLED",
+          } as const
+        )[verifiedSettlement.status as 2 | 3 | 4];
+
+        return settledState ? { ...activated, state: settledState } : activated;
+      }),
   );
 
-  app.post<{ Params: { id: string } }>("/v1/commitments/:id/cancel", async (request, reply) =>
-    handle(request, reply, async () => {
-      if (!dependencies.commitmentSettlementVerifier) {
-        throw new CommitmentSettlementUnavailableError();
-      }
-      const body = requireObject(request.body);
-      const onchainCommitmentId = requireString(body, "onchainCommitmentId");
-      const owner = requireString(body, "owner");
-      const userId = asAuthenticatedRequest(request).user.id;
-      const commitment = await dependencies.persistence.getCommitment(
-        userId,
-        request.params.id,
-      );
-      if (!commitment) throw new NotFoundError("Commitment");
-      const cancellationInput = {
-        userId,
-        commitmentId: request.params.id,
-        expectedVersion: requireInteger(body, "expectedVersion"),
-        onchainCommitmentId,
-        settlementOwner: owner,
-        idempotencyKey: requireIdempotencyKey(request),
-      };
-      if (
-        commitment.state === "CANCELLED"
-        && commitment.onchainCommitmentId === onchainCommitmentId
-      ) {
-        return dependencies.persistence.cancelCommitment(cancellationInput);
-      }
-      if (
-        commitment.state !== "ACTIVE"
-        || commitment.onchainCommitmentId !== onchainCommitmentId
-      ) {
-        throw new CommitmentSettlementMismatchError(
-          "Only a matching onchain active commitment can be cancelled",
+  app.post<{ Params: { id: string } }>(
+    "/v1/commitments/:id/cancel",
+    async (request, reply) =>
+      handle(request, reply, async () => {
+        if (!dependencies.commitmentSettlementVerifier) {
+          throw new CommitmentSettlementUnavailableError();
+        }
+
+        const body = requireObject(request.body);
+
+        const onchainCommitmentId = requireString(body, "onchainCommitmentId");
+
+        const owner = requireString(body, "owner");
+
+        const userId = asAuthenticatedRequest(request).user.id;
+
+        const commitment = await dependencies.persistence.getCommitment(
+          userId,
+
+          request.params.id,
         );
-      }
 
-      await settlementRequest(() => dependencies.commitmentSettlementVerifier!.verifyCancelled({
-        offchainCommitmentId: commitment.id,
-        onchainCommitmentId,
-        owner,
-        startAt: new Date(commitment.epochStart),
-        endAt: new Date(commitment.epochEnd),
-      }));
+        if (!commitment) throw new NotFoundError("Commitment");
 
-      return dependencies.persistence.cancelCommitment(cancellationInput);
-    }),
+        const cancellationInput = {
+          userId,
+
+          commitmentId: request.params.id,
+
+          expectedVersion: requireInteger(body, "expectedVersion"),
+
+          onchainCommitmentId,
+
+          settlementOwner: owner,
+
+          idempotencyKey: requireIdempotencyKey(request),
+        };
+
+        if (
+          commitment.state === "CANCELLED" &&
+          commitment.onchainCommitmentId === onchainCommitmentId
+        ) {
+          return dependencies.persistence.cancelCommitment(cancellationInput);
+        }
+
+        if (
+          commitment.state !== "ACTIVE" ||
+          commitment.onchainCommitmentId !== onchainCommitmentId
+        ) {
+          throw new CommitmentSettlementMismatchError(
+            "Only a matching onchain active commitment can be cancelled",
+          );
+        }
+
+        await settlementRequest(() =>
+          dependencies.commitmentSettlementVerifier!.verifyCancelled({
+            offchainCommitmentId: commitment.id,
+
+            onchainCommitmentId,
+
+            owner,
+
+            startAt: new Date(commitment.epochStart),
+
+            endAt: new Date(commitment.epochEnd),
+          }),
+        );
+
+        return dependencies.persistence.cancelCommitment(cancellationInput);
+      }),
   );
 
   return app;
