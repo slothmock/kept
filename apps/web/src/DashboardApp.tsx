@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPublicClient, getAddress, http, isAddress } from "viem";
 import {
   createKeptApi,
@@ -119,6 +120,7 @@ function fundingRefreshError(
 }
 
 export function DashboardApp({ session }: { readonly session: Session }) {
+  const navigate = useNavigate();
   const [depositAmount, setDepositAmount] = useState("");
 
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
@@ -2121,8 +2123,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       headerAction={
         wallet.address ? (
           <AccountMenu
-            address={wallet.address}
-            onSignOut={session.logout}
+            onOpenAccount={() => {
+              navigate("/account");
+            }}
+            onSignOut={async () => {
+              session.logout();
+            }}
           />
         ) : undefined
       }

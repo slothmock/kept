@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import type { Session } from "@/auth/session";
 import { DashboardApp } from "@/DashboardApp";
+import { AccountPage } from "@/pages/AccountPage";
 import { LandingPage } from "@/pages/LandingPage";
 import { PublicInformationScreen } from "@/pages/PublicInformationScreen";
 
@@ -17,14 +18,47 @@ export function App({ session }: { readonly session: Session }) {
   return (
     <Routes>
       <Route path="/" element={<LandingPage session={session} />} />
-      <Route path="/privacy" element={<PublicInformationScreen page="privacy" />} />
+
+      <Route
+        path="/privacy"
+        element={<PublicInformationScreen page="privacy" />}
+      />
+
       <Route path="/terms" element={<PublicInformationScreen page="terms" />} />
-      <Route path="/verification" element={<PublicInformationScreen page="verification" />} />
+
+      <Route
+        path="/verification"
+        element={<PublicInformationScreen page="verification" />}
+      />
+
       <Route
         path="/dashboard"
-        element={session.isAuthenticated ? <DashboardApp session={session} /> : <Navigate to="/" replace />}
+        element={
+          session.isAuthenticated ? (
+            <DashboardApp session={session} />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        }
       />
-      <Route path="*" element={<Navigate to={session.isAuthenticated ? "/dashboard" : "/"} replace />} />
+
+      <Route
+        path="/account"
+        element={
+          session.isAuthenticated ? (
+            <AccountPage session={session} />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        }
+      />
+
+      <Route
+        path="*"
+        element={
+          <Navigate to={session.isAuthenticated ? "/dashboard" : "/"} replace />
+        }
+      />
     </Routes>
   );
 }
