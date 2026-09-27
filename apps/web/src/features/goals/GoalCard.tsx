@@ -1,7 +1,6 @@
 import type { CommitmentDto, GoalDto } from "@/api/kept-api";
 import { ArrowRight, Plus, SlidersHorizontal } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -40,10 +39,7 @@ export function GoalCard({
 }: GoalCardProps) {
   const target = targetAmountAtomic(goal);
   const allocatedAssets = funding?.allocatedAssets ?? null;
-  const progress = goalFundingPercent(
-    allocatedAssets ?? 0n,
-    target,
-  );
+  const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
 
   return (
     <Card className="overflow-hidden shadow-none transition-shadow hover:shadow-sm">
@@ -58,26 +54,16 @@ export function GoalCard({
               {goal.name}
             </h3>
           </div>
-
-          <Badge variant="outline">
-            {goal.status === "ACTIVE"
-              ? "Active"
-              : goal.status}
-          </Badge>
         </div>
 
         <div>
           <div className="flex items-end gap-2">
             <p className="text-3xl font-semibold tracking-tight tabular-nums">
-              {allocatedAssets === null
-                ? "—"
-                : formatUsdc(allocatedAssets)}
+              {allocatedAssets === null ? "—" : formatUsdc(allocatedAssets)}
             </p>
 
             {allocatedAssets !== null && (
-              <span className="pb-1 text-sm text-muted-foreground">
-                USDC
-              </span>
+              <span className="pb-1 text-sm text-muted-foreground">USDC</span>
             )}
           </div>
 
@@ -89,7 +75,7 @@ export function GoalCard({
         <div className="space-y-2">
           <Progress
             value={progress.visualPercent}
-            aria-label={`${progress.labelPercent}% funded`}
+            aria-label={`${progress.labelPercent}% of target`}
           />
 
           <div className="flex items-center justify-between gap-4 text-sm">
@@ -100,9 +86,7 @@ export function GoalCard({
             </span>
 
             {goal.targetDate && (
-              <span className="text-muted-foreground">
-                Target set
-              </span>
+              <span className="text-muted-foreground">Target set</span>
             )}
           </div>
         </div>
@@ -110,12 +94,9 @@ export function GoalCard({
 
       <CardContent className="space-y-4 border-t bg-muted/10 pt-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">
-            Current commitment
-          </p>
+          <p className="text-sm font-medium">Current commitment</p>
 
-          {(!commitment ||
-            commitment.state === "DRAFT") && (
+          {(!commitment || commitment.state === "DRAFT") && (
             <Button
               variant="ghost"
               size="sm"
@@ -128,26 +109,19 @@ export function GoalCard({
         </div>
 
         {commitment ? (
-          <CommitmentCard
-            commitment={commitment}
-            compact
-          />
+          <CommitmentCard commitment={commitment} compact />
         ) : (
           <button
             type="button"
             className="w-full rounded-lg border border-dashed p-4 text-left text-sm text-muted-foreground transition hover:border-primary/40 hover:bg-accent/40 hover:text-foreground"
             onClick={() => onAddCommitment(goal)}
           >
-            Add a commitment to help you keep moving
-            towards this goal.
+            Add a commitment to help you keep moving towards this goal.
           </button>
         )}
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button
-            disabled={!funding}
-            onClick={() => onManageSavings(goal)}
-          >
+          <Button disabled={!funding} onClick={() => onManageSavings(goal)}>
             <SlidersHorizontal className="size-4" />
             Manage savings
           </Button>
