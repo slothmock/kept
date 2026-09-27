@@ -15,6 +15,8 @@ set "CAST=%FOUNDRY_BIN%\cast.exe"
 set "RPC_URL=http://127.0.0.1:8545"
 set "MOCK_USDC=0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
+set "KEPT_TREASURY=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+
 if not exist "%PID_DIR%" mkdir "%PID_DIR%"
 
 echo.
@@ -238,6 +240,26 @@ echo Minted 1000 USDC to:
 echo %LOCAL_TEST_WALLET_ADDRESS%
 
 echo.
+
+rem --------------------------------------------------
+rem Fund reward treasury
+rem --------------------------------------------------
+
+echo.
+echo Funding reward treasury...
+
+set "LOCAL_TREASURY_USDC=100000000"
+
+"%CAST%" send %MOCK_USDC% "mint(address,uint256)" %KEPT_TREASURY% %LOCAL_TREASURY_USDC% --private-key %LOCAL_DEPLOYER_PRIVATE_KEY% --rpc-url %RPC_URL%
+"%CAST%" call %MOCK_USDC% "balanceOf(address)(uint256)" %KEPT_TREASURY% --rpc-url %RPC_URL%
+
+if errorlevel 1 (
+    echo ERROR: Failed to fund reward treasury.
+    goto :error
+)
+
+
+echo Funded reward treasury with 100 USDC.
 
 rem --------------------------------------------------
 rem Start API
