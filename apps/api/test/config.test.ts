@@ -71,4 +71,81 @@ describe("API configuration", () => {
       loadApiConfig({ ...requiredEnvironment, MONAD_CHAIN_ID: "1" }),
     ).toThrow("MONAD_CHAIN_ID must be 143");
   });
+
+  it(
+    "allows a shortened commitment window on explicitly enabled local Anvil",
+    () => {
+      const config =
+        loadApiConfig({
+          ...requiredEnvironment,
+          MONAD_CHAIN_ID:
+            "31337",
+          ENABLE_LOCAL_ANVIL:
+            "true",
+          DEV_COMMITMENT_WINDOW_SECONDS:
+            "120",
+        });
+
+      expect(
+        config.commitmentWindowOverrideSeconds,
+      ).toBe(120);
+    },
+  );
+
+  it(
+    "does not configure a commitment window override by default",
+    () => {
+      const config =
+        loadApiConfig({
+          ...requiredEnvironment,
+        });
+
+      expect(
+        config.commitmentWindowOverrideSeconds,
+      ).toBeUndefined();
+    },
+  );
+
+  it(
+    "rejects the dev commitment window outside local Anvil",
+    () => {
+      expect(
+        () =>
+          loadApiConfig({
+            ...requiredEnvironment,
+            DEV_COMMITMENT_WINDOW_SECONDS:
+              "120",
+          }),
+      ).toThrow(
+        "DEV_COMMITMENT_WINDOW_SECONDS may only be used with local Anvil",
+      );
+    },
+  );
+
+  it.each([
+    "0",
+    "9",
+    "-1",
+    "1.5",
+    "banana",
+    "86401",
+  ])(
+    "rejects invalid dev commitment window %s",
+    (value) => {
+      expect(
+        () =>
+          loadApiConfig({
+            ...requiredEnvironment,
+            MONAD_CHAIN_ID:
+              "31337",
+            ENABLE_LOCAL_ANVIL:
+              "true",
+            DEV_COMMITMENT_WINDOW_SECONDS:
+              value,
+          }),
+      ).toThrow(
+        "DEV_COMMITMENT_WINDOW_SECONDS must be an integer between 10 and 86400",
+      );
+    },
+  );
 });

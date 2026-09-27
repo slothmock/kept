@@ -10,8 +10,47 @@ export interface ApiConfig {
   readonly monadRpcUrl: string;
   readonly monadChainId: 143 | 31337;
   readonly commitmentManagerAddress: Address;
-  readonly commitmentVerifierPrivateKey: Address;
+  readonly commitmentVerifierPrivateKey: `0x${string}`;
   readonly keptSavingsVaultAddress: Address;
+  readonly commitmentWindowOverrideSeconds?: number | undefined;
+}
+
+function parseCommitmentWindowOverride(
+  environment: NodeJS.ProcessEnv,
+  chainId: 143 | 31337,
+): number | undefined {
+  const raw = environment.DEV_COMMITMENT_WINDOW_SECONDS?.trim();
+
+  if (!raw) return undefined;
+
+  if (
+    chainId !== 31337
+    || environment.ENABLE_LOCAL_ANVIL !== "true"
+  ) {
+    throw new Error(
+      "DEV_COMMITMENT_WINDOW_SECONDS may only be used with local Anvil",
+    );
+  }
+
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(
+      "DEV_COMMITMENT_WINDOW_SECONDS must be an integer between 10 and 86400",
+    );
+  }
+
+  const seconds = Number(raw);
+
+  if (
+    !Number.isSafeInteger(seconds)
+    || seconds < 10
+    || seconds > 86_400
+  ) {
+    throw new Error(
+      "DEV_COMMITMENT_WINDOW_SECONDS must be an integer between 10 and 86400",
+    );
+  }
+
+  return seconds;
 }
 
 function requireValue(environment: NodeJS.ProcessEnv, key: string): string {
@@ -80,18 +119,87 @@ function requireAddress(environment: NodeJS.ProcessEnv, key: string): Address {
   }
 }
 
-export function loadApiConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
+export function loadApiConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): ApiConfig {
+  const databaseUrl =
+    requireValue(
+      environment,
+      "DATABASE_URL",
+    );
+
+  const privyAppId =
+    requireValue(
+      environment,
+      "PRIVY_APP_ID",
+    );
+
+  const privyJwtVerificationKey =
+    requireValue(
+      environment,
+      "PRIVY_JWT_VERIFICATION_KEY",
+    );
+
+  const privyAppSecret =
+    requireValue(
+      environment,
+      "PRIVY_APP_SECRET",
+    );
+
+  const port =
+    parsePort(
+      environment.PORT,
+    );
+
+  const webOrigin =
+    environment.WEB_ORIGIN?.trim()
+    || "http://localhost:5173";
+
+  const monadRpcUrl =
+    requireHttpUrl(
+      environment,
+      "MONAD_RPC_URL",
+    );
+
+  const monadChainId =
+    parseChainId(environment);
+
+  const commitmentManagerAddress =
+    requireAddress(
+      environment,
+      "COMMITMENT_MANAGER_ADDRESS",
+    );
+
+  const commitmentVerifierPrivateKey =
+    requirePrivateKey(
+      environment,
+      "COMMITMENT_VERIFIER_PRIVATE_KEY",
+    );
+
+  const keptSavingsVaultAddress =
+    requireAddress(
+      environment,
+      "KEPT_SAVINGS_VAULT_ADDRESS",
+    );
+
+  const commitmentWindowOverrideSeconds =
+    parseCommitmentWindowOverride(
+      environment,
+      monadChainId,
+    );
+
   return {
-    databaseUrl: requireValue(environment, "DATABASE_URL"),
-    privyAppId: requireValue(environment, "PRIVY_APP_ID"),
-    privyJwtVerificationKey: requireValue(environment, "PRIVY_JWT_VERIFICATION_KEY"),
-    privyAppSecret: requireValue(environment, "PRIVY_APP_SECRET"),
-    port: parsePort(environment.PORT),
-    webOrigin: environment.WEB_ORIGIN?.trim() || "http://localhost:5173",
-    monadRpcUrl: requireHttpUrl(environment, "MONAD_RPC_URL"),
-    monadChainId: parseChainId(environment),
-    commitmentManagerAddress: requireAddress(environment, "COMMITMENT_MANAGER_ADDRESS"),
-    commitmentVerifierPrivateKey: requirePrivateKey(environment, "COMMITMENT_VERIFIER_PRIVATE_KEY"),
-    keptSavingsVaultAddress: requireAddress(environment, "KEPT_SAVINGS_VAULT_ADDRESS"),
+    databaseUrl,
+    privyAppId,
+    privyJwtVerificationKey,
+    privyAppSecret,
+    port,
+    webOrigin,
+    monadRpcUrl,
+    monadChainId,
+    commitmentManagerAddress,
+    commitmentVerifierPrivateKey,
+    keptSavingsVaultAddress,
+    commitmentWindowOverrideSeconds,
   };
 }

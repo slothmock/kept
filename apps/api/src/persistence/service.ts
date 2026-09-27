@@ -145,18 +145,43 @@ function validateCommitmentWindow(
   epochStart: Date,
   epochEnd: Date,
   verificationDeadline: Date,
+  commitmentWindowOverrideSeconds?: number,
 ): void {
-  if (epochEnd <= epochStart || verificationDeadline < epochEnd) {
-    throw new PersistenceValidationError("Commitment period timestamps are out of order");
+  if (
+    epochEnd <= epochStart
+    || verificationDeadline < epochEnd
+  ) {
+    throw new PersistenceValidationError(
+      "Commitment period timestamps are out of order",
+    );
   }
 
-  const periodDays = parameters.periodDays;
-  if (!Number.isSafeInteger(periodDays) || typeof periodDays !== "number" || periodDays < 1) {
-    throw new PersistenceValidationError("Commitment periodDays must be a positive safe integer");
+  const periodDays =
+    parameters.periodDays;
+
+  if (
+    !Number.isSafeInteger(periodDays)
+    || typeof periodDays !== "number"
+    || periodDays < 1
+  ) {
+    throw new PersistenceValidationError(
+      "Commitment periodDays must be a positive safe integer",
+    );
   }
-  const expectedDurationMilliseconds = periodDays * 24 * 60 * 60 * 1_000;
-  if (epochEnd.getTime() - epochStart.getTime() !== expectedDurationMilliseconds) {
-    throw new PersistenceValidationError("Commitment window must match the catalogue period");
+
+  const expectedDurationMilliseconds =
+    commitmentWindowOverrideSeconds !== undefined
+      ? commitmentWindowOverrideSeconds * 1_000
+      : periodDays * 24 * 60 * 60 * 1_000;
+
+  if (
+    epochEnd.getTime()
+    - epochStart.getTime()
+    !== expectedDurationMilliseconds
+  ) {
+    throw new PersistenceValidationError(
+      "Commitment window must match the catalogue period",
+    );
   }
 }
 
@@ -290,6 +315,12 @@ function mapCommitment(row: CommitmentRecord): CommitmentDto {
   };
 }
 
+export interface KeptPersistenceOptions {
+  readonly chainId?: bigint;
+  readonly reader?: VaultShareBalanceReader;
+  readonly commitmentWindowOverrideSeconds?: number;
+}
+
 export class KeptPersistenceService {
   constructor(
     private readonly db: KeptDatabase,
@@ -297,6 +328,7 @@ export class KeptPersistenceService {
       readonly reader: VaultShareBalanceReader;
       readonly chainId: bigint;
     },
+    private readonly commitmentWindowOverrideSeconds?: number,
   ) { }
 
   async createUser(input: {
@@ -805,6 +837,7 @@ export class KeptPersistenceService {
           epochStart,
           epochEnd,
           verificationDeadline,
+          this.commitmentWindowOverrideSeconds,
         );
 
         const id = randomUUID();
@@ -934,6 +967,7 @@ export class KeptPersistenceService {
           current.epochStart,
           current.epochEnd,
           current.verificationDeadline,
+          this.commitmentWindowOverrideSeconds,
         );
 
         const transitioned = transitionCommitment({

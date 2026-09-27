@@ -379,6 +379,58 @@ export class KeptRepository {
       .orderBy(desc(userCommitments.createdAt), desc(userCommitments.id));
   }
 
+  async listDueActiveCommitments(
+    now: Date,
+    limit = 50,
+  ): Promise<readonly CommitmentRecord[]> {
+    return this.db
+      .select({
+        id: userCommitments.id,
+        userId: userCommitments.userId,
+        savingsGoalId: userCommitments.savingsGoalId,
+        definitionId: userCommitments.definitionId,
+        definitionCode: commitmentDefinitions.code,
+        definitionVersion: commitmentDefinitions.version,
+        parameters: userCommitments.parameters,
+        epochStart: userCommitments.epochStart,
+        epochEnd: userCommitments.epochEnd,
+        verificationDeadline: userCommitments.verificationDeadline,
+        state: userCommitments.state,
+        stateVersion: userCommitments.stateVersion,
+        activatedAt: userCommitments.activatedAt,
+        finalizedAt: userCommitments.finalizedAt,
+        createdAt: userCommitments.createdAt,
+        updatedAt: userCommitments.updatedAt,
+        opaqueSettlementRef: userCommitments.opaqueSettlementRef,
+      })
+      .from(userCommitments)
+      .innerJoin(
+        commitmentDefinitions,
+        eq(
+          userCommitments.definitionId,
+          commitmentDefinitions.id,
+        ),
+      )
+      .where(
+        and(
+          eq(userCommitments.state, "ACTIVE"),
+          eq(
+            commitmentDefinitions.code,
+            "WEEKLY_SAVINGS_V1",
+          ),
+          lte(
+            userCommitments.epochEnd,
+            now,
+          ),
+        ),
+      )
+      .orderBy(
+        userCommitments.epochEnd,
+        userCommitments.id,
+      )
+      .limit(limit);
+  }
+
   async listCommitmentsForGoal(
     userId: string,
     goalId: string,

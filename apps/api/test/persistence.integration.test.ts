@@ -405,6 +405,193 @@ describe.sequential("commitment persistence and lifecycle", () => {
     ).rejects.toBeInstanceOf(PersistenceValidationError);
   });
 
+  it("accepts a shortened commitment window when the dev override is configured", async () => {
+    const owner = await createUser("dev-window-owner");
+    const goal = await createGoal(owner.id);
+
+    const devService =
+      new KeptPersistenceService(
+        connection.db,
+        undefined,
+        120,
+      );
+
+    const startAt =
+      new Date("2026-09-27T12:00:00.000Z");
+
+    const endAt =
+      new Date(
+        startAt.getTime()
+        + 120 * 1000,
+      );
+
+    const verificationDeadline =
+      new Date(
+        endAt.getTime()
+        + 5 * 60 * 1000,
+      );
+
+    const draft =
+      await devService.createCommitmentDraft({
+        userId: owner.id,
+        idempotencyKey: randomUUID(),
+        goalId: goal.id,
+
+        definition: {
+          code: "WEEKLY_SAVINGS_V1",
+          version: 1,
+        },
+
+        parameters: {
+          targetAmountAtomic: "25000000",
+          periodDays: 7,
+        },
+
+        epochStart:
+          startAt.toISOString(),
+
+        epochEnd:
+          endAt.toISOString(),
+
+        verificationDeadline:
+          verificationDeadline.toISOString(),
+      });
+
+    expect(draft).toMatchObject({
+      userId: owner.id,
+      savingsGoalId: goal.id,
+      state: "DRAFT",
+      stateVersion: 1,
+      epochStart: startAt.toISOString(),
+      epochEnd: endAt.toISOString(),
+      verificationDeadline:
+        verificationDeadline.toISOString(),
+    });
+  });
+
+  it("still rejects a shortened commitment window without the dev override", async () => {
+    const owner =
+      await createUser("normal-window-owner");
+
+    const goal =
+      await createGoal(owner.id);
+
+    const startAt =
+      new Date("2026-09-27T12:00:00.000Z");
+
+    const endAt =
+      new Date(
+        startAt.getTime()
+        + 120 * 1000,
+      );
+
+    await expect(
+      service.createCommitmentDraft({
+        userId: owner.id,
+        idempotencyKey: randomUUID(),
+        goalId: goal.id,
+
+        definition: {
+          code: "WEEKLY_SAVINGS_V1",
+          version: 1,
+        },
+
+        parameters: {
+          targetAmountAtomic: "25000000",
+          periodDays: 7,
+        },
+
+        epochStart:
+          startAt.toISOString(),
+
+        epochEnd:
+          endAt.toISOString(),
+
+        verificationDeadline:
+          new Date(
+            endAt.getTime()
+            + 5 * 60 * 1000,
+          ).toISOString(),
+      }),
+    ).rejects.toThrow(
+      "Commitment window must match the catalogue period",
+    );
+  });
+
+  it("revalidates a shortened commitment window with the same dev override during activation", async () => {
+    const owner =
+      await createUser("dev-window-activation");
+
+    const goal =
+      await createGoal(owner.id);
+
+    const devService =
+      new KeptPersistenceService(
+        connection.db,
+        undefined,
+        120,
+      );
+
+    const startAt =
+      new Date("2026-09-27T12:00:00.000Z");
+
+    const endAt =
+      new Date(
+        startAt.getTime()
+        + 120 * 1000,
+      );
+
+    const draft =
+      await devService.createCommitmentDraft({
+        userId: owner.id,
+        idempotencyKey: randomUUID(),
+        goalId: goal.id,
+
+        definition: {
+          code: "WEEKLY_SAVINGS_V1",
+          version: 1,
+        },
+
+        parameters: {
+          targetAmountAtomic: "25000000",
+          periodDays: 7,
+        },
+
+        epochStart:
+          startAt.toISOString(),
+
+        epochEnd:
+          endAt.toISOString(),
+
+        verificationDeadline:
+          new Date(
+            endAt.getTime()
+            + 5 * 60 * 1000,
+          ).toISOString(),
+      });
+
+    const active =
+      await devService.activateCommitment({
+        userId: owner.id,
+        commitmentId: draft.id,
+        expectedVersion: draft.stateVersion,
+        onchainCommitmentId: "7",
+
+        settlementOwner:
+          "0x2222222222222222222222222222222222222222",
+
+        settlementChainId: 31337,
+        settlementStatus: 1,
+        idempotencyKey: randomUUID(),
+      });
+
+    expect(active).toMatchObject({
+      id: draft.id,
+      state: "ACTIVE",
+      stateVersion: 2,
+    });
+  });
+
   it("revalidates definition activity and parameters during activation", async () => {
     const owner = await createUser("owner");
     const goal = await createGoal(owner.id);
@@ -721,15 +908,25 @@ describe.sequential("goal share allocation ledger", () => {
     const firstGoal = await createGoal(owner.id);
     const secondGoal = await createGoal(owner.id);
 
-    const allocationService = new KeptPersistenceService(connection.db, {
-      chainId: 143n,
-      reader: {
-        readShares: async (address) => {
-          expect(address).toBe(ALLOCATION_WALLET);
-          return 250_000_000_000_000n;
+    const allocationService =
+      new KeptPersistenceService(
+        connection.db,
+        {
+          chainId: 143n,
+          reader: {
+            readShares: async (address) => {
+              expect(address).toBe(
+                ALLOCATION_WALLET,
+              );
+
+              return 250_000_000_000_000n;
+            },
+
+            convertToAssets:
+              async (shares) => shares,
+          },
         },
-      },
-    });
+      );
 
     const first = await allocationService.allocateGoalShares({
       userId: owner.id,
@@ -802,9 +999,15 @@ describe.sequential("goal share allocation ledger", () => {
       chainId: 143n,
       reader: {
         readShares: async (address) => {
-          expect(address).toBe(ALLOCATION_WALLET);
+          expect(address).toBe(
+            ALLOCATION_WALLET,
+          );
+
           return 100n;
         },
+
+        convertToAssets:
+          async (shares) => shares,
       },
     });
 
@@ -872,7 +1075,11 @@ describe.sequential("goal share allocation ledger", () => {
       new KeptPersistenceService(connection.db, {
         chainId: 143n,
         reader: {
-          readShares: async () => 250n,
+          readShares:
+            async () => 250n,
+
+          convertToAssets:
+            async (shares) => shares,
         },
       });
 
@@ -1031,8 +1238,11 @@ describe.sequential("goal archiving", () => {
         {
           chainId: 143n,
           reader: {
-            readShares: async () =>
-              250_000_000_000_000n,
+            readShares:
+              async () => 250n,
+
+            convertToAssets:
+              async (shares) => shares,
           },
         },
       );
@@ -1184,7 +1394,11 @@ describe.sequential("goal archiving", () => {
         {
           chainId: 143n,
           reader: {
-            readShares: async () => 100n,
+            readShares:
+              async () => 250n,
+
+            convertToAssets:
+              async (shares) => shares,
           },
         },
       );

@@ -23,6 +23,10 @@ export {
   ViemCommitmentSettlementGateway,
 } from "./settlement-gateway.js"
 
+export {
+  CommitmentVerificationWorker,
+} from "./worker.js";
+
 export type {
   ActivityEvidenceSource,
   CommitmentSettlementGateway,

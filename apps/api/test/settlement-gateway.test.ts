@@ -58,6 +58,22 @@ function commitment(
     };
 }
 
+function onchainCommitment(input?: {
+    readonly rewardAssets?: bigint;
+    readonly status?: number;
+}) {
+    return [
+        "0x1111111111111111111111111111111111111111",
+        `0x${"22".repeat(32)}`,
+        1n,
+        2n,
+        3n,
+        input?.rewardAssets ?? 0n,
+        input?.status ?? 1,
+        false,
+    ] as const;
+}
+
 function settlementRef(
     id: bigint,
 ): Uint8Array {
@@ -86,6 +102,13 @@ function createDependencies(
         = "success",
 ) {
     const publicClient = {
+        readContract:
+            vi.fn(async () =>
+                onchainCommitment({
+                    status: 1,
+                }),
+            ),
+
         waitForTransactionReceipt:
             vi.fn(async () => ({
                 status: receiptStatus,
@@ -315,6 +338,378 @@ describe(
                 ).rejects.toThrow(
                     "Commitment completion reverted",
                 );
+            },
+        );
+
+        it(
+            "treats an already completed commitment with the same reward as success",
+            async () => {
+                const writeContract =
+                    vi.fn();
+
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValue(
+                                onchainCommitment({
+                                    rewardAssets:
+                                        5_000_000n,
+                                    status: 2,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.completeCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                        rewardAssets:
+                            5_000_000n,
+                    }),
+                ).resolves.toBeUndefined();
+
+                expect(
+                    writeContract,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it(
+            "rejects an already completed commitment with a different reward",
+            async () => {
+                const writeContract =
+                    vi.fn();
+
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValue(
+                                onchainCommitment({
+                                    rewardAssets:
+                                        3_000_000n,
+                                    status: 2,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.completeCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                        rewardAssets:
+                            5_000_000n,
+                    }),
+                ).rejects.toThrow(
+                    "already completed with a different reward",
+                );
+
+                expect(
+                    writeContract,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it(
+            "treats an already failed commitment as successful failure settlement",
+            async () => {
+                const writeContract =
+                    vi.fn();
+
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValue(
+                                onchainCommitment({
+                                    status: 3,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.failCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                    }),
+                ).resolves.toBeUndefined();
+
+                expect(
+                    writeContract,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it(
+            "recovers when completion write throws but chain is already completed",
+            async () => {
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValueOnce(
+                                onchainCommitment({
+                                    status: 1,
+                                }),
+                            )
+                            .mockResolvedValueOnce(
+                                onchainCommitment({
+                                    rewardAssets:
+                                        5_000_000n,
+                                    status: 2,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const writeContract =
+                    vi.fn()
+                        .mockRejectedValue(
+                            new Error(
+                                "CommitmentNotActive",
+                            ),
+                        );
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.completeCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                        rewardAssets:
+                            5_000_000n,
+                    }),
+                ).resolves.toBeUndefined();
+
+                expect(
+                    writeContract,
+                ).toHaveBeenCalledTimes(1);
+
+                expect(
+                    publicClient.readContract,
+                ).toHaveBeenCalledTimes(2);
+            },
+        );
+
+        it(
+            "recovers when failure write throws but chain is already failed",
+            async () => {
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValueOnce(
+                                onchainCommitment({
+                                    status: 1,
+                                }),
+                            )
+                            .mockResolvedValueOnce(
+                                onchainCommitment({
+                                    status: 3,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const writeContract =
+                    vi.fn()
+                        .mockRejectedValue(
+                            new Error(
+                                "CommitmentNotActive",
+                            ),
+                        );
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.failCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                    }),
+                ).resolves.toBeUndefined();
+
+                expect(
+                    writeContract,
+                ).toHaveBeenCalledTimes(1);
+
+                expect(
+                    publicClient.readContract,
+                ).toHaveBeenCalledTimes(2);
+            },
+        );
+
+        it(
+            "rejects completion when the commitment is already failed",
+            async () => {
+                const writeContract =
+                    vi.fn();
+
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValue(
+                                onchainCommitment({
+                                    status: 3,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.completeCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                        rewardAssets:
+                            5_000_000n,
+                    }),
+                ).rejects.toThrow(
+                    "cannot be completed from onchain status 3",
+                );
+
+                expect(
+                    writeContract,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it(
+            "rejects failure when the commitment is already completed",
+            async () => {
+                const writeContract =
+                    vi.fn();
+
+                const publicClient = {
+                    readContract:
+                        vi.fn()
+                            .mockResolvedValue(
+                                onchainCommitment({
+                                    rewardAssets:
+                                        5_000_000n,
+                                    status: 2,
+                                }),
+                            ),
+
+                    waitForTransactionReceipt:
+                        vi.fn(),
+                };
+
+                const gateway =
+                    new ViemCommitmentSettlementGateway({
+                        publicClient:
+                            publicClient as never,
+                        walletClient: {
+                            account,
+                            writeContract,
+                        } as never,
+                        manager,
+                    });
+
+                await expect(
+                    gateway.failCommitment({
+                        commitment:
+                            commitment({
+                                settlementRef:
+                                    settlementRef(7n),
+                            }),
+                    }),
+                ).rejects.toThrow(
+                    "cannot be failed from onchain status 2",
+                );
+
+                expect(
+                    writeContract,
+                ).not.toHaveBeenCalled();
             },
         );
     },

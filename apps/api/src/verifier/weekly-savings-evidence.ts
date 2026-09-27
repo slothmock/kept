@@ -1,4 +1,3 @@
-import { KeptRepository } from "../persistence/repository.js";
 import type {
     VaultShareBalanceReader,
 } from "../vault-shares.js";
