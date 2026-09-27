@@ -2,15 +2,13 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   PiggyBank,
+  RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { GoalFundingState } from "@/features/goals/funding";
 import type { VaultPosition } from "@/vault/position";
 import { formatUsdc } from "./format";
 
@@ -26,140 +24,166 @@ export type PositionState =
       readonly message: string;
     };
 
+type SavingsPerformanceState =
+  | { readonly kind: "unavailable" }
+  | { readonly kind: "loading" }
+  | {
+      readonly kind: "ready";
+      readonly earningsAssets: bigint;
+    }
+  | { readonly kind: "error" };
+
 interface BalanceCardProps {
   readonly positionState: PositionState;
-  readonly goalFundingState: GoalFundingState;
-  readonly activeGoalCount: number;
   readonly transactionPending: boolean;
+  readonly savingsPerformanceState: SavingsPerformanceState;
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
+  readonly onRefresh: () => void;
 }
 
 export function BalanceCard({
   positionState,
-  goalFundingState,
-  activeGoalCount,
   transactionPending,
+  savingsPerformanceState,
   onAddMoney,
   onWithdraw,
+  onRefresh,
 }: BalanceCardProps) {
   const ready = positionState.kind === "ready";
 
-  const canWithdraw =
-    ready &&
-    positionState.position.withdrawableAssets > 0n;
+  const canWithdraw = ready && positionState.position.withdrawableAssets > 0n;
 
-  const funding =
-    goalFundingState.kind === "loading"
-      ? null
-      : goalFundingState.funding ?? null;
+  const earnings =
+    savingsPerformanceState.kind === "ready"
+      ? savingsPerformanceState.earningsAssets
+      : null;
 
-  const unallocatedAssets =
-    funding &&
-    ready &&
-    funding.totalVaultShares === 0n &&
-    positionState.position.shares > 0n
-      ? positionState.position.assets
-      : funding?.unallocatedAssets ?? null;
+  const hasAvailableCash = ready && positionState.position.usdcBalance > 0n;
 
   return (
     <Card className="overflow-hidden border-primary/10 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--card)_94%,var(--primary)),var(--card))] shadow-none">
-      <CardContent className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div>
-          <div className="mb-6 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+      <CardContent className="p-6 sm:p-8">
+        <div className="mb-6 flex items-center justify-between gap-2 text-sm font-medium text-muted-foreground">
+          <div className="flex items-center gap-2">
             <PiggyBank className="size-4" />
-            Your savings
+            Your account
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-3">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Total savings
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={transactionPending}
+            onClick={onRefresh}
+          >
+            <RefreshCw className="size-4" />
+            Refresh
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Kept savings</p>
+
+            {positionState.kind === "loading" ? (
+              <Skeleton className="mt-2 h-10 w-44" />
+            ) : (
+              <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
+                {ready
+                  ? `${formatUsdc(positionState.position.assets)} USDC`
+                  : "—"}
               </p>
+            )}
+
+            <p className="mt-2 text-sm text-muted-foreground">
+              Money currently saved with Kept.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={!ready || transactionPending}
+              onClick={onAddMoney}
+            >
+              <ArrowDownToLine className="size-4" />
+              Deposit
+            </Button>
+
+            <Button
+              variant="outline"
+              disabled={!canWithdraw || transactionPending}
+              onClick={onWithdraw}
+            >
+              <ArrowUpFromLine className="size-4" />
+              Withdraw
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-8 border-t pt-6">
+          <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="grid size-9 place-items-center rounded-full bg-primary/10 text-primary">
+                <TrendingUp className="size-4" />
+              </div>
+
+              <div>
+                <p className="text-sm font-medium">Net earnings</p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Growth after fees.
+                </p>
+              </div>
+            </div>
+
+            {savingsPerformanceState.kind === "loading" ? (
+              <Skeleton className="h-6 w-24" />
+            ) : savingsPerformanceState.kind === "ready" ? (
+              <p className="text-lg font-semibold tabular-nums">
+                {earnings !== null && earnings > 0n ? "+" : ""}
+                {formatUsdc(earnings ?? 0n)} USDC
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">—</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-8 border-t pt-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Available cash</p>
 
               {positionState.kind === "loading" ? (
-                <Skeleton className="mt-2 h-10 w-44" />
+                <Skeleton className="mt-2 h-7 w-32" />
               ) : (
-                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
+                <p className="mt-1 text-xl font-semibold tabular-nums">
                   {ready
-                    ? `${formatUsdc(
-                        positionState.position.assets,
-                      )} USDC`
+                    ? `${formatUsdc(positionState.position.usdcBalance)} USDC`
                     : "—"}
                 </p>
               )}
-            </div>
 
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Assigned to goals
-              </p>
-
-              <p className="mt-1 text-xl font-semibold tabular-nums">
-                {funding
-                  ? `${formatUsdc(
-                      funding.totalAllocatedAssets,
-                    )} USDC`
-                  : "—"}
+              <p className="mt-1 text-sm text-muted-foreground">
+                Ready to add to your savings.
               </p>
             </div>
 
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Available to assign
-              </p>
-
-              <p className="mt-1 text-xl font-semibold tabular-nums">
-                {unallocatedAssets === null
-                  ? "—"
-                  : `${formatUsdc(
-                      unallocatedAssets,
-                    )} USDC`}
-              </p>
-            </div>
+            <Button
+              variant="outline"
+              disabled={!hasAvailableCash || transactionPending}
+              onClick={onAddMoney}
+            >
+              Add to savings
+            </Button>
           </div>
+        </div>
 
-          <p className="mt-3 text-sm text-muted-foreground">
-            {activeGoalCount === 0
-              ? "Create a goal to give your savings some direction."
-              : activeGoalCount === 1
-                ? "1 active savings goal."
-                : `${activeGoalCount} active savings goals.`}
+        {positionState.kind === "error" && (
+          <p className="mt-4 text-sm text-destructive">
+            {positionState.message}
           </p>
-
-          {positionState.kind === "error" && (
-            <p className="mt-3 text-sm text-destructive">
-              {positionState.message}
-            </p>
-          )}
-
-          {goalFundingState.kind === "error" && (
-            <p className="mt-3 text-sm text-destructive">
-              {goalFundingState.message}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            disabled={!ready || transactionPending}
-            onClick={onAddMoney}
-          >
-            <ArrowDownToLine className="size-4" />
-            Add money
-          </Button>
-
-          <Button
-            variant="outline"
-            disabled={
-              !canWithdraw || transactionPending
-            }
-            onClick={onWithdraw}
-          >
-            <ArrowUpFromLine className="size-4" />
-            Withdraw
-          </Button>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

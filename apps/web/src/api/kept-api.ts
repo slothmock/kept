@@ -1,7 +1,9 @@
 import { ConsumerError } from "../lib/consumer-error.js";
 
 export type GoalStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
-export type CommitmentState = "DRAFT" | "ACTIVE" | "COMPLETED" | "FAILED" | "CANCELLED";
+
+export type CommitmentState =
+  "DRAFT" | "ACTIVE" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export interface GoalDto {
   readonly id: string;
@@ -36,6 +38,23 @@ export interface CommitmentDto {
   readonly updatedAt: string;
 }
 
+export interface SavingsPerformanceDto {
+  readonly depositedAssetsAtomic: string;
+  readonly withdrawnAssetsAtomic: string;
+  readonly netContributionsAtomic: string;
+  readonly currentAssetsAtomic: string;
+  readonly earningsAssetsAtomic: string;
+}
+
+export interface SavingsMarketStatusDto {
+  readonly suppliedAssetsAtomic: string | null;
+  readonly supplyCapAssetsAtomic: string | null;
+  readonly availableToDepositAtomic: string;
+  readonly availableToWithdrawAtomic: string;
+  readonly grossApyBps: string;
+  readonly netApyBps: string;
+}
+
 export interface CreateCommitmentRequest {
   readonly goalId: string;
   readonly definition: { readonly code: string; readonly version: number };
@@ -60,20 +79,19 @@ export interface ReallocateGoalSharesInput {
 }
 
 export interface KeptApi {
+  getSavingsPerformance(): Promise<SavingsPerformanceDto>;
+  getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
   listGoals(): Promise<readonly GoalDto[]>;
   createGoal(input: {
     readonly name: string;
     readonly targetAmountAtomic: string;
     readonly targetDate: string | null;
   }): Promise<GoalDto>;
-  archiveGoal(
-    goalId: string,
-    idempotencyKey?: string,
-  ): Promise<GoalDto>;
+  archiveGoal(goalId: string, idempotencyKey?: string): Promise<GoalDto>;
   getGoalAllocation(goalId: string): Promise<GoalAllocationDto>;
   allocateGoalShares(
     goalId: string,
-    input: { readonly shareDeltaAtomic: string; readonly reason: string; },
+    input: { readonly shareDeltaAtomic: string; readonly reason: string },
     idempotencyKey?: string,
   ): Promise<GoalAllocationDto>;
   reallocateGoalShares(
@@ -84,14 +102,23 @@ export interface KeptApi {
     readonly to: GoalAllocationDto;
   }>;
   listCommitments(): Promise<readonly CommitmentDto[]>;
-  createCommitment(input: CreateCommitmentRequest, idempotencyKey?: string): Promise<CommitmentDto>;
+  createCommitment(
+    input: CreateCommitmentRequest,
+    idempotencyKey?: string,
+  ): Promise<CommitmentDto>;
   activateCommitment(
     commitment: CommitmentDto,
-    settlement: { readonly onchainCommitmentId: string; readonly transactionHash: string },
+    settlement: {
+      readonly onchainCommitmentId: string;
+      readonly transactionHash: string;
+    },
   ): Promise<CommitmentDto>;
   cancelCommitment(
     commitment: CommitmentDto,
-    settlement: { readonly onchainCommitmentId: string; readonly owner: string },
+    settlement: {
+      readonly onchainCommitmentId: string;
+      readonly owner: string;
+    },
   ): Promise<CommitmentDto>;
 }
 
@@ -115,7 +142,11 @@ function idempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
-function apiConsumerError(status: number, code: string, cause?: unknown): ConsumerError {
+function apiConsumerError(
+  status: number,
+  code: string,
+  cause?: unknown,
+): ConsumerError {
   if (status === 401 || code === "UNAUTHENTICATED") {
     return new ConsumerError("Your session has expired. Sign in again.", {
       code: "authentication_required",
@@ -123,20 +154,29 @@ function apiConsumerError(status: number, code: string, cause?: unknown): Consum
       diagnosticCode: code,
     });
   }
+
   if (code === "REQUEST_IN_PROGRESS") {
-    return new ConsumerError("That request is already being processed. Wait a moment and try again.", {
-      code: "request_in_progress",
-      cause,
-      diagnosticCode: code,
-    });
+    return new ConsumerError(
+      "That request is already being processed. Wait a moment and try again.",
+      {
+        code: "request_in_progress",
+        cause,
+        diagnosticCode: code,
+      },
+    );
   }
+
   if (status === 409) {
-    return new ConsumerError("That request conflicts with a recent change. Refresh and try again.", {
-      code: "request_conflict",
-      cause,
-      diagnosticCode: code,
-    });
+    return new ConsumerError(
+      "That request conflicts with a recent change. Refresh and try again.",
+      {
+        code: "request_conflict",
+        cause,
+        diagnosticCode: code,
+      },
+    );
   }
+
   if (status === 404) {
     return new ConsumerError("We couldn't find that item.", {
       code: "not_found",
@@ -144,6 +184,7 @@ function apiConsumerError(status: number, code: string, cause?: unknown): Consum
       diagnosticCode: code,
     });
   }
+
   if (status === 400 || status === 413 || status === 415) {
     return new ConsumerError("Check the information and try again.", {
       code: "validation_failed",
@@ -151,6 +192,7 @@ function apiConsumerError(status: number, code: string, cause?: unknown): Consum
       diagnosticCode: code,
     });
   }
+
   return new ConsumerError("Kept is temporarily unavailable. Try again.", {
     code: "service_unavailable",
     cause,
@@ -158,12 +200,19 @@ function apiConsumerError(status: number, code: string, cause?: unknown): Consum
   });
 }
 
-function parseGoalAllocation(value: unknown, expectedGoalId: string): GoalAllocationDto {
+function parseGoalAllocation(
+  value: unknown,
+  expectedGoalId: string,
+): GoalAllocationDto {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new ConsumerError("Kept returned an unexpected response. Try again.", {
-      code: "service_unavailable",
-    });
+    throw new ConsumerError(
+      "Kept returned an unexpected response. Try again.",
+      {
+        code: "service_unavailable",
+      },
+    );
   }
+
   const record = value as Record<string, unknown>;
   const atomicFields = [
     "allocatedSharesAtomic",
@@ -171,16 +220,23 @@ function parseGoalAllocation(value: unknown, expectedGoalId: string): GoalAlloca
     "totalAllocatedSharesAtomic",
     "unallocatedSharesAtomic",
   ] as const;
+
   if (
-    record.goalId !== expectedGoalId
-    || atomicFields.some((field) => (
-      typeof record[field] !== "string" || !/^-?\d+$/.test(record[field] as string)
-    ))
+    record.goalId !== expectedGoalId ||
+    atomicFields.some(
+      (field) =>
+        typeof record[field] !== "string" ||
+        !/^-?\d+$/.test(record[field] as string),
+    )
   ) {
-    throw new ConsumerError("Kept returned an unexpected response. Try again.", {
-      code: "service_unavailable",
-    });
+    throw new ConsumerError(
+      "Kept returned an unexpected response. Try again.",
+      {
+        code: "service_unavailable",
+      },
+    );
   }
+
   return {
     goalId: record.goalId,
     allocatedSharesAtomic: record.allocatedSharesAtomic as string,
@@ -199,14 +255,20 @@ export function createKeptApi(input: {
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let accessToken: string | null;
+
     try {
       accessToken = await input.getAccessToken();
     } catch (error) {
-      throw new ConsumerError("We couldn't verify your session. Sign in again.", {
-        code: "authentication_required",
-        cause: error,
-      });
+      throw new ConsumerError(
+        "We couldn't verify your session. Sign in again.",
+        {
+          code: "authentication_required",
+
+          cause: error,
+        },
+      );
     }
+
     if (!accessToken) {
       throw new ConsumerError("Your session has expired. Sign in again.", {
         code: "authentication_required",
@@ -218,23 +280,28 @@ export function createKeptApi(input: {
     if (init.body) headers.set("content-type", "application/json");
 
     let response: Response;
+
     try {
       response = await fetcher(`${input.baseUrl}${path}`, {
         ...init,
         headers,
       });
     } catch (error) {
-      throw new ConsumerError("Kept couldn't connect. Check your connection and try again.", {
-        code: "connection_failed",
-        cause: error,
-      });
+      throw new ConsumerError(
+        "Kept couldn't connect. Check your connection and try again.",
+        {
+          code: "connection_failed",
+          cause: error,
+        },
+      );
     }
 
     if (!response.ok) {
       let code = `HTTP_${response.status}`;
       let responseParseError: unknown;
+
       try {
-        const body = await response.json() as { error?: { code?: string } };
+        const body = (await response.json()) as { error?: { code?: string } };
         code = body.error?.code ?? code;
       } catch (error) {
         responseParseError = error;
@@ -243,16 +310,23 @@ export function createKeptApi(input: {
     }
 
     try {
-      return await response.json() as T;
+      return (await response.json()) as T;
     } catch (error) {
-      throw new ConsumerError("Kept returned an unexpected response. Try again.", {
-        code: "service_unavailable",
-        cause: error,
-      });
+      throw new ConsumerError(
+        "Kept returned an unexpected response. Try again.",
+        {
+          code: "service_unavailable",
+          cause: error,
+        },
+      );
     }
   }
 
-  function post<T>(path: string, body: unknown, requestIdempotencyKey = idempotencyKey()): Promise<T> {
+  function post<T>(
+    path: string,
+    body: unknown,
+    requestIdempotencyKey = idempotencyKey(),
+  ): Promise<T> {
     return request<T>(path, {
       method: "POST",
       headers: { "idempotency-key": requestIdempotencyKey },
@@ -261,6 +335,10 @@ export function createKeptApi(input: {
   }
 
   return {
+    getSavingsPerformance: () =>
+      request<SavingsPerformanceDto>("/v1/savings/performance"),
+    getSavingsMarketStatus: () =>
+      request<SavingsMarketStatusDto>("/v1/savings/market-status"),
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
     archiveGoal: (
@@ -272,18 +350,22 @@ export function createKeptApi(input: {
         {},
         requestIdempotencyKey,
       ),
-    getGoalAllocation: async (goalId) => parseGoalAllocation(
-      await request<unknown>(`/v1/goals/${encodeURIComponent(goalId)}/allocation`),
-      goalId,
-    ),
-    allocateGoalShares: async (goalId, allocation, requestIdempotencyKey) => parseGoalAllocation(
-      await post<unknown>(
-        `/v1/goals/${encodeURIComponent(goalId)}/allocations`,
-        { ...allocation },
-        requestIdempotencyKey,
+    getGoalAllocation: async (goalId) =>
+      parseGoalAllocation(
+        await request<unknown>(
+          `/v1/goals/${encodeURIComponent(goalId)}/allocation`,
+        ),
+        goalId,
       ),
-      goalId,
-    ),
+    allocateGoalShares: async (goalId, allocation, requestIdempotencyKey) =>
+      parseGoalAllocation(
+        await post<unknown>(
+          `/v1/goals/${encodeURIComponent(goalId)}/allocations`,
+          { ...allocation },
+          requestIdempotencyKey,
+        ),
+        goalId,
+      ),
     reallocateGoalShares: async (
       input,
       requestIdempotencyKey,
@@ -296,7 +378,6 @@ export function createKeptApi(input: {
         input,
         requestIdempotencyKey,
       );
-
       return {
         from: parseGoalAllocation(
           result.from,
@@ -309,18 +390,27 @@ export function createKeptApi(input: {
       };
     },
     listCommitments: () => request<readonly CommitmentDto[]>("/v1/commitments"),
-    createCommitment: (commitment, requestIdempotencyKey) => post<CommitmentDto>(
-      "/v1/commitments",
-      commitment,
-      requestIdempotencyKey,
-    ),
-    activateCommitment: (commitment, settlement) => post<CommitmentDto>(`/v1/commitments/${commitment.id}/activate`, {
-      expectedVersion: commitment.stateVersion,
-      ...settlement,
-    }),
-    cancelCommitment: (commitment, settlement) => post<CommitmentDto>(`/v1/commitments/${commitment.id}/cancel`, {
-      expectedVersion: commitment.stateVersion,
-      ...settlement,
-    }),
+    createCommitment: (commitment, requestIdempotencyKey) =>
+      post<CommitmentDto>(
+        "/v1/commitments",
+
+        commitment,
+
+        requestIdempotencyKey,
+      ),
+
+    activateCommitment: (commitment, settlement) =>
+      post<CommitmentDto>(`/v1/commitments/${commitment.id}/activate`, {
+        expectedVersion: commitment.stateVersion,
+
+        ...settlement,
+      }),
+
+    cancelCommitment: (commitment, settlement) =>
+      post<CommitmentDto>(`/v1/commitments/${commitment.id}/cancel`, {
+        expectedVersion: commitment.stateVersion,
+
+        ...settlement,
+      }),
   };
 }

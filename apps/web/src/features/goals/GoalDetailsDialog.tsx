@@ -1,9 +1,6 @@
 import { useState } from "react";
 
-import type {
-  CommitmentDto,
-  GoalDto,
-} from "@/api/kept-api";
+import type { CommitmentDto, GoalDto } from "@/api/kept-api";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -46,15 +43,118 @@ function formatTargetDate(value: string): string {
   }).format(date);
 }
 
+interface CommitmentRewardProps {
+  readonly commitment: CommitmentDto;
+  readonly rewardState: RewardState | undefined;
+  readonly claiming: boolean;
+  readonly rewardClaimError: {
+    readonly commitmentId: string;
+    readonly message: string;
+  } | null;
+  readonly onClaimReward: (commitment: CommitmentDto) => Promise<boolean>;
+  readonly onAddToSavings: () => void;
+}
+
+function CommitmentReward({
+  commitment,
+  rewardState,
+  claiming,
+  rewardClaimError,
+  onClaimReward,
+  onAddToSavings,
+}: CommitmentRewardProps) {
+  if (commitment.state !== "COMPLETED") {
+    return null;
+  }
+
+  if (!rewardState || rewardState.kind === "loading") {
+    return (
+      <div className="rounded-lg border bg-muted/20 px-4 py-3">
+        <p className="text-sm text-muted-foreground">Checking reward…</p>
+      </div>
+    );
+  }
+
+  if (rewardState.kind === "error") {
+    return (
+      <div className="rounded-lg border bg-muted/20 px-4 py-3">
+        <p className="text-sm text-muted-foreground">{rewardState.message}</p>
+      </div>
+    );
+  }
+
+  const { reward } = rewardState;
+
+  if (reward.rewardClaimed) {
+    return (
+      <div className="rounded-lg border bg-muted/20 px-4 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Reward claimed</p>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              {formatUsdc(reward.rewardAssets)} USDC was added to your available
+              cash.
+            </p>
+          </div>
+
+          <Button size="sm" variant="outline" onClick={onAddToSavings}>
+            Add to savings
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (reward.rewardAssets <= 0n) {
+    return (
+      <div className="rounded-lg border bg-muted/20 px-4 py-3">
+        <p className="text-sm text-muted-foreground">Verified</p>
+      </div>
+    );
+  }
+
+  const claimError =
+    rewardClaimError?.commitmentId === commitment.id
+      ? rewardClaimError.message
+      : null;
+
+  return (
+    <div className="rounded-lg border bg-muted/20 px-4 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium">
+            {formatUsdc(reward.rewardAssets)} USDC reward
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your commitment has been verified.
+          </p>
+        </div>
+
+        <Button
+          size="sm"
+          disabled={claiming}
+          onClick={() => void onClaimReward(commitment)}
+        >
+          {claiming ? "Claiming…" : "Claim reward"}
+        </Button>
+      </div>
+
+      {claimError && (
+        <p className="mt-3 text-sm text-destructive">{claimError}</p>
+      )}
+    </div>
+  );
+}
+
 interface GoalDetailsDialogProps {
   readonly open: boolean;
   readonly goal: GoalDto | null;
   readonly deleting: boolean;
   readonly deleteStatus: string | null;
   readonly deleteError: string | null;
-  readonly onDelete: (
-    goal: GoalDto,
-  ) => Promise<boolean>;
+  readonly onDelete: (goal: GoalDto) => Promise<boolean>;
   readonly funding: GoalFundingEntry | null;
   readonly commitments: readonly CommitmentDto[];
   readonly onOpenChange: (open: boolean) => void;
@@ -66,9 +166,8 @@ interface GoalDetailsDialogProps {
     readonly commitmentId: string;
     readonly message: string;
   } | null;
-  readonly onClaimReward: (
-    commitment: CommitmentDto,
-  ) => Promise<boolean>;
+  readonly onClaimReward: (commitment: CommitmentDto) => Promise<boolean>;
+  readonly onAddToSavings: () => void;
 }
 
 export function GoalDetailsDialog({
@@ -87,9 +186,9 @@ export function GoalDetailsDialog({
   claimingRewardId,
   rewardClaimError,
   onClaimReward,
+  onAddToSavings,
 }: GoalDetailsDialogProps) {
-  const [confirmDelete, setConfirmDelete] =
-    useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -100,40 +199,24 @@ export function GoalDetailsDialog({
   };
 
   if (!goal) {
-    return (
-      <Dialog
-        open={open}
-        onOpenChange={handleOpenChange}
-      />
-    );
+    return <Dialog open={open} onOpenChange={handleOpenChange} />;
   }
 
   const target = targetAmountAtomic(goal);
 
-  const allocatedAssets =
-    funding?.allocatedAssets ?? null;
+  const allocatedAssets = funding?.allocatedAssets ?? null;
 
-  const progress = goalFundingPercent(
-    allocatedAssets ?? 0n,
-    target,
-  );
+  const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={handleOpenChange}
-    >
-      <DialogContent className="max-w-xl">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
-            {goal.name}
-          </DialogTitle>
+          <DialogTitle>{goal.name}</DialogTitle>
 
           <DialogDescription>
             {goal.targetDate
-              ? `Target date ${formatTargetDate(
-                goal.targetDate,
-              )}`
+              ? `Target date ${formatTargetDate(goal.targetDate)}`
               : "Keep building towards what matters."}
           </DialogDescription>
         </DialogHeader>
@@ -141,25 +224,25 @@ export function GoalDetailsDialog({
         <div className="rounded-xl border bg-muted/20 p-5">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">
-                Saved towards this goal
-              </p>
+              <p className="text-sm text-muted-foreground">Saved</p>
 
-              <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
-                {allocatedAssets === null
-                  ? "—"
-                  : `${formatUsdc(
-                    allocatedAssets,
-                  )} USDC`}
-              </p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <p className="text-3xl font-semibold tracking-tight tabular-nums">
+                  {allocatedAssets === null ? "—" : formatUsdc(allocatedAssets)}
+                </p>
+
+                {allocatedAssets !== null && (
+                  <span className="text-sm text-muted-foreground">USDC</span>
+                )}
+              </div>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                of {formatUsdc(target)}{" "}
-                {goal.targetAsset}
+                of {formatUsdc(target)} {goal.targetAsset} target
               </p>
             </div>
 
             <Button
+              variant="outline"
               disabled={!funding}
               onClick={() => {
                 handleOpenChange(false);
@@ -173,7 +256,7 @@ export function GoalDetailsDialog({
           <div className="mt-5 space-y-2">
             <Progress
               value={progress.visualPercent}
-              aria-label={`${progress.labelPercent}% funded`}
+              aria-label={`${progress.labelPercent}% of target`}
             />
 
             <p className="text-sm font-medium tabular-nums">
@@ -187,196 +270,96 @@ export function GoalDetailsDialog({
         <Separator />
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="font-medium">
-                Commitments
-              </h3>
+              <h3 className="font-medium">Commitments</h3>
 
-              <p className="text-sm text-muted-foreground">
-                Actions you have connected to this
-                goal.
+              <p className="mt-1 text-sm text-muted-foreground">
+                Actions that help keep this goal moving.
               </p>
             </div>
 
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
-                onAddCommitment(goal)
-              }
+              onClick={() => onAddCommitment(goal)}
             >
               Add commitment
             </Button>
           </div>
 
           {commitments.length ? (
-            <div className="space-y-3">
-              {commitments.map((commitment) => {
-                const rewardState =
-                  rewardStates[commitment.id];
+            <div className="space-y-4">
+              {commitments.map((commitment) => (
+                <div key={commitment.id} className="space-y-3">
+                  <CommitmentCard commitment={commitment} />
 
-                const claiming =
-                  claimingRewardId === commitment.id;
-
-                return (
-                  <div
-                    key={commitment.id}
-                    className="space-y-2"
-                  >
-                    <CommitmentCard
-                      commitment={commitment}
-                    />
-
-                    {commitment.state === "COMPLETED" && (
-                      <div className="rounded-lg border bg-muted/20 px-4 py-3">
-                        {!rewardState
-                          || rewardState.kind === "loading" ? (
-                          <p className="text-sm text-muted-foreground">
-                            Checking reward…
-                          </p>
-                        ) : rewardState.kind === "error" ? (
-                          <p className="text-sm text-muted-foreground">
-                            {rewardState.message}
-                          </p>
-                        ) : rewardState.reward.rewardClaimed ? (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">
-                              Verified
-                            </p>
-
-                            <p className="text-sm text-muted-foreground">
-                              {formatUsdc(
-                                rewardState.reward.rewardAssets,
-                              )}{" "}
-                              USDC reward claimed
-                            </p>
-                          </div>
-                        ) : rewardState.reward.rewardAssets > 0n ? (
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p className="text-sm font-medium">
-                                Verified
-                              </p>
-
-                              <p className="text-sm text-muted-foreground">
-                                {formatUsdc(
-                                  rewardState.reward.rewardAssets,
-                                )}{" "}
-                                USDC reward available
-                              </p>
-                            </div>
-
-                            <Button
-                              size="sm"
-                              disabled={claiming}
-                              onClick={() =>
-                                void onClaimReward(
-                                  commitment,
-                                )
-                              }
-                            >
-                              {claiming
-                                ? "Claiming…"
-                                : "Claim reward"}
-                            </Button>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            Verified
-                          </p>
-                        )}
-
-                        {claiming
-                          && rewardClaimError && (
-                            <p className="mt-2 text-sm text-destructive">
-                              {rewardClaimError
-                                && rewardState?.kind === "ready"
-                                && !rewardState.reward.rewardClaimed
-                                && (
-                                  <p className="mt-2 text-sm text-destructive">
-                                    {rewardClaimError?.commitmentId
-                                      === commitment.id && (
-                                        <p className="mt-2 text-sm text-destructive">
-                                          {rewardClaimError.message}
-                                        </p>
-                                      )}
-                                  </p>
-                                )}
-                            </p>
-                          )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  <CommitmentReward
+                    commitment={commitment}
+                    rewardState={rewardStates[commitment.id]}
+                    claiming={claimingRewardId === commitment.id}
+                    rewardClaimError={rewardClaimError}
+                    onClaimReward={onClaimReward}
+                    onAddToSavings={() => {
+                      handleOpenChange(false);
+                      onAddToSavings();
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-              No commitments yet. Add one when
-              you're ready to turn this goal into a
-              regular action.
+            <div className="rounded-lg border border-dashed p-5">
+              <p className="text-sm font-medium">No commitments yet</p>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add one when you're ready to build a regular action around this
+                goal.
+              </p>
             </div>
           )}
         </div>
 
         <Separator />
 
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h3 className="text-sm font-medium">
-              Delete goal
-            </h3>
-
-            <p className="text-sm text-muted-foreground">
-              Savings assigned to this goal will stay
-              in Kept and become available to assign
-              elsewhere.
-            </p>
-          </div>
-
+        <div>
           {!confirmDelete ? (
-            <Button
-              variant="destructive"
-              onClick={() =>
-                setConfirmDelete(true)
-              }
-            >
-              Delete goal
-            </Button>
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive hover:text-white"
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete goal
+              </Button>
+            </div>
           ) : (
-            <div className="space-y-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-              <div>
-                <p className="text-sm font-medium">
-                  Delete “{goal.name}”?
-                </p>
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm font-medium">Delete “{goal.name}”?</p>
 
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This removes the goal from your
-                  dashboard. Your savings remain in
-                  Kept.<br />Any commitments
-                  connected to this goal will also be
-                  cancelled.
-                </p>
-              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The goal will be removed and its savings will become unassigned.
+                Your money stays in Kept. Connected commitments will also be
+                cancelled.
+              </p>
 
-              <div className="flex gap-2">
+              <div className="mt-4 flex gap-2">
                 <Button
                   variant="outline"
+                  size="sm"
                   disabled={deleting}
-                  onClick={() =>
-                    setConfirmDelete(false)
-                  }
+                  onClick={() => setConfirmDelete(false)}
                 >
-                  Cancel
+                  Keep goal
                 </Button>
 
                 <Button
                   variant="destructive"
+                  size="sm"
                   disabled={deleting}
                   onClick={async () => {
-                    const deleted =
-                      await onDelete(goal);
+                    const deleted = await onDelete(goal);
 
                     if (deleted) {
                       setConfirmDelete(false);
@@ -384,32 +367,22 @@ export function GoalDetailsDialog({
                     }
                   }}
                 >
-                  {deleting
-                    ? "Deleting…"
-                    : "Delete goal"}
+                  {deleting ? "Deleting…" : "Delete goal"}
                 </Button>
               </div>
 
               {deleteStatus && (
-                <p className="text-sm text-muted-foreground">
+                <p className="mt-3 text-sm text-muted-foreground">
                   {deleteStatus}
                 </p>
               )}
 
               {deleteError && (
-                <p className="text-sm text-destructive">
-                  {deleteError}
-                </p>
+                <p className="mt-3 text-sm text-destructive">{deleteError}</p>
               )}
             </div>
           )}
         </div>
-
-        <p className="text-xs leading-5 text-muted-foreground">
-          Savings assigned to a goal remain part of
-          your Kept balance and can be moved or
-          withdrawn when needed.
-        </p>
       </DialogContent>
     </Dialog>
   );
