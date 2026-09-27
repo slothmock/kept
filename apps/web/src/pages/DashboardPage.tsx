@@ -17,6 +17,7 @@ import { BalanceCard, type PositionState } from "@/features/savings/BalanceCard"
 import { DepositDialog } from "@/features/savings/DepositDialog";
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 import { WithdrawDialog } from "@/features/savings/WithdrawDialog";
+import type { RewardState } from "@/commitments/reward-claim";
 
 interface DashboardPageProps {
   readonly walletAddress: string | null;
@@ -35,6 +36,12 @@ interface DashboardPageProps {
   readonly deletingGoal: boolean;
   readonly deleteGoalStatus: string | null;
   readonly deleteGoalError: string | null;
+  readonly rewardStates: Readonly<Record<string, RewardState>>;
+  readonly claimingRewardId: string | null;
+  readonly rewardClaimError: {
+  readonly commitmentId: string;
+  readonly message: string;
+} | null;
 
   readonly onDeleteGoal: (
     goal: GoalDto,
@@ -68,6 +75,9 @@ interface DashboardPageProps {
   readonly onDismissGoal: () => void;
   readonly onDismissCommitment: () => void;
   readonly onDismissAllocation: () => void;
+  readonly onClaimReward: (
+    commitment: CommitmentDto,
+  ) => Promise<boolean>;
 }
 
 function currentCommitment(goalId: string, commitments: readonly CommitmentDto[]): CommitmentDto | undefined {
@@ -99,6 +109,10 @@ export function DashboardPage(props: DashboardPageProps) {
     creatingCommitment,
     commitmentStatus,
     commitmentError,
+    rewardStates,
+    claimingRewardId,
+    rewardClaimError,
+    onClaimReward,
     allocatingGoal,
     allocationStatus,
     allocationError,
@@ -357,6 +371,10 @@ export function DashboardPage(props: DashboardPageProps) {
             : null
         }
         commitments={detailCommitments}
+        rewardStates={rewardStates}
+        claimingRewardId={claimingRewardId}
+        rewardClaimError={rewardClaimError}
+        onClaimReward={onClaimReward}
         deleting={deletingGoal}
         deleteStatus={deleteGoalStatus}
         deleteError={deleteGoalError}

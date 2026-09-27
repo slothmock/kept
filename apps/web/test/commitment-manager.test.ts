@@ -4,12 +4,15 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   getAddress,
+  type Address,
   type Hex,
 } from "viem";
 
 import {
   buildCreateCommitmentTransaction,
   buildCancelCommitmentTransaction,
+  buildClaimRewardTransaction,
+  readCommitmentRewardState,
   commitmentManagerAbi,
   confirmCommitmentCreation,
   referenceIdForCommitment,
@@ -191,6 +194,163 @@ describe("CommitmentManager browser integration", () => {
         chainId: 143,
         commitmentId:
           (1n << 256n).toString(),
+      }),
+    ).toThrow(
+      "Onchain commitment ID is outside uint256 range.",
+    );
+  });
+});
+
+describe("reward claiming", () => {
+  const referenceId =
+    `0x${"ab".repeat(32)}` as Hex;
+
+  it("builds a claimReward transaction", () => {
+    const transaction =
+      buildClaimRewardTransaction({
+        manager,
+        chainId: 143,
+        commitmentId: "42",
+      });
+
+    expect(transaction.to).toBe(manager);
+    expect(transaction.chainId).toBe(143);
+
+    const decoded = decodeFunctionData({
+      abi: commitmentManagerAbi,
+      data: transaction.data,
+    });
+
+    expect(decoded.functionName).toBe(
+      "claimReward",
+    );
+
+    expect(decoded.args).toEqual([42n]);
+  });
+
+  it("reads a completed unclaimed reward", async () => {
+    const readContract = vi.fn(
+      async () =>
+        [
+          owner,
+          referenceId,
+          1n,
+          2n,
+          3n,
+          5_000_000n,
+          2,
+          false,
+        ] as const,
+    );
+
+    const reward =
+      await readCommitmentRewardState({
+        manager,
+        commitmentId: "1",
+        readContract,
+      });
+
+    expect(reward).toEqual({
+      owner,
+      rewardAssets: 5_000_000n,
+      status: 2,
+      rewardClaimed: false,
+    });
+
+    expect(readContract).toHaveBeenCalledOnce();
+  });
+
+  it("reads an already claimed reward", async () => {
+    const readContract = vi.fn(
+      async () =>
+        [
+          owner,
+          referenceId,
+          1n,
+          2n,
+          3n,
+          5_000_000n,
+          2,
+          true,
+        ] as const,
+    );
+
+    const reward =
+      await readCommitmentRewardState({
+        manager,
+        commitmentId: "1",
+        readContract,
+      });
+
+    expect(reward.rewardAssets).toBe(
+      5_000_000n,
+    );
+
+    expect(reward.status).toBe(2);
+    expect(reward.rewardClaimed).toBe(true);
+  });
+
+  it.each([
+    "",
+    "-1",
+    "abc",
+    "1.5",
+  ])(
+    "rejects malformed commitment id %p",
+    async (commitmentId) => {
+      expect(() =>
+        buildClaimRewardTransaction({
+          manager,
+          chainId: 143,
+          commitmentId,
+        }),
+      ).toThrow(
+        "Onchain commitment ID must be an unsigned integer.",
+      );
+
+      await expect(
+        readCommitmentRewardState({
+          manager,
+          commitmentId,
+          readContract: vi.fn(),
+        }),
+      ).rejects.toThrow(
+        "Onchain commitment ID must be an unsigned integer.",
+      );
+    },
+  );
+
+  it("rejects zero commitment id", async () => {
+    expect(() =>
+      buildClaimRewardTransaction({
+        manager,
+        chainId: 143,
+        commitmentId: "0",
+      }),
+    ).toThrow(
+      "Onchain commitment ID is outside uint256 range.",
+    );
+
+    await expect(
+      readCommitmentRewardState({
+        manager,
+        commitmentId: "0",
+        readContract: vi.fn(),
+      }),
+    ).rejects.toThrow(
+      "Onchain commitment ID is outside uint256 range.",
+    );
+  });
+
+  it("rejects commitment ids above uint256", () => {
+    const tooLarge =
+      (1n << 256n).toString();
+
+    expect(() =>
+      buildClaimRewardTransaction({
+        manager,
+        chainId: 143,
+        commitmentId: tooLarge,
       }),
     ).toThrow(
       "Onchain commitment ID is outside uint256 range.",

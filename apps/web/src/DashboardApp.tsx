@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPublicClient, getAddress, http, isAddress } from "viem";
 
-import { createKeptApi, readApiBaseUrl, type GoalDto } from "@/api/kept-api";
+import { createKeptApi, readApiBaseUrl, type GoalDto, type CommitmentDto } from "@/api/kept-api";
 import { type Session } from "@/auth/session";
 import { useKeptEvmWallet } from "@/chain/evm-wallet";
 import { checkNetworkReadiness } from "@/chain/network-readiness";
@@ -11,9 +11,12 @@ import {
   buildCreateCommitmentTransaction,
   commitmentManagerAbi,
   confirmCommitmentCreation,
+  readCommitmentRewardState,
   referenceIdForCommitment,
   timestampSeconds,
+  type CommitmentRewardState,
 } from "@/commitments/commitment-manager";
+import { claimCommitmentReward } from "@/commitments/reward-claim";
 import {
   runCommitmentCreation,
   type CommitmentCreationAttempt,
@@ -46,9 +49,6 @@ import {
   type GoalFundingState,
 } from "@/features/goals/funding";
 import {
-  clearPendingGoalAllocation,
-  loadPendingGoalAllocation,
-  savePendingGoalAllocation,
   type PendingGoalAllocation,
 } from "@/features/goals/pending-allocation";
 import {
@@ -332,6 +332,90 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [account, api, config, productRequestGate, publicClient]);
 
+  const refreshRewardStates = useCallback(
+    async (commitments: readonly CommitmentDto[]) => {
+      if (!commitmentManagerConfig || !publicClient) {
+        return;
+      }
+
+      const completed = commitments.filter(
+        (commitment) =>
+          commitment.state === "COMPLETED"
+          && commitment.onchainCommitmentId !== null,
+      );
+
+      if (completed.length === 0) {
+        setRewardStates({});
+        return;
+      }
+
+      setRewardStates((current) => {
+        const next = { ...current };
+
+        for (const commitment of completed) {
+          next[commitment.id] = {
+            kind: "loading",
+          };
+        }
+
+        return next;
+      });
+
+      await Promise.all(
+        completed.map(async (commitment) => {
+          try {
+            const onchainCommitmentId =
+              commitment.onchainCommitmentId;
+
+            if (!onchainCommitmentId) return;
+
+            const reward =
+              await readCommitmentRewardState({
+                manager:
+                  commitmentManagerConfig.address,
+                commitmentId:
+                  onchainCommitmentId,
+                readContract: (request) =>
+                  publicClient.readContract(
+                    request as never,
+                  ),
+              });
+
+            setRewardStates((current) => ({
+              ...current,
+              [commitment.id]: {
+                kind: "ready",
+                reward,
+              },
+            }));
+          } catch (error) {
+            diagnostics.warn(
+              "commitment.reward_read_failed",
+              error,
+              {
+                commitmentId:
+                  commitment.id,
+              },
+            );
+
+            setRewardStates((current) => ({
+              ...current,
+              [commitment.id]: {
+                kind: "error",
+                message:
+                  "Reward details are temporarily unavailable.",
+              },
+            }));
+          }
+        }),
+      );
+    },
+    [
+      commitmentManagerConfig,
+      publicClient,
+    ],
+  );
+
   useEffect(() => {
     const requestId = depositQuoteRequestGate.begin();
     const parsedAmount = parseUsdcDepositAmount(depositAmount);
@@ -373,6 +457,19 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     void refreshPosition();
     void refreshProductData();
   }, [refreshPosition, refreshProductData]);
+
+  useEffect(() => {
+    if (productState.kind !== "ready") {
+      return;
+    }
+
+    void refreshRewardStates(
+      productState.commitments,
+    );
+  }, [
+    productState,
+    refreshRewardStates,
+  ]);
 
   const submitDeposit = useCallback(async () => {
     if (!config || !publicClient || !account || positionState.kind !== "ready") {
@@ -1200,6 +1297,162 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     setAllocationStatus(null);
   }, []);
 
+  type RewardState =
+    | { readonly kind: "loading" }
+    | {
+      readonly kind: "ready";
+      readonly reward: CommitmentRewardState;
+    }
+    | {
+      readonly kind: "error";
+      readonly message: string;
+    };
+
+  const [rewardStates, setRewardStates] = useState<
+    Readonly<Record<string, RewardState>>
+  >({});
+
+  const [claimingRewardId, setClaimingRewardId] =
+    useState<string | null>(null);
+
+  const [
+    rewardClaimError,
+    setRewardClaimError,
+  ] = useState<{
+    readonly commitmentId: string;
+    readonly message: string;
+  } | null>(null);
+
+  const claimReward = useCallback(
+    async (
+      commitment: CommitmentDto,
+    ): Promise<boolean> => {
+      if (
+        !config
+        || !commitmentManagerConfig
+        || !publicClient
+        || !account
+        || !commitment.onchainCommitmentId
+      ) {
+        setRewardClaimError({
+          commitmentId: commitment.id,
+          message: "Your Kept account is not ready yet.",
+        });
+        return false;
+      }
+
+      setRewardClaimError(null);
+      setClaimingRewardId(commitment.id);
+
+      let succeeded = false;
+
+      const acquired =
+        await transactionCoordinator.run(
+          "commitment",
+          async () => {
+            try {
+              await ensureTransactionNetwork();
+
+              const result =
+                await claimCommitmentReward({
+                  manager:
+                    commitmentManagerConfig.address,
+                  chainId:
+                    config.chainId,
+                  commitmentId:
+                    commitment.onchainCommitmentId!,
+                  sender,
+                  readContract: (request) =>
+                    publicClient.readContract(
+                      request as never,
+                    ),
+                  waitForReceipt:
+                    async (transactionHash) => {
+                      const receipt =
+                        await publicClient
+                          .waitForTransactionReceipt({
+                            hash:
+                              transactionHash,
+                            confirmations:
+                              import.meta.env
+                                .VITE_ENABLE_LOCAL_ANVIL
+                                === "true"
+                                ? 1
+                                : 2,
+                          });
+
+                      return {
+                        status:
+                          receipt.status
+                            === "success"
+                            ? "success"
+                            : "reverted",
+                      };
+                    },
+                });
+
+              if (!result.ok) {
+                throw result.error;
+              }
+
+              await Promise.all([
+                refreshPosition(),
+                refreshRewardStates(
+                  productState.kind === "ready"
+                    ? productState.commitments
+                    : [commitment],
+                ),
+              ]);
+
+              succeeded = true;
+            } catch (error) {
+              diagnostics.warn(
+                "commitment.reward_claim_failed",
+                error,
+                {
+                  commitmentId:
+                    commitment.id,
+                  onchainCommitmentId:
+                    commitment.onchainCommitmentId,
+                },
+              );
+
+              setRewardClaimError({
+                commitmentId: commitment.id,
+                message: consumerErrorMessage(
+                  error,
+                  "We could not claim your reward. Try again.",
+                ),
+              });
+            }
+          },
+        );
+
+      if (!acquired) {
+        setRewardClaimError({
+          commitmentId: commitment.id,
+          message: "Another account action is still being processed. Try again in a moment.",
+        });
+      }
+
+      setClaimingRewardId(null);
+
+      return succeeded;
+    },
+    [
+      account,
+      commitmentManagerConfig,
+      config,
+      ensureTransactionNetwork,
+      productState,
+      publicClient,
+      refreshPosition,
+      refreshRewardStates,
+      sender,
+      transactionCoordinator,
+    ],
+  );
+
   if (!session.isReady) {
     return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground" aria-live="polite">Preparing your account…</main>;
   }
@@ -1250,6 +1503,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         onDismissAllocation={dismissAllocation}
         onRemoveFromGoal={removeFromGoal}
         onMoveBetweenGoals={moveBetweenGoals}
+        rewardStates={rewardStates}
+        claimingRewardId={claimingRewardId}
+        rewardClaimError={rewardClaimError}
+        onClaimReward={claimReward}
       />
     </AppShell>
   );

@@ -84,6 +84,18 @@ export const commitmentManagerAbi = [
     ],
   },
   {
+    type: "function",
+    name: "claimReward",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "commitmentId",
+        type: "uint256",
+      },
+    ],
+    outputs: [],
+  },
+  {
     type: "event",
     name: "CommitmentCreated",
     anonymous: false,
@@ -134,6 +146,13 @@ export class CommitmentConfirmationError extends Error {
   }
 }
 
+export interface CommitmentRewardState {
+  readonly owner: Address;
+  readonly rewardAssets: bigint;
+  readonly rewardClaimed: boolean;
+  readonly status: number;
+}
+
 interface ContractReader {
   readContract(input: {
     readonly address: Address;
@@ -156,6 +175,29 @@ export function referenceIdForCommitment(
   commitmentId: string,
 ): Hex {
   return keccak256(toBytes(commitmentId));
+}
+
+function parseCommitmentId(
+  value: string,
+): bigint {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(
+      "Onchain commitment ID must be an unsigned integer.",
+    );
+  }
+
+  const commitmentId = BigInt(value);
+
+  if (
+    commitmentId < 1n
+    || commitmentId > UINT256_MAX
+  ) {
+    throw new Error(
+      "Onchain commitment ID is outside uint256 range.",
+    );
+  }
+
+  return commitmentId;
 }
 
 export function timestampSeconds(
@@ -210,31 +252,18 @@ export function buildCancelCommitmentTransaction(
     readonly commitmentId: string;
   },
 ): UnsignedVaultTransaction {
-  if (!/^\d+$/.test(input.commitmentId)) {
-    throw new Error(
-      "Onchain commitment ID must be an unsigned integer.",
+  const commitmentId =
+    parseCommitmentId(
+      input.commitmentId,
     );
-  }
-
-  const commitmentId = BigInt(
-    input.commitmentId,
-  );
-
-  if (
-    commitmentId < 1n
-    || commitmentId > UINT256_MAX
-  ) {
-    throw new Error(
-      "Onchain commitment ID is outside uint256 range.",
-    );
-  }
 
   return {
     to: input.manager,
     chainId: input.chainId,
     data: encodeFunctionData({
       abi: commitmentManagerAbi,
-      functionName: "cancelCommitment",
+      functionName:
+        "cancelCommitment",
       args: [commitmentId],
     }),
   };
@@ -325,7 +354,7 @@ export async function confirmCommitmentCreation(
     readonly transactionHash: Hex;
     readonly receipt: CommitmentReceipt;
     readonly readContract:
-      ContractReader["readContract"];
+    ContractReader["readContract"];
   },
 ): Promise<ConfirmedCommitmentCreation> {
   if (
@@ -369,13 +398,13 @@ export async function confirmCommitmentCreation(
 
       if (
         getAddress(args.owner)
-          === input.owner
+        === input.owner
         && args.referenceId
-          === input.referenceId
+        === input.referenceId
         && args.startAt
-          === input.startAt
+        === input.startAt
         && args.endAt
-          === input.endAt
+        === input.endAt
       ) {
         commitmentId =
           args.commitmentId;
@@ -418,11 +447,11 @@ export async function confirmCommitmentCreation(
   if (
     settledOwner !== input.owner
     || settledReference
-      !== input.referenceId
+    !== input.referenceId
     || settledStart
-      !== input.startAt
+    !== input.startAt
     || settledEnd
-      !== input.endAt
+    !== input.endAt
     || status < 1
     || status > 4
   ) {
@@ -439,5 +468,72 @@ export async function confirmCommitmentCreation(
     owner: input.owner,
     transactionHash:
       input.transactionHash,
+  };
+}
+
+export async function readCommitmentRewardState(
+  input: {
+    readonly manager: Address;
+    readonly commitmentId: string;
+    readonly readContract:
+    ContractReader["readContract"];
+  },
+): Promise<CommitmentRewardState> {
+  const commitmentId =
+    parseCommitmentId(
+      input.commitmentId,
+    );
+
+  const record =
+    normalizeRecord(
+      await input.readContract({
+        address: input.manager,
+        abi: commitmentManagerAbi,
+        functionName:
+          "commitments",
+        args: [commitmentId],
+      }),
+    );
+
+  const [
+    owner,
+    ,
+    ,
+    ,
+    ,
+    rewardAssets,
+    status,
+    rewardClaimed,
+  ] = record;
+
+  return {
+    owner,
+    rewardAssets,
+    rewardClaimed,
+    status,
+  };
+}
+
+export function buildClaimRewardTransaction(
+  input: {
+    readonly manager: Address;
+    readonly chainId: number;
+    readonly commitmentId: string;
+  },
+): UnsignedVaultTransaction {
+  const commitmentId =
+    parseCommitmentId(
+      input.commitmentId,
+    );
+
+  return {
+    to: input.manager,
+    chainId: input.chainId,
+    data: encodeFunctionData({
+      abi: commitmentManagerAbi,
+      functionName:
+        "claimReward",
+      args: [commitmentId],
+    }),
   };
 }

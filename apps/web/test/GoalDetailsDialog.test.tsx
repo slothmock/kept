@@ -37,6 +37,30 @@ const goal: GoalDto = {
 
 const commitments: readonly CommitmentDto[] = [];
 
+const completedCommitment: CommitmentDto = {
+  id: "commitment-1",
+  userId: "user-1",
+  savingsGoalId: goal.id,
+  definition: {
+    code: "WEEKLY_SAVINGS_V1",
+    version: 1
+  },
+  parameters: {
+    targetAmountAtomic: "50000000",
+    periodDays: 7,
+  },
+  epochStart: "2026-09-18T00:00:00.000Z",
+  epochEnd: "2026-09-25T00:00:00.000Z",
+  verificationDeadline: "2026-09-26T00:00:00.000Z",
+  state: "COMPLETED",
+  stateVersion: 3,
+  onchainCommitmentId: "1",
+  createdAt: "2026-09-18T00:00:00.000Z",
+  updatedAt: "2026-09-25T00:00:00.000Z",
+  activatedAt: "2026-09-25T00:00:00.000Z",
+  finalizedAt: "2026-09-25T00:00:00.000Z",
+};
+
 function renderDialog(
   overrides: Partial<
     ComponentProps<typeof GoalDetailsDialog>
@@ -61,6 +85,10 @@ function renderDialog(
     onOpenChange: vi.fn(),
     onManageSavings: vi.fn(),
     onAddCommitment: vi.fn(),
+    rewardStates: {},
+    claimingRewardId: null,
+    rewardClaimError: null,
+    onClaimReward: vi.fn(),
     ...overrides,
   };
 
@@ -253,5 +281,100 @@ describe("GoalDetailsDialog", () => {
         "Cancelling your commitment…",
       ),
     ).toBeTruthy();
+  });
+
+  it("shows an available reward for a completed commitment", () => {
+    renderDialog({
+      commitments: [completedCommitment],
+      rewardStates: {
+        [completedCommitment.id]: {
+          kind: "ready",
+          reward: {
+            owner:
+              "0x2222222222222222222222222222222222222222",
+            rewardAssets: 5_000_000n,
+            rewardClaimed: false,
+            status: 2,
+          },
+        },
+      },
+    });
+
+    expect(
+      screen.getByText(
+        "5.00 USDC reward available",
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Claim reward",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("shows a claimed reward for a completed commitment", () => {
+    renderDialog({
+      commitments: [completedCommitment],
+      rewardStates: {
+        [completedCommitment.id]: {
+          kind: "ready",
+          reward: {
+            owner:
+              "0x2222222222222222222222222222222222222222",
+            rewardAssets: 5_000_000n,
+            rewardClaimed: true,
+            status: 2,
+          },
+        },
+      },
+    });
+
+    expect(
+      screen.getByText(
+        "5.00 USDC reward claimed",
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Claim reward",
+      }),
+    ).toBeNull();
+  });
+
+  it("claims an available reward", () => {
+    const onClaimReward = vi
+      .fn()
+      .mockResolvedValue(true);
+
+    renderDialog({
+      commitments: [completedCommitment],
+      rewardStates: {
+        [completedCommitment.id]: {
+          kind: "ready",
+          reward: {
+            owner:
+              "0x2222222222222222222222222222222222222222",
+            rewardAssets: 5_000_000n,
+            rewardClaimed: false,
+            status: 2,
+          },
+        },
+      },
+      onClaimReward,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Claim reward",
+      }),
+    );
+
+    expect(onClaimReward).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: completedCommitment.id,
+      }),
+    );
   });
 });

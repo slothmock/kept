@@ -22,6 +22,8 @@ import {
 } from "@/features/goals/funding";
 import { formatUsdc } from "@/features/savings/format";
 
+import type { RewardState } from "@/commitments/reward-claim";
+
 function targetAmountAtomic(goal: GoalDto): bigint {
   try {
     return BigInt(goal.targetAmountAtomic);
@@ -58,6 +60,15 @@ interface GoalDetailsDialogProps {
   readonly onOpenChange: (open: boolean) => void;
   readonly onManageSavings: (goal: GoalDto) => void;
   readonly onAddCommitment: (goal: GoalDto) => void;
+  readonly rewardStates: Readonly<Record<string, RewardState>>;
+  readonly claimingRewardId: string | null;
+  readonly rewardClaimError: {
+    readonly commitmentId: string;
+    readonly message: string;
+  } | null;
+  readonly onClaimReward: (
+    commitment: CommitmentDto,
+  ) => Promise<boolean>;
 }
 
 export function GoalDetailsDialog({
@@ -72,6 +83,10 @@ export function GoalDetailsDialog({
   onOpenChange,
   onManageSavings,
   onAddCommitment,
+  rewardStates,
+  claimingRewardId,
+  rewardClaimError,
+  onClaimReward,
 }: GoalDetailsDialogProps) {
   const [confirmDelete, setConfirmDelete] =
     useState(false);
@@ -197,14 +212,104 @@ export function GoalDetailsDialog({
 
           {commitments.length ? (
             <div className="space-y-3">
-              {commitments.map(
-                (commitment) => (
-                  <CommitmentCard
+              {commitments.map((commitment) => {
+                const rewardState =
+                  rewardStates[commitment.id];
+
+                const claiming =
+                  claimingRewardId === commitment.id;
+
+                return (
+                  <div
                     key={commitment.id}
-                    commitment={commitment}
-                  />
-                ),
-              )}
+                    className="space-y-2"
+                  >
+                    <CommitmentCard
+                      commitment={commitment}
+                    />
+
+                    {commitment.state === "COMPLETED" && (
+                      <div className="rounded-lg border bg-muted/20 px-4 py-3">
+                        {!rewardState
+                          || rewardState.kind === "loading" ? (
+                          <p className="text-sm text-muted-foreground">
+                            Checking reward…
+                          </p>
+                        ) : rewardState.kind === "error" ? (
+                          <p className="text-sm text-muted-foreground">
+                            {rewardState.message}
+                          </p>
+                        ) : rewardState.reward.rewardClaimed ? (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">
+                              Verified
+                            </p>
+
+                            <p className="text-sm text-muted-foreground">
+                              {formatUsdc(
+                                rewardState.reward.rewardAssets,
+                              )}{" "}
+                              USDC reward claimed
+                            </p>
+                          </div>
+                        ) : rewardState.reward.rewardAssets > 0n ? (
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-medium">
+                                Verified
+                              </p>
+
+                              <p className="text-sm text-muted-foreground">
+                                {formatUsdc(
+                                  rewardState.reward.rewardAssets,
+                                )}{" "}
+                                USDC reward available
+                              </p>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              disabled={claiming}
+                              onClick={() =>
+                                void onClaimReward(
+                                  commitment,
+                                )
+                              }
+                            >
+                              {claiming
+                                ? "Claiming…"
+                                : "Claim reward"}
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Verified
+                          </p>
+                        )}
+
+                        {claiming
+                          && rewardClaimError && (
+                            <p className="mt-2 text-sm text-destructive">
+                              {rewardClaimError
+                                && rewardState?.kind === "ready"
+                                && !rewardState.reward.rewardClaimed
+                                && (
+                                  <p className="mt-2 text-sm text-destructive">
+                                    {rewardClaimError?.commitmentId
+                                      === commitment.id && (
+                                        <p className="mt-2 text-sm text-destructive">
+                                          {rewardClaimError.message}
+                                        </p>
+                                      )}
+                                  </p>
+                                )}
+                            </p>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
