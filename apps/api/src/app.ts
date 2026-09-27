@@ -25,12 +25,16 @@ export interface AuthenticatedIdentity {
 }
 
 export interface ApiDependencies {
+  readonly chainId: number;
+
   readonly authenticate: (
     authorization: string | undefined,
   ) => Promise<AuthenticatedIdentity | null>;
+
   readonly persistence: Pick<
     KeptPersistenceService,
     | "createUser"
+    | "ensureEmbeddedWallet"
     | "createGoal"
     | "getGoal"
     | "listGoals"
@@ -44,6 +48,7 @@ export interface ApiDependencies {
     | "activateCommitment"
     | "cancelCommitment"
   >;
+
   readonly commitmentSettlementVerifier?: CommitmentSettlementVerifier;
 }
 
@@ -256,6 +261,14 @@ export function buildApp(
         await dependencies.persistence.createUser({
           privyUserId: identity.privyUserId,
         });
+
+      if (identity.wallet) {
+        await dependencies.persistence.ensureEmbeddedWallet({
+          userId: authenticatedRequest.user.id,
+          chainId: dependencies.chainId,
+          address: identity.wallet,
+        });
+      }
 
       authenticatedRequest.identity = identity;
     } catch (error) {

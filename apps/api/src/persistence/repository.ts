@@ -77,6 +77,23 @@ export class KeptRepository {
     return wallet;
   }
 
+  async updateWallet(input: {
+    readonly id: string;
+    readonly walletKind: string;
+    readonly isPrimary: boolean;
+  }) {
+    const [wallet] = await this.db
+      .update(wallets)
+      .set({
+        walletKind: input.walletKind,
+        isPrimary: input.isPrimary,
+      })
+      .where(eq(wallets.id, input.id))
+      .returning();
+
+    return wallet ?? null;
+  }
+
   async findWalletForOwner(userId: string, id: string) {
     const [wallet] = await this.db
       .select()

@@ -16,6 +16,17 @@ const user = {
   updatedAt: "2026-09-23T00:00:00.000Z",
 } as const;
 
+const embeddedWallet = {
+  id: "wallet-1",
+  userId: user.id,
+  privyWalletId: null,
+  walletKind: "PRIVY_EMBEDDED_MONAD",
+  chainId: "143",
+  address: walletAddress,
+  isPrimary: true,
+  createdAt: "2026-09-23T00:00:00.000Z",
+} as const;
+
 const allocation = {
   goalId: "goal-1",
   allocatedSharesAtomic: "100000000000000",
@@ -28,21 +39,33 @@ function buildDependencies(
   overrides: Partial<ApiDependencies> = {},
 ): ApiDependencies {
   return {
+    chainId: 143,
+
     authenticate: async (
       authorization: string | undefined,
     ) => (
       authorization === "Bearer valid-token"
         ? {
           privyUserId: user.privyUserId,
-          wallet:  walletAddress,
+          wallet: walletAddress,
         }
         : null
     ),
 
     persistence: {
       createUser: async () => user,
-      getGoalAllocation: vi.fn(async () => allocation),
-      allocateGoalShares: vi.fn(async () => allocation),
+
+      ensureEmbeddedWallet: vi.fn(
+        async () => embeddedWallet,
+      ),
+
+      getGoalAllocation: vi.fn(
+        async () => allocation,
+      ),
+
+      allocateGoalShares: vi.fn(
+        async () => allocation,
+      ),
     },
 
     ...overrides,
@@ -50,6 +73,32 @@ function buildDependencies(
 }
 
 describe("goal allocation API", () => {
+  it("registers the authenticated embedded wallet for the configured chain", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/goals/goal-1/allocation",
+      headers: {
+        authorization: "Bearer valid-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    expect(
+      dependencies.persistence
+        .ensureEmbeddedWallet as ReturnType<typeof vi.fn>
+    ).toHaveBeenCalledWith({
+      userId: user.id,
+      chainId: 143,
+      address: walletAddress,
+    });
+
+    await app.close();
+  });
+
   it("reads an owned goal allocation using the server-authenticated wallet", async () => {
     const dependencies = buildDependencies();
     const app = buildApp(dependencies);
@@ -166,6 +215,11 @@ describe("goal allocation API", () => {
     });
 
     expect(response.statusCode).toBe(404);
+
+    expect(
+      dependencies.persistence
+        .ensureEmbeddedWallet as ReturnType<typeof vi.fn>
+    ).not.toHaveBeenCalled();
 
     expect(
       dependencies.persistence

@@ -403,6 +403,92 @@ export class KeptPersistenceService {
     return wallet ? mapWallet(wallet) : null;
   }
 
+  async ensureEmbeddedWallet(input: {
+    readonly userId: string;
+    readonly chainId: number;
+    readonly address: string;
+  }): Promise<WalletDto> {
+    if (!Number.isSafeInteger(input.chainId) || input.chainId <= 0) {
+      throw new PersistenceValidationError(
+        "chainId must be a positive safe integer",
+      );
+    }
+
+    const repository = new KeptRepository(this.db);
+    const chainId = BigInt(input.chainId);
+    const address = requireNonBlank(input.address, "address");
+
+    if (!(await repository.findUser(input.userId))) {
+      throw new NotFoundError("User");
+    }
+
+    const primary =
+      await repository.findPrimaryWalletForOwnerOnChain(
+        input.userId,
+        chainId,
+      );
+
+    if (primary) {
+      if (
+        primary.address.toLowerCase()
+        !== address.toLowerCase()
+      ) {
+        throw new PersistenceValidationError(
+          "Authenticated embedded wallet does not match the stored wallet",
+        );
+      }
+
+      return mapWallet(primary);
+    }
+
+    const existing =
+      await repository.findWalletByChainAddress(
+        chainId,
+        address,
+      );
+
+    if (existing) {
+      if (existing.userId !== input.userId) {
+        throw new PersistenceValidationError(
+          "The wallet is already associated with another account",
+        );
+      }
+
+      const updated = await repository.updateWallet({
+        id: existing.id,
+        walletKind: "PRIVY_EMBEDDED_MONAD",
+        isPrimary: true,
+      });
+
+      if (!updated) {
+        throw new Error(
+          "Embedded wallet could not be updated",
+        );
+      }
+
+      return mapWallet(updated);
+    }
+
+    const created = await repository.createWallet({
+      id: randomUUID(),
+      userId: input.userId,
+      privyWalletId: null,
+      walletKind: "PRIVY_EMBEDDED_MONAD",
+      chainId,
+      address,
+      isPrimary: true,
+      createdAt: new Date(),
+    });
+
+    if (!created) {
+      throw new Error(
+        "Embedded wallet could not be created",
+      );
+    }
+
+    return mapWallet(created);
+  }
+
   async createGoal(input: {
     readonly userId: string;
     readonly idempotencyKey: string;
@@ -919,26 +1005,25 @@ export class KeptPersistenceService {
           throw new NotFoundError("Commitment");
         }
 
-        const wallet = await repository.findWalletByChainAddress(
-          BigInt(input.settlementChainId),
-          input.settlementOwner,
-        );
-        if (wallet && wallet.userId !== input.userId) {
+        const wallet =
+          await repository.findPrimaryWalletForOwnerOnChain(
+            input.userId,
+            BigInt(input.settlementChainId),
+          );
+
+        if (!wallet) {
           throw new PersistenceValidationError(
-            "The commitment wallet is already associated with another account",
+            "User has no embedded wallet for the settlement chain",
           );
         }
-        if (!wallet) {
-          await repository.createWallet({
-            id: randomUUID(),
-            userId: input.userId,
-            privyWalletId: null,
-            walletKind: "commitment_signer",
-            chainId: BigInt(input.settlementChainId),
-            address: input.settlementOwner,
-            isPrimary: false,
-            createdAt: new Date(),
-          });
+
+        if (
+          wallet.address.toLowerCase()
+          !== input.settlementOwner.toLowerCase()
+        ) {
+          throw new PersistenceValidationError(
+            "Commitment owner does not match the user's embedded wallet",
+          );
         }
 
         if (["ACTIVE", "COMPLETED", "FAILED", "CANCELLED"].includes(current.state)) {

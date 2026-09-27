@@ -52,9 +52,7 @@ export class CommitmentVerificationWorker {
 
         for (const commitment of commitments) {
             try {
-                await this.options.verifier.verify(
-                    commitment.id,
-                );
+                await this.options.verifier.verify(commitment.id);
             } catch (error) {
                 failed += 1;
 

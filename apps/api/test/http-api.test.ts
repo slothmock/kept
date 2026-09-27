@@ -46,9 +46,14 @@ const commitment = {
   updatedAt: "2026-09-18T00:00:00.000Z",
 };
 
-function buildDependencies(overrides: Partial<ApiDependencies> = {}): ApiDependencies {
+function buildDependencies(
+  overrides: Partial<ApiDependencies> = {},
+): ApiDependencies {
   let currentCommitment: CommitmentDto = commitment;
+
   return {
+    chainId: 143,
+
     authenticate: async (authorization) =>
       authorization === "Bearer valid-token"
         ? {
@@ -57,8 +62,22 @@ function buildDependencies(overrides: Partial<ApiDependencies> = {}): ApiDepende
             "0x0000000000000000000000000000000000000001",
         }
         : null,
+
     persistence: {
       createUser: async () => user,
+
+      ensureEmbeddedWallet: vi.fn(async () => ({
+        id: "wallet-1",
+        userId: user.id,
+        privyWalletId: null,
+        walletKind: "PRIVY_EMBEDDED_MONAD",
+        chainId: "143",
+        address:
+          "0x0000000000000000000000000000000000000001",
+        isPrimary: true,
+        createdAt: "2026-09-27T00:00:00.000Z",
+        updatedAt: "2026-09-27T00:00:00.000Z",
+      })),
       createGoal: async () => goal,
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],

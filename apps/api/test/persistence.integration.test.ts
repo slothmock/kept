@@ -16,8 +16,8 @@ const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test";
 
-const ALLOCATION_WALLET =
-  "0x0000000000000000000000000000000000000001";
+const ALLOCATION_WALLET = "0x0000000000000000000000000000000000000001";
+const COMMITMENT_WALLET = "0x2222222222222222222222222222222222222222";
 
 let connection: DatabaseConnection;
 let service: KeptPersistenceService;
@@ -36,6 +36,19 @@ async function resetEmptyDatabase() {
   } finally {
     await pool.end();
   }
+}
+
+
+async function ensureEmbeddedWallet(
+  userId: string,
+  chainId = 143,
+  address = COMMITMENT_WALLET,
+) {
+  return service.ensureEmbeddedWallet({
+    userId,
+    chainId,
+    address,
+  });
 }
 
 async function createUser(label: string) {
@@ -306,6 +319,8 @@ describe.sequential("commitment persistence and lifecycle", () => {
 
   it("activates through the domain lifecycle and persists the incremented version", async () => {
     const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
+
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
     const active = await service.activateCommitment({
@@ -331,13 +346,15 @@ describe.sequential("commitment persistence and lifecycle", () => {
     expect(wallet.rows).toEqual([{
       user_id: owner.id,
       chain_id: "143",
-      address: "0x2222222222222222222222222222222222222222",
-      wallet_kind: "commitment_signer",
+      address: COMMITMENT_WALLET,
+      wallet_kind: "PRIVY_EMBEDDED_MONAD",
     }]);
   });
 
   it("cancels an active commitment without touching financial state", async () => {
     const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
+
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
     const active = await service.activateCommitment({
@@ -365,7 +382,9 @@ describe.sequential("commitment persistence and lifecycle", () => {
   });
 
   it("activates a draft when chain finalization happened before API activation", async () => {
-    const owner = await createUser("terminal-owner");
+    const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
+
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
 
@@ -519,11 +538,10 @@ describe.sequential("commitment persistence and lifecycle", () => {
   });
 
   it("revalidates a shortened commitment window with the same dev override during activation", async () => {
-    const owner =
-      await createUser("dev-window-activation");
+    const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id, 31337, COMMITMENT_WALLET);
 
-    const goal =
-      await createGoal(owner.id);
+    const goal = await createGoal(owner.id);
 
     const devService =
       new KeptPersistenceService(
@@ -696,6 +714,7 @@ describe.sequential("commitment persistence and lifecycle", () => {
 
   it("rejects retrying an active commitment with a different onchain id", async () => {
     const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
     await service.activateCommitment({
@@ -729,6 +748,7 @@ describe.sequential("commitment persistence and lifecycle", () => {
 
   it("coalesces concurrent activation retries for the same onchain commitment", async () => {
     const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
     const attempts = await Promise.allSettled([
@@ -764,6 +784,7 @@ describe.sequential("commitment persistence and lifecycle", () => {
 
   it("prevents definition identity or parameters from changing after activation", async () => {
     const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
     const other = await createUser("other");
     const goal = await createGoal(owner.id);
     const otherGoal = await createGoal(other.id);
@@ -825,6 +846,7 @@ describe.sequential("idempotent write commands", () => {
 
   it("returns the original activation result when the same command is retried", async () => {
     const owner = await createUser("owner");
+    await ensureEmbeddedWallet(owner.id);
     const goal = await createGoal(owner.id);
     const draft = await createDraft(owner.id, goal.id);
     const idempotencyKey = randomUUID();
@@ -1314,8 +1336,12 @@ describe.sequential("goal archiving", () => {
   });
 
   it("rejects archiving while an active commitment is still persisted as active", async () => {
-    const owner = await createUser(
-      "archive-active",
+    const owner = await createUser("archive-active");
+
+    await ensureEmbeddedWallet(
+      owner.id,
+      143,
+      ALLOCATION_WALLET,
     );
 
     const goal = await createGoal(owner.id);

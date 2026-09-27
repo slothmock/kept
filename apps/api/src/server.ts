@@ -242,6 +242,14 @@ const commitmentVerifier =
       commitmentSettlementGateway,
 
     rewards,
+
+    onDiagnostic: (event, error) => {
+      console.error(
+        "[verifier diagnostic]",
+        event,
+        error,
+      );
+    },
   });
 
 const verificationWorker =
@@ -363,6 +371,7 @@ const app =
           appSecret:
             config.privyAppSecret,
         }),
+      chainId: config.monadChainId,
 
       persistence,
 
