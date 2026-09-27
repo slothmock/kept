@@ -1238,8 +1238,8 @@ describe.sequential("goal archiving", () => {
         {
           chainId: 143n,
           reader: {
-            readShares:
-              async () => 250n,
+            readShares: async () =>
+              250_000_000_000_000n,
 
             convertToAssets:
               async (shares) => shares,
