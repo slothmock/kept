@@ -44,8 +44,8 @@ const config = loadApiConfig();
 
 const commitmentWindowOverrideSeconds =
   config.monadChainId === 31_337 &&
-  process.env.ENABLE_LOCAL_ANVIL === "true" &&
-  process.env.DEV_COMMITMENT_WINDOW_SECONDS
+    process.env.ENABLE_LOCAL_ANVIL === "true" &&
+    process.env.DEV_COMMITMENT_WINDOW_SECONDS
     ? Number(process.env.DEV_COMMITMENT_WINDOW_SECONDS)
     : undefined;
 
@@ -141,27 +141,37 @@ if (
   throw new Error("Local Aave market configuration is invalid");
 }
 
-const savingsMarketStatus = createSavingsMarketStatusReader({
-  publicClient: {
-    getChainId: () => publicClient.getChainId(),
+const savingsMarketStatus =
+  createSavingsMarketStatusReader({
+    publicClient: {
+      getChainId: () =>
+        publicClient.getChainId(),
 
-    readContract: async (request) =>
-      publicClient.readContract(request as never),
-  },
+      readContract: async (request) =>
+        publicClient.readContract(
+          request as never,
+        ),
+    },
 
-  vault: config.keptSavingsVaultAddress,
+    vault:
+      config.keptSavingsVaultAddress,
 
-  chainId: config.monadChainId,
+    chainId:
+      config.monadChainId,
 
-  localAave:
-    config.monadChainId === 31_337
+    ...(config.monadChainId === 31_337
       ? {
-          supplyCapAssets: localSupplyCapUsdc * 1_000_000n,
+        localAave: {
+          supplyCapAssets:
+            localSupplyCapUsdc
+            * 1_000_000n,
 
-          grossApyBps: localGrossApyBps,
-        }
-      : undefined,
-});
+          grossApyBps:
+            localGrossApyBps,
+        },
+      }
+      : {}),
+  });
 
 const weeklySavingsEvidence = new PersistenceWeeklySavingsEvidenceSource({
   repository,

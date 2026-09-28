@@ -3,61 +3,337 @@ import {
     Check,
     Copy,
     ExternalLink,
-    HelpCircle,
     LogOut,
     ShieldCheck,
     UserRound,
     WalletCards,
 } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
+import {
+    Link,
+    useNavigate,
+} from "react-router-dom";
 
-import type { Session } from "@/auth/session";
-import { useKeptEvmWallet } from "@/chain/evm-wallet";
-import { AccountMenu } from "@/components/AccountMenu";
-import { AppShell } from "@/components/AppShell";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { consumerErrorMessage } from "@/lib/consumer-error";
-import { diagnostics } from "@/lib/diagnostics";
+import {
+    createKeptApi,
+    readApiBaseUrl,
+    type SavingsMarketStatusDto,
+} from "@/api/kept-api";
+import type {
+    Session,
+} from "@/auth/session";
+import {
+    useKeptEvmWallet,
+} from "@/chain/evm-wallet";
+import {
+    AccountMenu,
+} from "@/components/AccountMenu";
+import {
+    AppShell,
+} from "@/components/AppShell";
+import {
+    Button,
+} from "@/components/ui/button";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    Skeleton,
+} from "@/components/ui/skeleton";
+import {
+    readSavingsTransparency,
+    type SavingsTransparency,
+} from "@/features/account/savings-transparency";
+import {
+    consumerErrorMessage,
+} from "@/lib/consumer-error";
+import {
+    diagnostics,
+} from "@/lib/diagnostics";
 
-function shortAddress(address: string): string {
+function shortAddress(
+    address: string,
+): string {
     return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-export function AccountPage({ session }: { readonly session: Session }) {
-    const navigate = useNavigate();
-    const wallet = useKeptEvmWallet();
-    const [copied, setCopied] = useState(false);
-    const [signOutPending, setSignOutPending] = useState(false);
-    const [signOutError, setSignOutError] = useState<string | null>(null);
+function formatBps(
+    basisPoints: number,
+): string {
+    return `${(basisPoints / 100).toFixed(2)}%`;
+}
 
-    async function copyAddress(): Promise<void> {
-        if (!wallet.address) {
-            return;
-        }
+function DetailRow({
+    label,
+    value,
+}: {
+    readonly label: string;
+    readonly value: string;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 py-3">
+            <p className="text-sm text-muted-foreground">
+                {label}
+            </p>
 
+            <p className="text-right text-sm font-medium tabular-nums">
+                {value}
+            </p>
+        </div>
+    );
+}
+
+function AccountAddress({
+    address,
+}: {
+    readonly address: string;
+}) {
+    const [
+        copied,
+        setCopied,
+    ] = useState(false);
+
+    async function copyAddress():
+        Promise<void> {
         try {
-            await navigator.clipboard.writeText(wallet.address);
+            await navigator.clipboard.writeText(
+                address,
+            );
+
             setCopied(true);
-            window.setTimeout(() => {
-                setCopied(false);
-            }, 1_500);
+
+            window.setTimeout(
+                () => {
+                    setCopied(false);
+                },
+                1_500,
+            );
         } catch (error) {
-            diagnostics.warn("account.address_copy_failed", error);
+            diagnostics.warn(
+                "account.address_copy_failed",
+                error,
+            );
         }
     }
 
-    async function signOut(): Promise<void> {
+    return (
+        <div className="py-3">
+            <p className="text-sm text-muted-foreground">
+                Account address
+            </p>
+
+            <div className="mt-2 flex items-center justify-between gap-3">
+                <code className="text-sm tabular-nums">
+                    {shortAddress(address)}
+                </code>
+
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                        void copyAddress();
+                    }}
+                >
+                    {copied ? (
+                        <>
+                            <Check className="size-4" />
+                            Copied
+                        </>
+                    ) : (
+                        <>
+                            <Copy className="size-4" />
+                            Copy
+                        </>
+                    )}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+export function AccountPage({
+    session,
+}: {
+    readonly session: Session;
+}) {
+    const navigate =
+        useNavigate();
+
+    const wallet =
+        useKeptEvmWallet();
+
+    const [
+        signOutPending,
+        setSignOutPending,
+    ] = useState(false);
+
+    const [
+        signOutError,
+        setSignOutError,
+    ] = useState<string | null>(
+        null,
+    );
+
+    const [
+        transparency,
+        setTransparency,
+    ] = useState<
+        SavingsTransparency | null
+    >(null);
+
+    const [
+        transparencyLoading,
+        setTransparencyLoading,
+    ] = useState(true);
+
+    const [
+        marketStatus,
+        setMarketStatus,
+    ] = useState<
+        SavingsMarketStatusDto | null
+    >(null);
+
+    const [
+        marketLoading,
+        setMarketLoading,
+    ] = useState(true);
+
+    const apiBaseUrl =
+        useMemo(
+            () =>
+                readApiBaseUrl(
+                    import.meta.env,
+                ),
+            [],
+        );
+
+    const api =
+        useMemo(
+            () =>
+                apiBaseUrl
+                    ? createKeptApi({
+                        baseUrl:
+                            apiBaseUrl,
+
+                        getAccessToken:
+                            session
+                                .getAccessToken,
+                    })
+                    : null,
+            [
+                apiBaseUrl,
+                session.getAccessToken,
+            ],
+        );
+
+    useEffect(() => {
+        let cancelled =
+            false;
+
+        void readSavingsTransparency()
+            .then((result) => {
+                if (!cancelled) {
+                    setTransparency(
+                        result,
+                    );
+                }
+            })
+            .catch((error) => {
+                diagnostics.warn(
+                    "account.transparency_failed",
+                    error,
+                );
+
+                if (!cancelled) {
+                    setTransparency(
+                        null,
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setTransparencyLoading(
+                        false,
+                    );
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled =
+            false;
+
+        if (!api) {
+            setMarketLoading(
+                false,
+            );
+
+            return;
+        }
+
+        void api
+            .getSavingsMarketStatus()
+            .then((status) => {
+                if (!cancelled) {
+                    setMarketStatus(
+                        status,
+                    );
+                }
+            })
+            .catch((error) => {
+                diagnostics.warn(
+                    "account.market_status_failed",
+                    error,
+                );
+
+                if (!cancelled) {
+                    setMarketStatus(
+                        null,
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setMarketLoading(
+                        false,
+                    );
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [api]);
+
+    async function signOut():
+        Promise<void> {
         setSignOutPending(true);
         setSignOutError(null);
 
         try {
             await session.logout();
         } catch (error) {
-            diagnostics.error("auth.sign_out_failed", error);
+            diagnostics.error(
+                "auth.sign_out_failed",
+                error,
+            );
+
             setSignOutError(
-                consumerErrorMessage(error, "We couldn't sign you out. Try again."),
+                consumerErrorMessage(
+                    error,
+                    "We couldn't sign you out. Try again.",
+                ),
             );
         } finally {
             setSignOutPending(false);
@@ -71,238 +347,322 @@ export function AccountPage({ session }: { readonly session: Session }) {
                     onOpenAccount={() => {
                         navigate("/account");
                     }}
-                    onSignOut={async () => {
-                        session.logout();
-                    }}
+                    onSignOut={
+                        session.logout
+                    }
                 />
             }
         >
-            <div className="mx-auto w-full max-w-3xl space-y-8">
-                <div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="-ml-3 gap-2 text-muted-foreground"
-                        onClick={() => {
-                            navigate("/dashboard");
-                        }}
-                    >
-                        <ArrowLeft className="size-4" />
-                        Dashboard
-                    </Button>
-                </div>
+            <div className="mx-auto w-full max-w-5xl space-y-8">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-3 gap-2 text-muted-foreground"
+                    onClick={() => {
+                        navigate(
+                            "/dashboard",
+                        );
+                    }}
+                >
+                    <ArrowLeft className="size-4" />
+                    Dashboard
+                </Button>
 
                 <section>
-                    <div className="flex items-center gap-3">
-                        <div className="grid size-10 place-items-center rounded-full bg-muted">
-                            <UserRound className="size-5" />
-                        </div>
+                    <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                        My Account
+                    </h1>
 
-                        <div>
-                            <h1 className="text-3xl font-semibold tracking-tight">
-                                My Account
-                            </h1>
-
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Manage your account access, privacy, and account details.
-                            </p>
-                        </div>
-                    </div>
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+                        Manage your account and
+                        see the important details
+                        behind your Kept savings.
+                    </p>
                 </section>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <UserRound className="size-4" />
-                            Account
-                        </CardTitle>
-                    </CardHeader>
+                <div className="grid gap-6 md:grid-cols-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <UserRound className="size-4" />
+                                Account
+                            </CardTitle>
+                        </CardHeader>
 
-                    <CardContent className="space-y-5">
-                        <div>
-                            <p className="text-xs text-muted-foreground">
-                                Email
-                            </p>
+                        <CardContent className="divide-y">
+                            <DetailRow
+                                label="Email"
+                                value={
+                                    session.email
+                                    ?? "Unavailable"
+                                }
+                            />
 
-                            <p className="mt-1 text-sm font-medium">
-                                {session.email ?? "Unavailable"}
-                            </p>
-                        </div>
+                            <DetailRow
+                                label="Sign-in method"
+                                value="Email"
+                            />
 
-                        <div>
-                            <p className="text-xs text-muted-foreground">
-                                Sign-in method
-                            </p>
-
-                            <p className="mt-1 text-sm font-medium">
-                                Email
-                            </p>
-                        </div>
-
-                        <div className="flex items-center justify-between border-t pt-4">
-                            <div>
-                                <p className="text-sm font-medium">
-                                    Sign out
-                                </p>
-
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    End your current Kept session.
-                                </p>
-                            </div>
-
-                            <Button
-                                variant="outline"
-                                disabled={signOutPending}
-                                onClick={() => {
-                                    void signOut();
-                                }}
-                            >
-                                <LogOut className="size-4" />
-                                {signOutPending
-                                    ? "Signing out…"
-                                    : "Sign out"}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <ShieldCheck className="size-4" />
-                            Privacy & information
-                        </CardTitle>
-                    </CardHeader>
-
-                    <CardContent className="divide-y p-0">
-                        <Button
-                            asChild
-                            variant="ghost"
-                            className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
-                        >
-                            <Link to="/privacy">
-                                <div className="text-left">
-                                    <p className="text-sm font-medium">Privacy policy</p>
+                            <div className="flex items-center justify-between gap-4 py-4">
+                                <div>
+                                    <p className="text-sm font-medium">
+                                        Sign out
+                                    </p>
 
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        How Kept handles your information.
+                                        End your current
+                                        Kept session.
                                     </p>
                                 </div>
-
-                                <ExternalLink className="size-4 text-muted-foreground" />
-                            </Link>
-                        </Button>
-
-                        <Button
-                            asChild
-                            variant="ghost"
-                            className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
-                        >
-                            <Link to="/terms">
-                                <div className="text-left">
-                                    <p className="text-sm font-medium">Terms of service</p>
-
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        The terms that apply when using Kept.
-                                    </p>
-                                </div>
-
-                                <ExternalLink className="size-4 text-muted-foreground" />
-                            </Link>
-                        </Button>
-
-                        <Button
-                            asChild
-                            variant="ghost"
-                            className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
-                        >
-                            <Link to="/verification">
-                                <div className="text-left">
-                                    <p className="text-sm font-medium">Verification</p>
-
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        How Kept verifies commitments.
-                                    </p>
-                                </div>
-
-                                <ExternalLink className="size-4 text-muted-foreground" />
-                            </Link>
-                        </Button>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <HelpCircle className="size-4" />
-                            Help & support
-                        </CardTitle>
-                    </CardHeader>
-
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                            Need help with your account or using Kept?
-                        </p>
-
-                        <Button variant="outline" className="mt-4" disabled>
-                            Contact support
-                        </Button>
-
-                        <p className="mt-2 text-xs text-muted-foreground">
-                            Support contact will be available before launch.
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <WalletCards className="size-4" />
-                            Advanced
-                        </CardTitle>
-                    </CardHeader>
-
-                    <CardContent>
-                        <div className="rounded-lg border bg-muted/20 p-4">
-                            <p className="text-sm font-medium">Kept account address</p>
-
-                            <p className="mt-1 max-w-lg text-sm text-muted-foreground">
-                                Kept uses this account behind the scenes to manage your savings.
-                                You normally won't need to use it.
-                            </p>
-
-                            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <code className="break-all text-sm tabular-nums text-muted-foreground">
-                                    {wallet.address
-                                        ? shortAddress(wallet.address)
-                                        : "Account not ready"}
-                                </code>
 
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    disabled={!wallet.address}
+                                    disabled={
+                                        signOutPending
+                                    }
                                     onClick={() => {
-                                        void copyAddress();
+                                        void signOut();
                                     }}
-                                    className="shrink-0"
                                 >
-                                    {copied ? (
-                                        <>
-                                            <Check className="size-4" />
-                                            Copied
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Copy className="size-4" />
-                                            Copy
-                                        </>
-                                    )}
+                                    <LogOut className="size-4" />
+
+                                    {signOutPending
+                                        ? "Signing out…"
+                                        : "Sign out"}
                                 </Button>
                             </div>
-                        </div>
-                    </CardContent>
-                </Card>
+
+                            {signOutError ? (
+                                <p
+                                    className="py-3 text-sm text-destructive"
+                                    role="alert"
+                                >
+                                    {signOutError}
+                                </p>
+                            ) : null}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <WalletCards className="size-4" />
+                                Kept account
+                            </CardTitle>
+                        </CardHeader>
+
+                        <CardContent className="divide-y">
+                            {wallet.address ? (
+                                <AccountAddress
+                                    address={
+                                        wallet.address
+                                    }
+                                />
+                            ) : (
+                                <DetailRow
+                                    label="Account address"
+                                    value="Account not ready"
+                                />
+                            )}
+
+                            {transparencyLoading ? (
+                                <div className="space-y-3 py-4">
+                                    <Skeleton className="h-5 w-full" />
+                                    <Skeleton className="h-5 w-full" />
+                                </div>
+                            ) : transparency ? (
+                                <>
+                                    <DetailRow
+                                        label="Network"
+                                        value={
+                                            transparency
+                                                .networkName
+                                        }
+                                    />
+
+                                    <DetailRow
+                                        label="Savings asset"
+                                        value={
+                                            transparency
+                                                .savingsAsset
+                                        }
+                                    />
+                                </>
+                            ) : (
+                                <p className="py-4 text-sm text-muted-foreground">
+                                    Account details are
+                                    currently unavailable.
+                                </p>
+                            )}
+
+                            <p className="py-4 text-xs leading-5 text-muted-foreground">
+                                Kept manages this
+                                account behind the
+                                scenes during normal
+                                use.
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">
+                                Savings details
+                            </CardTitle>
+                        </CardHeader>
+
+                        <CardContent className="divide-y">
+                            <DetailRow
+                                label="Yield source"
+                                value="Aave"
+                            />
+
+                            {transparencyLoading ? (
+                                <div className="space-y-3 py-4">
+                                    <Skeleton className="h-5 w-full" />
+                                    <Skeleton className="h-5 w-full" />
+                                </div>
+                            ) : transparency ? (
+                                <>
+                                    <DetailRow
+                                        label="Deposit fee"
+                                        value={
+                                            transparency.depositFeeBps !== null
+                                                ? formatBps(
+                                                    transparency.depositFeeBps,
+                                                )
+                                                : "Unavailable"
+                                        }
+                                    />
+
+                                    <DetailRow
+                                        label="Performance fee"
+                                        value={
+                                            transparency.performanceFeeBps !== null
+                                                ? `${formatBps(
+                                                    transparency.performanceFeeBps,
+                                                )} of earnings`
+                                                : "Unavailable"
+                                        }
+                                    />
+                                </>
+                            ) : null}
+
+                            {marketLoading ? (
+                                <div className="py-4">
+                                    <Skeleton className="h-5 w-full" />
+                                </div>
+                            ) : marketStatus ? (
+                                <DetailRow
+                                    label="Current APY"
+                                    value={`${(
+                                        Number(
+                                            marketStatus
+                                                .netApyBps,
+                                        )
+                                        / 100
+                                    ).toFixed(2)}%`}
+                                />
+                            ) : (
+                                <DetailRow
+                                    label="Current APY"
+                                    value="Unavailable"
+                                />
+                            )}
+
+                            <div className="py-4">
+                                <p className="text-xs leading-5 text-muted-foreground">
+                                    Yield is variable.
+                                    Current APY is shown
+                                    after Kept's
+                                    performance fee.
+                                    More technical
+                                    information about
+                                    contracts, liquidity,
+                                    custody and protocol
+                                    risk will be available
+                                    in Kept Docs.
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <ShieldCheck className="size-4" />
+                                Privacy & information
+                            </CardTitle>
+                        </CardHeader>
+
+                        <CardContent className="divide-y p-0">
+                            <Button
+                                asChild
+                                variant="ghost"
+                                className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
+                            >
+                                <Link to="/privacy">
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium">
+                                            Privacy policy
+                                        </p>
+
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            How Kept handles
+                                            your information.
+                                        </p>
+                                    </div>
+
+                                    <ExternalLink className="size-4 text-muted-foreground" />
+                                </Link>
+                            </Button>
+
+                            <Button
+                                asChild
+                                variant="ghost"
+                                className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
+                            >
+                                <Link to="/terms">
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium">
+                                            Terms of service
+                                        </p>
+
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            The terms that
+                                            apply when using
+                                            Kept.
+                                        </p>
+                                    </div>
+
+                                    <ExternalLink className="size-4 text-muted-foreground" />
+                                </Link>
+                            </Button>
+
+                            <Button
+                                asChild
+                                variant="ghost"
+                                className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
+                            >
+                                <Link to="/verification">
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium">
+                                            Verification
+                                        </p>
+
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            How commitments
+                                            are verified.
+                                        </p>
+                                    </div>
+
+                                    <ExternalLink className="size-4 text-muted-foreground" />
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </AppShell>
     );
