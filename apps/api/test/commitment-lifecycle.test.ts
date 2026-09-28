@@ -32,6 +32,7 @@ function commitmentInState(state: CommitmentState) {
     COMPLETED: ["ACTIVE", "COMPLETED"],
     FAILED: ["ACTIVE", "FAILED"],
     CANCELLED: ["CANCELLED"],
+    ARCHIVED: ["ARCHIVED"]
   };
   let commitment = createCommitment({
     id: "commitment-1",

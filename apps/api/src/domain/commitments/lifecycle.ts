@@ -11,12 +11,23 @@ import type {
 } from "./types.js";
 
 const ALLOWED_TRANSITIONS = {
-  DRAFT: ["ACTIVE", "CANCELLED"],
-  ACTIVE: ["COMPLETED", "FAILED", "CANCELLED"],
+  DRAFT: [
+    "ACTIVE",
+    "CANCELLED",
+  ],
+  ACTIVE: [
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+  ],
   COMPLETED: [],
   FAILED: [],
   CANCELLED: [],
-} as const satisfies Record<CommitmentState, readonly CommitmentState[]>;
+  ARCHIVED: [],
+} as const satisfies Record<
+  CommitmentState,
+  readonly CommitmentState[]
+>;
 
 function cloneAndFreeze<T>(value: T): Readonly<T> {
   const clone = structuredClone(value);

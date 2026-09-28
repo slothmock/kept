@@ -33,10 +33,13 @@ function createAllocationService() {
   return new KeptPersistenceService(connection.db, {
     chainId: 143n,
     reader: {
-      readShares: async (address: string) => {
-        expect(address).toBe(WALLET_ADDRESS);
-        return vaultShares;
-      },
+      readShares: async () =>
+        vaultShares,
+
+      convertToAssets: async (
+        shares: bigint,
+      ) =>
+        shares,
     },
   });
 }

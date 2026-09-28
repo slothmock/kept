@@ -159,6 +159,48 @@ function buildDependencies(
         status: 4,
       }),
     },
+    savingsMarketStatus: {
+      readStatus:
+        async () => ({
+          suppliedAssetsAtomic:
+            "0",
+
+          supplyCapAssetsAtomic:
+            null,
+
+          availableToDepositAtomic:
+            null,
+
+          availableToWithdrawAtomic:
+            "0",
+
+          grossApyBps:
+            "0",
+
+          netApyBps:
+            "0",
+        }),
+    },
+    savingsPerformance: {
+      readPerformance:
+        async () => ({
+          depositedAssetsAtomic:
+            "0",
+
+          withdrawnAssetsAtomic:
+            "0",
+
+          netContributionsAtomic:
+            "0",
+
+          currentAssetsAtomic:
+            "0",
+
+          earningsAssetsAtomic:
+            "0",
+        }),
+    },
+
     ...overrides,
   };
 }
