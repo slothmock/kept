@@ -279,11 +279,10 @@ const app = buildApp(
   {
     authenticate: createPrivyAuthenticator({
       appId: config.privyAppId,
-
       verificationKey: config.privyJwtVerificationKey,
-
       appSecret: config.privyAppSecret,
     }),
+
     chainId: config.monadChainId,
 
     persistence,
@@ -292,12 +291,22 @@ const app = buildApp(
 
     savingsMarketStatus,
 
-    commitmentSettlementVerifier: settlementVerifier,
+    commitmentSettlementVerifier:
+      settlementVerifier,
   },
   {
     enableLogging: true,
 
-    webOrigin: config.webOrigin,
+    webOrigin:
+      config.webOrigin,
+
+    auroraIntents: {
+      baseUrl:
+        config.auroraIntentsBaseUrl,
+
+      apiKey:
+        config.auroraIntentsApiKey,
+    },
   },
 );
 

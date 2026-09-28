@@ -69,8 +69,12 @@ export interface ApiDependencies {
 
 export interface BuildAppOptions {
   readonly enableLogging?: boolean;
-
   readonly webOrigin?: string;
+
+  readonly auroraIntents?: {
+    readonly baseUrl: string;
+    readonly apiKey: string;
+  };
 }
 
 function allowedWebOrigins(webOrigin: string): string[] {
@@ -279,9 +283,9 @@ export function buildApp(
   app.setErrorHandler((error, request, reply) => {
     const statusCode =
       error !== null &&
-      typeof error === "object" &&
-      "statusCode" in error &&
-      typeof error.statusCode === "number"
+        typeof error === "object" &&
+        "statusCode" in error &&
+        typeof error.statusCode === "number"
         ? error.statusCode
         : 500;
 
@@ -326,7 +330,14 @@ export function buildApp(
   app.get("/health", async () => ({ status: "ok" }));
 
   app.addHook("onRequest", async (request, reply) => {
-    if (request.routeOptions.url === "/health") return;
+    if (
+      request.url === "/health" ||
+      request.url.startsWith(
+        "/api/intents-connect",
+      )
+    ) {
+      return;
+    }
 
     const identity = await dependencies.authenticate(
       request.headers.authorization,
@@ -378,6 +389,123 @@ export function buildApp(
       return reply;
     }
   });
+
+  app.all(
+    "/api/intents-connect/*",
+    async (request, reply) => {
+      const config =
+        options.auroraIntents;
+
+      if (!config) {
+        return reply
+          .code(503)
+          .send({
+            error: {
+              code:
+                "SERVICE_UNAVAILABLE",
+            },
+          });
+      }
+
+      const suffix =
+        request.url.replace(
+          /^\/api\/intents-connect/,
+          "",
+        );
+
+      const upstreamUrl =
+        new URL(
+          suffix,
+          config.baseUrl,
+        );
+
+      try {
+        const headers =
+          new Headers();
+
+        headers.set(
+          "x-api-key",
+          config.apiKey,
+        );
+
+        const contentType =
+          request.headers[
+          "content-type"
+          ];
+
+        if (
+          typeof contentType ===
+          "string"
+        ) {
+          headers.set(
+            "content-type",
+            contentType,
+          );
+        }
+
+        const init: RequestInit = {
+          method:
+            request.method,
+
+          headers,
+        };
+
+        if (
+          request.method !== "GET" &&
+          request.method !== "HEAD" &&
+          request.body !== undefined
+        ) {
+          init.body =
+            JSON.stringify(
+              request.body,
+            );
+        }
+
+        const upstream =
+          await fetch(
+            upstreamUrl,
+            init,
+          );
+
+        const responseBody =
+          await upstream.text();
+
+        const responseType =
+          upstream.headers.get(
+            "content-type",
+          );
+
+        if (responseType) {
+          reply.header(
+            "content-type",
+            responseType,
+          );
+        }
+
+        return reply
+          .code(
+            upstream.status,
+          )
+          .send(
+            responseBody,
+          );
+      } catch (error) {
+        request.log.error(
+          error,
+          "Aurora Intents proxy failed",
+        );
+
+        return reply
+          .code(502)
+          .send({
+            error: {
+              code:
+                "UPSTREAM_ERROR",
+            },
+          });
+      }
+    },
+  );
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 

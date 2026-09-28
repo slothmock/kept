@@ -13,6 +13,8 @@ export interface ApiConfig {
   readonly commitmentVerifierPrivateKey: `0x${string}`;
   readonly keptSavingsVaultAddress: Address;
   readonly commitmentWindowOverrideSeconds?: number | undefined;
+  readonly auroraIntentsBaseUrl: string;
+  readonly auroraIntentsApiKey: string;
 }
 
 function parseCommitmentWindowOverride(
@@ -188,6 +190,18 @@ export function loadApiConfig(
       monadChainId,
     );
 
+  const auroraIntentsBaseUrl =
+    requireHttpUrl(
+      environment,
+      "AURORA_INTENTS_BASE_URL",
+    );
+
+  const auroraIntentsApiKey =
+    requireValue(
+      environment,
+      "AURORA_INTENTS_API_KEY",
+    );
+
   return {
     databaseUrl,
     privyAppId,
@@ -201,5 +215,7 @@ export function loadApiConfig(
     commitmentVerifierPrivateKey,
     keptSavingsVaultAddress,
     commitmentWindowOverrideSeconds,
+    auroraIntentsBaseUrl,
+    auroraIntentsApiKey,
   };
 }

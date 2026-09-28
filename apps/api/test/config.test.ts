@@ -12,6 +12,8 @@ const requiredEnvironment = {
   COMMITMENT_MANAGER_ADDRESS: "0x0000000000000000000000000000000000000001",
   COMMITMENT_VERIFIER_PRIVATE_KEY: `0x${"11".repeat(32)}`,
   KEPT_SAVINGS_VAULT_ADDRESS: "0x0000000000000000000000000000000000000002",
+  AURORA_INTENTS_BASE_URL: "https://intents-connect-alpha-api.aurora.dev",
+  AURORA_INTENTS_API_KEY: "test-aurora-key",
 } satisfies NodeJS.ProcessEnv;
 
 describe("API configuration", () => {
@@ -23,17 +25,44 @@ describe("API configuration", () => {
         WEB_ORIGIN: "https://app.kept.example",
       }),
     ).toEqual({
-      databaseUrl: requiredEnvironment.DATABASE_URL,
-      privyAppId: "privy-app-id",
-      privyJwtVerificationKey: "public-verification-key",
-      privyAppSecret: "privy-app-secret",
-      port: 3100,
-      webOrigin: "https://app.kept.example",
-      monadRpcUrl: "https://rpc.monad.example/",
-      monadChainId: 143,
-      commitmentManagerAddress: "0x0000000000000000000000000000000000000001",
-      commitmentVerifierPrivateKey: "0x1111111111111111111111111111111111111111111111111111111111111111",
-      keptSavingsVaultAddress: "0x0000000000000000000000000000000000000002",
+      databaseUrl:
+        requiredEnvironment.DATABASE_URL,
+
+      privyAppId:
+        "privy-app-id",
+
+      privyJwtVerificationKey:
+        "public-verification-key",
+
+      privyAppSecret:
+        "privy-app-secret",
+
+      port:
+        3100,
+
+      webOrigin:
+        "https://app.kept.example",
+
+      monadRpcUrl:
+        "https://rpc.monad.example/",
+
+      monadChainId:
+        143,
+
+      commitmentManagerAddress:
+        "0x0000000000000000000000000000000000000001",
+
+      commitmentVerifierPrivateKey:
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+
+      keptSavingsVaultAddress:
+        "0x0000000000000000000000000000000000000002",
+
+      auroraIntentsBaseUrl:
+        "https://intents-connect-alpha-api.aurora.dev/",
+
+      auroraIntentsApiKey:
+        "test-aurora-key",
     });
   });
 
