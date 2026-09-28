@@ -10,12 +10,16 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import { Skeleton } from "@/components/ui/skeleton";
 
+import type { ProductDataState } from "@/features/dashboard/product-data-state";
+
 import {
   CreateCommitmentDialog,
   type CreateCommitmentInput,
 } from "@/features/commitments/CreateCommitmentDialog";
 
-import type { ProductDataState } from "@/features/dashboard/product-data-state";
+import {
+  AddFundsDialog,
+} from "@/features/funding/AddFundsDialog";
 
 import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
 
@@ -93,20 +97,20 @@ interface DashboardPageProps {
   } | null;
 
   readonly savingsPerformanceState:
-    | {
-        readonly kind: "unavailable";
-      }
-    | {
-        readonly kind: "loading";
-      }
-    | {
-        readonly kind: "ready";
+  | {
+    readonly kind: "unavailable";
+  }
+  | {
+    readonly kind: "loading";
+  }
+  | {
+    readonly kind: "ready";
 
-        readonly earningsAssets: bigint;
-      }
-    | {
-        readonly kind: "error";
-      };
+    readonly earningsAssets: bigint;
+  }
+  | {
+    readonly kind: "error";
+  };
 
   readonly savingsMarketStatusState: SavingsMarketStatusState;
 
@@ -297,6 +301,8 @@ export function DashboardPage(props: DashboardPageProps) {
     onDismissAllocation,
   } = props;
 
+  const [addFundsOpen, setAddFundsOpen] = useState(false);
+
   const [depositOpen, setDepositOpen] = useState(false);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -319,8 +325,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const detailCommitments = detailGoal
     ? commitments.filter(
-        (commitment) => commitment.savingsGoalId === detailGoal.id,
-      )
+      (commitment) => commitment.savingsGoalId === detailGoal.id,
+    )
     : [];
 
   const commitmentForDialog = commitmentGoal
@@ -360,7 +366,9 @@ export function DashboardPage(props: DashboardPageProps) {
 
         transactionPending={pendingTransaction !== null}
 
-        onAddMoney={() => setDepositOpen(true)}
+        onAddMoney={() => {
+          setAddFundsOpen(true);
+        }}
 
         onWithdraw={() => setWithdrawOpen(true)}
 
@@ -523,6 +531,18 @@ export function DashboardPage(props: DashboardPageProps) {
         )}
       </section>
 
+      <AddFundsDialog
+        open={addFundsOpen}
+        walletAddress={walletAddress}
+        onOpenChange={
+          setAddFundsOpen
+        }
+        onUseAvailableCash={() => {
+          setAddFundsOpen(false);
+          setDepositOpen(true);
+        }}
+      />
+
       <DepositDialog
         open={depositOpen}
 
@@ -599,7 +619,7 @@ export function DashboardPage(props: DashboardPageProps) {
         allocatedAssets={
           savingsGoal && goalFundingState.kind === "ready"
             ? (goalFundingState.funding.byGoal.get(savingsGoal.id)
-                ?.allocatedAssets ?? 0n)
+              ?.allocatedAssets ?? 0n)
             : null
         }
 

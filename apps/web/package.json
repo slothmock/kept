@@ -12,7 +12,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@privy-io/react-auth": "^3.6.1",
+    "@aurora-is-near/intents-connect": "^7.24.1",
+    "@aurora-is-near/intents-connect-wallet": "^7.24.1",
+    "@privy-io/react-auth": "^3.45.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@radix-ui/react-progress": "^1.1.16",

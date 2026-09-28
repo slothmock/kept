@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { useWallets } from "@privy-io/react-auth";
+import {
+  useWallets,
+  type EIP1193Provider,
+} from "@privy-io/react-auth";
 
 import { diagnostics } from "../lib/diagnostics.js";
 import { parseEvmChainId, parseProviderChainId } from "./network-readiness.js";
 
-interface EthereumProvider {
-  request(input: { readonly method: "eth_chainId" }): Promise<unknown>;
-  on?(event: "chainChanged", listener: (chainId: unknown) => void): void;
-  removeListener?(event: "chainChanged", listener: (chainId: unknown) => void): void;
-}
+export type EthereumProvider = EIP1193Provider;
 
 interface WalletCandidate {
   readonly address: string;
@@ -23,7 +22,12 @@ export interface KeptEvmWallet {
   readonly address: string | null;
   readonly chainId: number | null;
   readonly liveChainId: number | null;
-  readonly getCurrentChainId: () => Promise<number | null>;
+
+  readonly getCurrentChainId:
+  () => Promise<number | null>;
+
+  readonly getProvider:
+  () => Promise<EthereumProvider | null>;
 }
 
 export function observeProviderChainId(
@@ -33,24 +37,58 @@ export function observeProviderChainId(
 ): () => void {
   let active = true;
   let receivedChainChanged = false;
+
   const handleChainChanged = (chainId: unknown) => {
     receivedChainChanged = true;
-    if (active) onChainId(parseProviderChainId(chainId));
+
+    if (active) {
+      onChainId(
+        parseProviderChainId(
+          chainId,
+        ),
+      );
+    }
   };
 
-  provider.on?.("chainChanged", handleChainChanged);
-  void provider.request({ method: "eth_chainId" })
+  provider.on?.(
+    "chainChanged",
+    handleChainChanged,
+  );
+
+  void provider
+    .request({
+      method: "eth_chainId",
+    })
     .then((chainId) => {
-      if (active && !receivedChainChanged) onChainId(parseProviderChainId(chainId));
+      if (
+        active &&
+        !receivedChainChanged
+      ) {
+        onChainId(
+          parseProviderChainId(
+            chainId,
+          ),
+        );
+      }
     })
     .catch((error) => {
       onError(error);
-      if (active && !receivedChainChanged) onChainId(null);
+
+      if (
+        active &&
+        !receivedChainChanged
+      ) {
+        onChainId(null);
+      }
     });
 
   return () => {
     active = false;
-    provider.removeListener?.("chainChanged", handleChainChanged);
+
+    provider.removeListener?.(
+      "chainChanged",
+      handleChainChanged,
+    );
   };
 }
 
@@ -63,12 +101,34 @@ export function selectKeptEvmWallet<T extends WalletCandidate>(
 }
 
 export function useKeptEvmWallet(): KeptEvmWallet {
+
   const { ready, wallets } = useWallets();
   const wallet = selectKeptEvmWallet(wallets);
   const [observedChain, setObservedChain] = useState<{
     readonly wallet: WalletCandidate;
     readonly chainId: number | null;
   } | null>(null);
+
+  const getProvider =
+    useCallback(async () => {
+      if (
+        !wallet?.getEthereumProvider
+      ) {
+        return null;
+      }
+
+      try {
+        return await wallet
+          .getEthereumProvider();
+      } catch (error) {
+        diagnostics.error(
+          "wallet.provider_unavailable",
+          error,
+        );
+
+        return null;
+      }
+    }, [wallet]);
 
   useEffect(() => {
     if (!wallet?.getEthereumProvider) return;
@@ -107,9 +167,20 @@ export function useKeptEvmWallet(): KeptEvmWallet {
 
   return {
     isReady: ready,
-    address: wallet?.address ?? null,
-    chainId: parseEvmChainId(wallet?.chainId),
-    liveChainId: observedChain?.wallet === wallet ? observedChain.chainId : null,
+    address:
+      wallet?.address ?? null,
+
+    chainId:
+      parseEvmChainId(
+        wallet?.chainId,
+      ),
+
+    liveChainId:
+      observedChain?.wallet === wallet
+        ? observedChain.chainId
+        : null,
+
     getCurrentChainId,
+    getProvider,
   };
 }
