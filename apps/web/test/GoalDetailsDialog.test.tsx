@@ -43,7 +43,7 @@ const completedCommitment: CommitmentDto = {
   savingsGoalId: goal.id,
   definition: {
     code: "WEEKLY_SAVINGS_V1",
-    version: 1
+    version: 1,
   },
   parameters: {
     targetAmountAtomic: "50000000",
@@ -89,7 +89,12 @@ function renderDialog(
     claimingRewardId: null,
     rewardClaimError: null,
     onClaimReward: vi.fn(),
+
     ...overrides,
+
+    onAddToSavings:
+      overrides.onAddToSavings ??
+      vi.fn(),
   };
 
   const rendered = render(
@@ -122,13 +127,13 @@ describe("GoalDetailsDialog", () => {
 
     expect(
       screen.getByText(
-        /Your savings remain in Kept/,
+        /Your money stays in Kept/,
       ),
     ).toBeTruthy();
 
     expect(
       screen.getByText(
-        /Any commitments connected to this goal will also be cancelled/,
+        /Connected commitments will also be cancelled/,
       ),
     ).toBeTruthy();
   });
@@ -144,7 +149,7 @@ describe("GoalDetailsDialog", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Cancel",
+        name: "Keep goal",
       }),
     );
 
@@ -254,9 +259,9 @@ describe("GoalDetailsDialog", () => {
       }),
     );
 
-    const cancelButton =
+    const keepGoalButton =
       screen.getByRole("button", {
-        name: "Cancel",
+        name: "Keep goal",
       });
 
     const deleteButton =
@@ -266,7 +271,7 @@ describe("GoalDetailsDialog", () => {
 
     expect(
       (
-        cancelButton as HTMLButtonElement
+        keepGoalButton as HTMLButtonElement
       ).disabled,
     ).toBe(true);
 
@@ -302,7 +307,13 @@ describe("GoalDetailsDialog", () => {
 
     expect(
       screen.getByText(
-        "5.00 USDC reward available",
+        "5.00 USDC reward",
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText(
+        "Your commitment has been verified.",
       ),
     ).toBeTruthy();
 
@@ -332,7 +343,13 @@ describe("GoalDetailsDialog", () => {
 
     expect(
       screen.getByText(
-        "5.00 USDC reward claimed",
+        "Reward claimed",
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText(
+        "5.00 USDC was added to your available cash.",
       ),
     ).toBeTruthy();
 
@@ -341,6 +358,12 @@ describe("GoalDetailsDialog", () => {
         name: "Claim reward",
       }),
     ).toBeNull();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Add to savings",
+      }),
+    ).toBeTruthy();
   });
 
   it("claims an available reward", () => {
@@ -371,7 +394,9 @@ describe("GoalDetailsDialog", () => {
       }),
     );
 
-    expect(onClaimReward).toHaveBeenCalledWith(
+    expect(
+      onClaimReward,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         id: completedCommitment.id,
       }),
