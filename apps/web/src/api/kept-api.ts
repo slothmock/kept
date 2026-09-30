@@ -119,6 +119,15 @@ export interface RecordTransactionInput {
   readonly externalReference?: string | null;
 }
 
+export interface MoonPayOfframpSessionDto {
+  readonly withdrawalId: string;
+  readonly widgetUrl: string;
+}
+
+export interface MoonPayOfframpUrlDto {
+  readonly url: string;
+}
+
 export interface KeptApi {
   getSavingsPerformance(): Promise<SavingsPerformanceDto>;
   getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
@@ -127,6 +136,10 @@ export interface KeptApi {
     input: RecordTransactionInput,
     idempotencyKey?: string,
   ): Promise<TransactionDto>;
+  readonly createMoonPayOfframpUrl:
+  (amount: string,
+  ) =>
+    Promise<MoonPayOfframpUrlDto>;
   listGoals(): Promise<readonly GoalDto[]>;
   createGoal(input: {
     readonly name: string;
@@ -396,6 +409,16 @@ export function createKeptApi(input: {
         requestIdempotencyKey,
       ),
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
+    createMoonPayOfframpUrl:
+      (
+        amount,
+      ) =>
+        post<MoonPayOfframpUrlDto>(
+          "/v1/moonpay/offramp-url",
+          {
+            amount,
+          },
+        ),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
     archiveGoal: (
       goalId,
