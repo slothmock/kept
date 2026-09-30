@@ -1,6 +1,5 @@
-import { Buffer } from "buffer";
-
 import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { MoonPayProvider } from "@moonpay/moonpay-react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -39,8 +38,6 @@ window.addEventListener(
     );
   },
 );
-
-globalThis.Buffer = Buffer;
 
 const privyAppId =
   import.meta.env
@@ -105,8 +102,17 @@ if (!privyAppId) {
 
         supportedChains,
 
-        defaultChain:
-          keptChain,
+        defaultChain,
+
+        appearance: {
+          walletChainType: "ethereum-and-solana",
+        },
+
+        externalWallets: {
+          solana: {
+            connectors: solanaWalletConnectors,
+          },
+        },
 
         embeddedWallets: {
           ethereum: {
