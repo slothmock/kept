@@ -7,7 +7,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { createPublicClient, getAddress, http, isAddress } from "viem";
+import {
+  createPublicClient,
+  getAddress,
+  http,
+  isAddress,
+  encodeFunctionData,
+  erc20Abi,
+} from "viem";
 import {
   createKeptApi,
   readApiBaseUrl,
@@ -108,6 +115,21 @@ import {
   buildVaultWithdrawTransaction,
 } from "@/vault/transactions";
 
+import {
+  resolveKeptFundingAssets,
+  type FundingAsset,
+} from "@/features/funding/intents/supported-tokens";
+
+import {
+  createKeptIntentsRunner,
+} from "@/features/funding/intents/runner";
+
+import {
+  previewCryptoWithdrawal,
+} from "@/features/withdrawal/preview-crypto-withdrawal";
+import { executeCryptoWithdrawal } from "./features/withdrawal/execute-withdrawal";
+
+
 function fundingRefreshError(
   current: GoalFundingState,
   message: string,
@@ -135,6 +157,220 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [withdrawStatus, setWithdrawStatus] = useState<string | null>(null);
 
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+
+
+  const [
+    cryptoWithdrawAmount,
+    setCryptoWithdrawAmount,
+  ] = useState("");
+
+  const [
+    cryptoRecipient,
+    setCryptoRecipient,
+  ] = useState("");
+
+  const [
+    cryptoDestinationAssets,
+    setCryptoDestinationAssets,
+  ] = useState<
+    readonly FundingAsset[]
+  >([]);
+
+  const [
+    cryptoDestinationAssetId,
+    setCryptoDestinationAssetId,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    cryptoPreviewing,
+    setCryptoPreviewing,
+  ] = useState(false);
+
+  const [
+    cryptoPreviewReady,
+    setCryptoPreviewReady,
+  ] = useState(false);
+
+  const [
+    cryptoPreviewStatus,
+    setCryptoPreviewStatus,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    cryptoPreviewError,
+    setCryptoPreviewError,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    cryptoExecuting,
+    setCryptoExecuting,
+  ] = useState(false);
+
+  const [
+    cryptoExecutionStatus,
+    setCryptoExecutionStatus,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    cryptoExecutionError,
+    setCryptoExecutionError,
+  ] = useState<
+    string | null
+  >(null);
+
+  useEffect(
+    () => {
+      let cancelled =
+        false;
+
+      void (
+        async () => {
+          try {
+            const {
+              origins,
+              destination,
+            } =
+              await resolveKeptFundingAssets();
+
+            const assets =
+              [
+                destination,
+                ...origins,
+              ].filter(
+                (
+                  asset,
+                  index,
+                  all,
+                ) =>
+                  all.findIndex(
+                    (
+                      candidate,
+                    ) =>
+                      candidate.assetId ===
+                      asset.assetId,
+                  ) ===
+                  index,
+              );
+
+            setCryptoDestinationAssets(
+              assets,
+            );
+
+            setCryptoDestinationAssetId(
+              (
+                current,
+              ) =>
+                current ??
+                destination.assetId,
+            );
+          } catch (
+          error
+          ) {
+            diagnostics.error(
+              "withdrawal.assets_load_failed",
+              error,
+            );
+
+            if (
+              !cancelled
+            ) {
+              setCryptoPreviewError(
+                "Withdrawal routes are currently unavailable.",
+              );
+            }
+          }
+        }
+      )();
+
+      return () => {
+        cancelled =
+          true;
+      };
+    },
+    [],
+  );
+
+  const invalidateCryptoPreview =
+    useCallback(
+      () => {
+        setCryptoPreviewReady(
+          false,
+        );
+
+        setCryptoPreviewStatus(
+          null,
+        );
+
+        setCryptoPreviewError(
+          null,
+        );
+
+        setCryptoExecutionStatus(
+          null,
+        );
+
+        setCryptoExecutionError(
+          null,
+        );
+      },
+      [],
+    );
+
+  const handleCryptoWithdrawAmountChange =
+    useCallback(
+      (
+        value: string,
+      ) => {
+        setCryptoWithdrawAmount(
+          value,
+        );
+
+        invalidateCryptoPreview();
+      },
+      [
+        invalidateCryptoPreview,
+      ],
+    );
+
+  const handleCryptoRecipientChange =
+    useCallback(
+      (
+        value: string,
+      ) => {
+        setCryptoRecipient(
+          value,
+        );
+
+        invalidateCryptoPreview();
+      },
+      [
+        invalidateCryptoPreview,
+      ],
+    );
+
+  const handleCryptoDestinationAssetChange =
+    useCallback(
+      (
+        assetId: string,
+      ) => {
+        setCryptoDestinationAssetId(
+          assetId,
+        );
+
+        invalidateCryptoPreview();
+      },
+      [
+        invalidateCryptoPreview,
+      ],
+    );
 
   const [storedPositionState, setStoredPositionState] =
     useState<BoundPositionState>({ kind: "unavailable" });
@@ -192,6 +428,30 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     () => null,
   );
 
+  const [
+    bankWithdrawAmount,
+    setBankWithdrawAmount,
+  ] = useState("");
+
+  const [
+    bankWithdrawSubmitting,
+    setBankWithdrawSubmitting,
+  ] = useState(false);
+
+  const [
+    bankWithdrawStatus,
+    setBankWithdrawStatus,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    bankWithdrawError,
+    setBankWithdrawError,
+  ] = useState<string | null>(
+    null,
+  );
+
   const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
 
   const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
@@ -212,10 +472,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     () =>
       apiBaseUrl
         ? createKeptApi({
-            baseUrl: apiBaseUrl,
+          baseUrl: apiBaseUrl,
 
-            getAccessToken: session.getAccessToken,
-          })
+          getAccessToken: session.getAccessToken,
+        })
         : null,
 
     [apiBaseUrl, session.getAccessToken],
@@ -278,19 +538,19 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   type SavingsPerformanceState =
     | {
-        readonly kind: "unavailable";
-      }
+      readonly kind: "unavailable";
+    }
     | {
-        readonly kind: "loading";
-      }
+      readonly kind: "loading";
+    }
     | {
-        readonly kind: "ready";
+      readonly kind: "ready";
 
-        readonly earningsAssets: bigint;
-      }
+      readonly earningsAssets: bigint;
+    }
     | {
-        readonly kind: "error";
-      };
+      readonly kind: "error";
+    };
 
   const [savingsPerformanceState, setSavingsPerformanceState] =
     useState<SavingsPerformanceState>({
@@ -864,13 +1124,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     const [approval, deposit] = buildVaultDepositTransactions({
       usdc: config.usdc,
-
       vault: config.vault,
-
       receiver: account,
-
       assets: parsedAmount.assets,
-
       chainId: config.chainId,
     });
 
@@ -967,7 +1223,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     });
   }, [
     account,
-    api,
     config,
     depositAmount,
     depositQuoteState,
@@ -1109,7 +1364,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     });
   }, [
     account,
-    api,
     config,
     ensureTransactionNetwork,
     positionState,
@@ -1122,6 +1376,786 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     transactionCoordinator,
     withdrawAmount,
   ]);
+
+  const previewCryptoTransfer =
+    useCallback(
+      async () => {
+        if (
+          !account ||
+          !config ||
+          positionState.kind !==
+          "ready"
+        ) {
+          setCryptoPreviewError(
+            "Your Kept account is not ready yet.",
+          );
+
+          return;
+        }
+
+        const parsedAmount =
+          parseUsdcDepositAmount(
+            cryptoWithdrawAmount,
+          );
+
+        if (
+          "error" in
+          parsedAmount
+        ) {
+          setCryptoPreviewError(
+            parsedAmount.error,
+          );
+
+          return;
+        }
+
+        if (
+          parsedAmount.assets >
+          positionState.position
+            .withdrawableAssets
+        ) {
+          setCryptoPreviewError(
+            "Enter an amount no greater than your available savings.",
+          );
+
+          return;
+        }
+
+        const destinationAsset =
+          cryptoDestinationAssets.find(
+            (
+              asset,
+            ) =>
+              asset.assetId ===
+              cryptoDestinationAssetId,
+          );
+
+        if (
+          !destinationAsset
+        ) {
+          setCryptoPreviewError(
+            "Choose a withdrawal network.",
+          );
+
+          return;
+        }
+
+        setCryptoPreviewing(
+          true,
+        );
+
+        setCryptoPreviewReady(
+          false,
+        );
+
+        setCryptoPreviewStatus(
+          null,
+        );
+
+        setCryptoPreviewError(
+          null,
+        );
+
+        try {
+          const directMonadTransfer =
+            destinationAsset.blockchain ===
+            "monad";
+
+          if (
+            directMonadTransfer
+          ) {
+            setCryptoPreviewReady(
+              true,
+            );
+
+            setCryptoPreviewStatus(
+              "Transfer ready.",
+            );
+
+            return;
+          }
+
+          await ensureTransactionNetwork();
+
+          const provider =
+            await wallet.getProvider();
+
+          if (
+            !provider
+          ) {
+            throw new Error(
+              "Wallet provider is unavailable.",
+            );
+          }
+
+          const runner =
+            createKeptIntentsRunner({
+              sourceAddress:
+                account,
+
+              provider,
+            });
+
+          try {
+            await previewCryptoWithdrawal({
+              runner,
+              amount:
+                parsedAmount.assets,
+              recipient:
+                cryptoRecipient,
+              destinationAsset,
+            });
+
+            setCryptoPreviewReady(
+              true,
+            );
+
+            setCryptoPreviewStatus(
+              "Transfer route ready.",
+            );
+          } finally {
+            runner.dispose?.();
+          }
+        } catch (
+        error
+        ) {
+          diagnostics.error(
+            "withdrawal.crypto_preview_failed",
+            error,
+          );
+
+          setCryptoPreviewError(
+            consumerErrorMessage(
+              error,
+              "We could not prepare this transfer. Try again.",
+            ),
+          );
+        } finally {
+          setCryptoPreviewing(
+            false,
+          );
+        }
+      },
+      [
+        account,
+        config,
+        cryptoDestinationAssetId,
+        cryptoDestinationAssets,
+        cryptoRecipient,
+        cryptoWithdrawAmount,
+        ensureTransactionNetwork,
+        positionState,
+        wallet,
+      ],
+    );
+
+  const executeCryptoTransfer =
+    useCallback(
+      async () => {
+        if (
+          !config ||
+          !publicClient ||
+          !account ||
+          positionState.kind !==
+          "ready"
+        ) {
+          setCryptoExecutionError(
+            "Your Kept account is not ready yet.",
+          );
+
+          return;
+        }
+
+        if (
+          !isAddress(
+            cryptoRecipient,
+          )
+        ) {
+          setCryptoExecutionError(
+            "Enter a valid wallet address.",
+          );
+
+          return;
+        }
+
+        const parsedAmount =
+          parseUsdcDepositAmount(
+            cryptoWithdrawAmount,
+          );
+
+        if (
+          "error" in
+          parsedAmount
+        ) {
+          setCryptoExecutionError(
+            parsedAmount.error,
+          );
+
+          return;
+        }
+
+        const availableCash =
+          positionState.position
+            .usdcBalance;
+
+        const withdrawableSavings =
+          positionState.position
+            .withdrawableAssets;
+
+        const availableToSend =
+          positionState.position.usdcBalance +
+          positionState.position.withdrawableAssets;
+
+        if (
+          parsedAmount.assets >
+          availableToSend
+        ) {
+          setCryptoPreviewError(
+            "Enter an amount no greater than your available balance.",
+          );
+
+          return;
+        }
+
+        const destinationAsset =
+          cryptoDestinationAssets.find(
+            (
+              asset,
+            ) =>
+              asset.assetId ===
+              cryptoDestinationAssetId,
+          );
+
+        if (
+          !destinationAsset
+        ) {
+          setCryptoExecutionError(
+            "Choose a withdrawal network.",
+          );
+
+          return;
+        }
+
+        if (
+          !cryptoPreviewReady
+        ) {
+          setCryptoExecutionError(
+            "Review the transfer before confirming it.",
+          );
+
+          return;
+        }
+
+        const recipient =
+          getAddress(
+            cryptoRecipient,
+          );
+
+        const requiredFromSavings =
+          parsedAmount.assets >
+            availableCash
+            ? parsedAmount.assets -
+            availableCash
+            : 0n;
+
+        setCryptoExecuting(
+          true,
+        );
+
+        setCryptoExecutionError(
+          null,
+        );
+
+        setCryptoExecutionStatus(
+          requiredFromSavings > 0n
+            ? "Preparing your money…"
+            : "Preparing transfer…",
+        );
+
+        let savingsWithdrawn =
+          false;
+
+        try {
+          await transactionCoordinator.run(
+            "withdraw",
+            async () => {
+              /*
+               * Stage 1:
+               *
+               * Only withdraw the amount that is not
+               * already sitting in Available cash.
+               */
+              if (
+                requiredFromSavings >
+                0n
+              ) {
+                if (
+                  requiredFromSavings >
+                  withdrawableSavings
+                ) {
+                  throw new Error(
+                    "There is not enough available savings for this transfer.",
+                  );
+                }
+
+                const withdrawal =
+                  buildVaultWithdrawTransaction({
+                    vault:
+                      config.vault,
+
+                    receiver:
+                      account,
+
+                    owner:
+                      account,
+
+                    assets:
+                      requiredFromSavings,
+
+                    chainId:
+                      config.chainId,
+                  });
+
+                setCryptoExecutionStatus(
+                  "Confirm the withdrawal from your savings.",
+                );
+
+                const savingsWithdrawalResult =
+                  await submitVaultWithdrawal({
+                    withdrawal,
+
+                    beforeSend:
+                      async () =>
+                        ensureTransactionNetwork(),
+
+                    sender,
+
+                    receipts: {
+                      waitForTransactionReceipt:
+                        async ({
+                          hash,
+                        }) => {
+                          const receipt =
+                            await publicClient
+                              .waitForTransactionReceipt({
+                                hash,
+                              });
+
+                          return {
+                            status:
+                              receipt.status ===
+                                "success"
+                                ? "success"
+                                : "reverted",
+                          };
+                        },
+                    },
+                  });
+
+                if (api) {
+                  await api.recordTransaction(
+                    {
+                      type:
+                        "SAVINGS_WITHDRAWAL",
+
+                      amountAtomic:
+                        requiredFromSavings
+                          .toString(),
+
+                      asset:
+                        "USDC",
+
+                      description:
+                        "Moved to available cash",
+
+                      chainId:
+                        config.chainId
+                          .toString(),
+
+                      transactionHash:
+                        savingsWithdrawalResult
+                          .withdrawalHash,
+
+                      externalReference:
+                        savingsWithdrawalResult
+                          .withdrawalHash,
+                    },
+                    savingsWithdrawalResult
+                      .withdrawalHash,
+                  );
+                }
+
+                savingsWithdrawn =
+                  true;
+
+                setCryptoExecutionStatus(
+                  "Savings withdrawn. Preparing transfer…",
+                );
+              }
+
+              /*
+               * Stage 2:
+               *
+               * Send the entire requested amount.
+               *
+               * Same-chain Monad USDC does not need
+               * Aurora Intents.
+               */
+              const directMonadTransfer =
+                destinationAsset
+                  .blockchain ===
+                "monad";
+
+              if (
+                directMonadTransfer
+              ) {
+                await ensureTransactionNetwork();
+
+                const usdcAddress =
+                  config.usdc;
+
+                const hash =
+                  await sender.sendTransaction({
+                    to:
+                      usdcAddress,
+
+                    chainId:
+                      config.chainId,
+
+                    data:
+                      encodeFunctionData({
+                        abi:
+                          erc20Abi,
+
+                        functionName:
+                          "transfer",
+
+                        args: [
+                          recipient,
+                          parsedAmount.assets,
+                        ],
+                      }),
+                  });
+
+                setCryptoExecutionStatus(
+                  "Transfer submitted. Waiting for confirmation…",
+                );
+
+                const receipt =
+                  await publicClient
+                    .waitForTransactionReceipt({
+                      hash,
+                    });
+
+                if (
+                  receipt.status !==
+                  "success"
+                ) {
+                  throw new Error(
+                    "The transfer did not complete successfully.",
+                  );
+                }
+
+                return;
+              }
+
+              /*
+               * Cross-chain route:
+               *
+               * Monad USDC in the embedded wallet
+               * becomes the Aurora origin asset.
+               */
+              await ensureTransactionNetwork();
+
+              const provider =
+                await wallet.getProvider();
+
+              if (
+                !provider
+              ) {
+                throw new Error(
+                  "Wallet provider is unavailable.",
+                );
+              }
+
+              const runner =
+                createKeptIntentsRunner({
+                  sourceAddress:
+                    account,
+
+                  provider,
+                });
+
+              try {
+                setCryptoExecutionStatus(
+                  "Confirm the transfer in your wallet.",
+                );
+
+                const execution =
+                  await executeCryptoWithdrawal({
+                    runner,
+
+                    amount:
+                      parsedAmount.assets,
+
+                    recipient,
+
+                    destinationAsset,
+                  });
+
+                if (api) {
+                  await api.recordTransaction(
+                    {
+                      type:
+                        "CRYPTO_WITHDRAWAL",
+
+                      amountAtomic:
+                        parsedAmount.assets
+                          .toString(),
+
+                      asset:
+                        destinationAsset.symbol,
+
+                      description:
+                        "Sent to external wallet",
+
+                      chainId:
+                        null,
+
+                      transactionHash:
+                        null,
+
+                      externalReference:
+                        execution.id
+                    },
+                    execution.id,
+                  );
+                }
+              } finally {
+                runner.dispose?.();
+              }
+            },
+          );
+
+          setCryptoExecutionStatus(
+            "Transfer complete.",
+          );
+
+          setCryptoWithdrawAmount(
+            "",
+          );
+
+          setCryptoPreviewReady(
+            false,
+          );
+
+          setCryptoPreviewStatus(
+            null,
+          );
+
+          await Promise.all([
+            refreshPosition(),
+            refreshProductData(),
+          ]);
+        } catch (
+        error
+        ) {
+          diagnostics.warn(
+            "withdrawal.crypto_execution_failed",
+            error,
+          );
+
+          setCryptoExecutionStatus(
+            null,
+          );
+
+          /*
+           * This distinction is important.
+           *
+           * If the vault withdrawal succeeded,
+           * the user's funds are not stuck or
+           * lost. They're now simply Available
+           * cash in the embedded wallet.
+           */
+          if (
+            savingsWithdrawn
+          ) {
+            setCryptoExecutionError(
+              "The transfer couldn't be completed. Your money was withdrawn from savings successfully and is now available in Kept.",
+            );
+
+            await Promise.all([
+              refreshPosition(),
+              refreshProductData(),
+            ]);
+          } else {
+            setCryptoExecutionError(
+              consumerErrorMessage(
+                error,
+                "We could not complete this transfer. Try again.",
+              ),
+            );
+          }
+        } finally {
+          setCryptoExecuting(
+            false,
+          );
+        }
+      },
+      [
+        account,
+        config,
+        cryptoDestinationAssetId,
+        cryptoDestinationAssets,
+        cryptoPreviewReady,
+        cryptoRecipient,
+        cryptoWithdrawAmount,
+        ensureTransactionNetwork,
+        positionState,
+        publicClient,
+        refreshPosition,
+        refreshProductData,
+        sender,
+        transactionCoordinator,
+        wallet,
+      ],
+    );
+
+  const startBankWithdrawal =
+    useCallback(
+      async () => {
+        if (
+          positionState.kind !==
+          "ready"
+        ) {
+          setBankWithdrawError(
+            "Your Kept account is not ready yet.",
+          );
+
+          return;
+        }
+
+        const parsed =
+          parseUsdcDepositAmount(
+            bankWithdrawAmount,
+          );
+
+        if (
+          "error" in parsed ||
+          parsed.assets <= 0n
+        ) {
+          setBankWithdrawError(
+            "Enter a valid amount.",
+          );
+
+          return;
+        }
+
+        const available =
+          positionState.position.usdcBalance +
+          positionState.position.withdrawableAssets;
+
+        if (
+          parsed.assets >
+          available
+        ) {
+          setBankWithdrawError(
+            "Enter an amount no greater than your available balance.",
+          );
+
+          return;
+        }
+
+        setBankWithdrawSubmitting(
+          true,
+        );
+
+        setBankWithdrawError(
+          null,
+        );
+
+        setBankWithdrawStatus(
+          "Preparing bank withdrawal…",
+        );
+
+        try {
+          const accessToken =
+            await session.getAccessToken();
+
+          const response =
+            await fetch(
+              `${apiBaseUrl}/v1/moonpay/offramp-url`,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "content-type":
+                    "application/json",
+
+                  authorization:
+                    `Bearer ${accessToken}`,
+                },
+
+                body:
+                  JSON.stringify({
+                    amount:
+                      bankWithdrawAmount,
+                  }),
+              },
+            );
+
+          if (
+            !response.ok
+          ) {
+            const errorText =
+              await response.text();
+
+            throw new Error(
+              `Could not prepare MoonPay: ${response.status} ${errorText}`,
+            );
+          }
+
+          const result =
+            await response.json() as {
+              readonly url:
+              string;
+            };
+
+          window.location.assign(
+            result.url,
+          );
+        } catch (
+        error
+        ) {
+          diagnostics.error(
+            "withdrawal.moonpay_prepare_failed",
+            error,
+          );
+
+          setBankWithdrawStatus(
+            null,
+          );
+
+          setBankWithdrawError(
+            consumerErrorMessage(
+              error,
+              "We couldn't prepare your bank withdrawal. Try again.",
+            ),
+          );
+        } finally {
+          setBankWithdrawSubmitting(
+            false,
+          );
+        }
+      },
+      [
+        apiBaseUrl,
+        bankWithdrawAmount,
+        positionState,
+        session,
+      ],
+    );
 
   const createGoal = useCallback(
     async (input: {
@@ -1480,19 +2514,19 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         const validationError =
           direction === "fund"
             ? allocationInputError(
-                parsed.assets,
+              parsed.assets,
 
-                requiredShares,
+              requiredShares,
 
-                goalFundingState.funding.unallocatedShares,
-              )
+              goalFundingState.funding.unallocatedShares,
+            )
             : deallocationInputError(
-                parsed.assets,
+              parsed.assets,
 
-                requiredShares,
+              requiredShares,
 
-                goalFunding.allocatedShares,
-              );
+              goalFunding.allocatedShares,
+            );
 
         if (validationError) {
           setAllocationError(validationError);
@@ -1749,31 +2783,31 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           commitment.savingsGoalId === goal.id &&
           commitment.definition.code === input.code &&
           commitment.parameters.targetAmountAtomic ===
-            parameters.targetAmountAtomic,
+          parameters.targetAmountAtomic,
       );
 
       const existingAttempt =
         pendingCommitmentAttempt.current ??
         (recoverableDraft
           ? {
-              draftInput: {
-                goalId: recoverableDraft.savingsGoalId,
+            draftInput: {
+              goalId: recoverableDraft.savingsGoalId,
 
-                definition: recoverableDraft.definition,
+              definition: recoverableDraft.definition,
 
-                parameters: recoverableDraft.parameters,
+              parameters: recoverableDraft.parameters,
 
-                epochStart: recoverableDraft.epochStart,
+              epochStart: recoverableDraft.epochStart,
 
-                epochEnd: recoverableDraft.epochEnd,
+              epochEnd: recoverableDraft.epochEnd,
 
-                verificationDeadline: recoverableDraft.verificationDeadline,
-              },
+              verificationDeadline: recoverableDraft.verificationDeadline,
+            },
 
-              draftIdempotencyKey: globalThis.crypto.randomUUID(),
+            draftIdempotencyKey: globalThis.crypto.randomUUID(),
 
-              draft: recoverableDraft,
-            }
+            draft: recoverableDraft,
+          }
           : null);
 
       if (existingAttempt?.terminalFailure) {
@@ -1789,7 +2823,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         (existingAttempt.draftInput.goalId !== goal.id ||
           existingAttempt.draftInput.definition.code !== input.code ||
           existingAttempt.draftInput.parameters.targetAmountAtomic !==
-            parameters.targetAmountAtomic)
+          parameters.targetAmountAtomic)
       ) {
         setCommitmentError(
           "Finish retrying your pending commitment before creating a different one.",
@@ -1926,12 +2960,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               result.attempt?.terminalFailure
                 ? "Kept could not safely reconcile this confirmed commitment. Contact support before trying again."
                 : consumerErrorMessage(
-                    result.error,
+                  result.error,
 
-                    result.attempt?.settlement
-                      ? "Your commitment was created, but Kept couldn't finish updating it. Try again."
-                      : "We could not create your commitment. Try again.",
-                  ),
+                  result.attempt?.settlement
+                    ? "Your commitment was created, but Kept couldn't finish updating it. Try again."
+                    : "We could not create your commitment. Try again.",
+                ),
             );
 
             return;
@@ -2014,15 +3048,15 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   type RewardState =
     | { readonly kind: "loading" }
     | {
-        readonly kind: "ready";
+      readonly kind: "ready";
 
-        readonly reward: CommitmentRewardState;
-      }
+      readonly reward: CommitmentRewardState;
+    }
     | {
-        readonly kind: "error";
+      readonly kind: "error";
 
-        readonly message: string;
-      };
+      readonly message: string;
+    };
 
   const [rewardStates, setRewardStates] = useState<
     Readonly<Record<string, RewardState>>
@@ -2295,6 +3329,96 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         rewardClaimError={rewardClaimError}
 
         onClaimReward={claimReward}
+        cryptoAmount={
+          cryptoWithdrawAmount
+        }
+
+        cryptoRecipient={
+          cryptoRecipient
+        }
+
+        cryptoDestinationAssets={
+          cryptoDestinationAssets
+        }
+
+        cryptoDestinationAssetId={
+          cryptoDestinationAssetId
+        }
+
+        cryptoPreviewing={
+          cryptoPreviewing
+        }
+
+        cryptoPreviewReady={
+          cryptoPreviewReady
+        }
+
+        cryptoPreviewStatus={
+          cryptoPreviewStatus
+        }
+
+        cryptoPreviewError={
+          cryptoPreviewError
+        }
+
+        cryptoExecuting={
+          cryptoExecuting
+        }
+
+        cryptoExecutionStatus={
+          cryptoExecutionStatus
+        }
+
+        cryptoExecutionError={
+          cryptoExecutionError
+        }
+
+        cryptoEstimatedReceive={
+          null
+        }
+
+        onCryptoAmountChange={
+          handleCryptoWithdrawAmountChange
+        }
+
+        onCryptoRecipientChange={
+          handleCryptoRecipientChange
+        }
+
+        onCryptoDestinationAssetChange={
+          handleCryptoDestinationAssetChange
+        }
+
+        onPreviewCryptoWithdrawal={() =>
+          void previewCryptoTransfer()
+        }
+        onExecuteCryptoWithdrawal={() =>
+          void executeCryptoTransfer()
+        }
+
+        bankAmount={
+          bankWithdrawAmount
+        }
+
+        bankSubmitting={
+          bankWithdrawSubmitting
+        }
+
+        bankStatus={
+          bankWithdrawStatus
+        }
+
+        bankError={
+          bankWithdrawError
+        }
+
+        onBankAmountChange={
+          setBankWithdrawAmount
+        }
+
+        onStartBankWithdrawal={() =>
+          void startBankWithdrawal()
+        }
       />
     </AppShell>
   );

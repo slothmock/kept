@@ -38,6 +38,7 @@ interface BalanceCardProps {
   readonly transactionPending: boolean;
   readonly savingsPerformanceState: SavingsPerformanceState;
   readonly onAddMoney: () => void;
+  readonly onAddToSavings: () => void;
   readonly onWithdraw: () => void;
   readonly onRefresh: () => void;
 }
@@ -47,6 +48,7 @@ export function BalanceCard({
   transactionPending,
   savingsPerformanceState,
   onAddMoney,
+  onAddToSavings,
   onWithdraw,
   onRefresh,
 }: BalanceCardProps) {
