@@ -252,6 +252,64 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("rejects unauthenticated Solana balance requests", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      { solanaRpc: { url: "https://helius.example" } },
+    );
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/funding/solana/token-balances",
+      payload: { owner: "6NZH4e4r9dVGtp22mWmF7uMbdt6h9f9gCw6U5jrw6EFg" },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: { code: "UNAUTHENTICATED" } });
+    await app.close();
+  });
+
+  it("returns normalized Solana balances for an authenticated funding request", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: { value: 123456789 } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        result: {
+          value: [{
+            account: {
+              data: {
+                parsed: {
+                  info: {
+                    mint: "Es9vMFrzaCERmJfrF4H2FYD2CuPCdTu29PP4nXGkQQX",
+                    tokenAmount: { amount: "2500000" },
+                  },
+                },
+              },
+            },
+          }],
+        },
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const app = buildApp(
+      buildDependencies(),
+      { solanaRpc: { url: "https://helius.example" } },
+    );
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/funding/solana/token-balances",
+      headers: auth,
+      payload: { owner: "6NZH4e4r9dVGtp22mWmF7uMbdt6h9f9gCw6U5jrw6EFg" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      nativeBalance: "123456789",
+      balances: { Es9vMFrzaCERmJfrF4H2FYD2CuPCdTu29PP4nXGkQQX: "2500000" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await app.close();
+    vi.unstubAllGlobals();
+  });
+
   it("lists and reads goals", async () => {
     const app = buildApp(buildDependencies());
     const list = await app.inject({ method: "GET", url: "/v1/goals", headers: auth });

@@ -302,6 +302,9 @@ const app = buildApp(
     },
   },
   {
+    solanaRpc: {
+      url: config.solanaRpcUrl,
+    },
     enableLogging: true,
 
     webOrigin:

@@ -8,6 +8,7 @@ const requiredEnvironment = {
   PRIVY_JWT_VERIFICATION_KEY: "public-verification-key",
   PRIVY_APP_SECRET: "privy-app-secret",
   MONAD_RPC_URL: "https://rpc.monad.example",
+  HELIUS_RPC_URL: "https://helius.example",
   MONAD_CHAIN_ID: "143",
   COMMITMENT_MANAGER_ADDRESS: "0x0000000000000000000000000000000000000001",
   COMMITMENT_VERIFIER_PRIVATE_KEY: `0x${"11".repeat(32)}`,
@@ -48,6 +49,9 @@ describe("API configuration", () => {
 
       monadRpcUrl:
         "https://rpc.monad.example/",
+
+      solanaRpcUrl:
+        "https://helius.example/",
 
       monadChainId:
         143,

@@ -8,6 +8,7 @@ export interface ApiConfig {
   readonly port: number;
   readonly webOrigin: string;
   readonly monadRpcUrl: string;
+  readonly solanaRpcUrl: string;
   readonly monadChainId: 143 | 31337;
   readonly commitmentManagerAddress: Address;
   readonly commitmentVerifierPrivateKey: `0x${string}`;
@@ -166,6 +167,12 @@ export function loadApiConfig(
       "MONAD_RPC_URL",
     );
 
+  const solanaRpcUrl =
+    requireHttpUrl(
+      environment,
+      "HELIUS_RPC_URL",
+    );
+
   const monadChainId =
     parseChainId(environment);
 
@@ -231,6 +238,7 @@ export function loadApiConfig(
     port,
     webOrigin,
     monadRpcUrl,
+    solanaRpcUrl,
     monadChainId,
     commitmentManagerAddress,
     commitmentVerifierPrivateKey,

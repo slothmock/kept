@@ -91,6 +91,9 @@ export interface BuildAppOptions {
     readonly baseUrl: string;
     readonly apiKey: string;
   };
+  readonly solanaRpc?: {
+    readonly url: string;
+  };
 }
 
 function canonicalizeClientIp(
@@ -649,6 +652,351 @@ export function buildApp(
         request.log.error(
           error,
           "Aurora Intents proxy failed",
+        );
+
+        return reply
+          .code(502)
+          .send({
+            error: {
+              code:
+                "UPSTREAM_ERROR",
+            },
+          });
+      }
+    },
+  );
+
+  app.post(
+    "/v1/funding/solana/token-balances",
+    async (
+      request,
+      reply,
+    ) => {
+      const config =
+        options.solanaRpc;
+
+      if (
+        !config
+      ) {
+        return reply
+          .code(503)
+          .send({
+            error: {
+              code:
+                "SERVICE_UNAVAILABLE",
+            },
+          });
+      }
+
+      const body =
+        requireObject(
+          request.body,
+        );
+
+      const owner =
+        requireString(
+          body,
+          "owner",
+        ).trim();
+
+      if (
+        owner.length ===
+        0
+      ) {
+        throw new PersistenceValidationError(
+          "owner must not be empty",
+        );
+      }
+
+      try {
+        const [
+          nativeUpstream,
+          tokensUpstream,
+        ] =
+          await Promise.all([
+            fetch(
+              config.url,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "content-type":
+                    "application/json",
+                },
+
+                body:
+                  JSON.stringify({
+                    jsonrpc:
+                      "2.0",
+
+                    id:
+                      1,
+
+                    method:
+                      "getBalance",
+
+                    params: [
+                      owner,
+
+                      {
+                        commitment:
+                          "confirmed",
+                      },
+                    ],
+                  }),
+              },
+            ),
+
+            fetch(
+              config.url,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "content-type":
+                    "application/json",
+                },
+
+                body:
+                  JSON.stringify({
+                    jsonrpc:
+                      "2.0",
+
+                    id:
+                      2,
+
+                    method:
+                      "getTokenAccountsByOwner",
+
+                    params: [
+                      owner,
+
+                      {
+                        programId:
+                          "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                      },
+
+                      {
+                        encoding:
+                          "jsonParsed",
+
+                        commitment:
+                          "confirmed",
+                      },
+                    ],
+                  }),
+              },
+            ),
+          ]);
+
+        if (
+          !nativeUpstream.ok ||
+          !tokensUpstream.ok
+        ) {
+          request.log.warn(
+            {
+              nativeStatus:
+                nativeUpstream.status,
+
+              tokenStatus:
+                tokensUpstream.status,
+            },
+            "Helius RPC request failed",
+          );
+
+          return reply
+            .code(502)
+            .send({
+              error: {
+                code:
+                  "UPSTREAM_ERROR",
+              },
+            });
+        }
+
+        const nativePayload =
+          await nativeUpstream.json() as {
+            readonly result?: {
+              readonly value?:
+              number;
+            };
+
+            readonly error?: {
+              readonly code?:
+              number;
+
+              readonly message?:
+              string;
+            };
+          };
+
+        const tokenPayload =
+          await tokensUpstream.json() as {
+            readonly result?: {
+              readonly value?:
+              readonly {
+                readonly account?: {
+                  readonly data?: {
+                    readonly parsed?: {
+                      readonly info?: {
+                        readonly mint?:
+                        string;
+
+                        readonly tokenAmount?: {
+                          readonly amount?:
+                          string;
+                        };
+                      };
+                    };
+                  };
+                };
+              }[];
+            };
+
+            readonly error?: {
+              readonly code?:
+              number;
+
+              readonly message?:
+              string;
+            };
+          };
+
+        if (
+          nativePayload.error ||
+          tokenPayload.error
+        ) {
+          request.log.warn(
+            {
+              nativeRpcError:
+                nativePayload.error,
+
+              tokenRpcError:
+                tokenPayload.error,
+            },
+            "Helius RPC returned an error",
+          );
+
+          return reply
+            .code(502)
+            .send({
+              error: {
+                code:
+                  "UPSTREAM_ERROR",
+              },
+            });
+        }
+
+        const nativeBalance =
+          nativePayload.result
+            ?.value;
+
+        if (
+          typeof nativeBalance !==
+          "number" ||
+          !Number.isSafeInteger(
+            nativeBalance,
+          ) ||
+          nativeBalance <
+          0
+        ) {
+          request.log.warn(
+            {
+              nativeBalance,
+            },
+            "Helius returned an invalid SOL balance",
+          );
+
+          return reply
+            .code(502)
+            .send({
+              error: {
+                code:
+                  "UPSTREAM_ERROR",
+              },
+            });
+        }
+
+        const balances =
+          new Map<
+            string,
+            bigint
+          >();
+
+        for (
+          const entry of
+          tokenPayload.result
+            ?.value ??
+          []
+        ) {
+          const info =
+            entry.account
+              ?.data
+              ?.parsed
+              ?.info;
+
+          const mint =
+            info?.mint;
+
+          const amount =
+            info
+              ?.tokenAmount
+              ?.amount;
+
+          if (
+            typeof mint !==
+            "string" ||
+            typeof amount !==
+            "string"
+          ) {
+            continue;
+          }
+
+          try {
+            balances.set(
+              mint,
+              (
+                balances.get(
+                  mint,
+                ) ??
+                0n
+              ) +
+              BigInt(
+                amount,
+              ),
+            );
+          } catch {
+            continue;
+          }
+        }
+
+        return {
+          nativeBalance:
+            nativeBalance.toString(),
+
+          balances:
+            Object.fromEntries(
+              Array.from(
+                balances.entries(),
+              ).map(
+                ([
+                  mint,
+                  balance,
+                ]) => [
+                    mint,
+                    balance.toString(),
+                  ],
+              ),
+            ),
+        };
+      } catch (
+      error
+      ) {
+        request.log.error(
+          error,
+          "Helius RPC proxy failed",
         );
 
         return reply
