@@ -8,7 +8,6 @@ import {
 
 import type {
     EthereumProvider,
-    KeptEvmWallet,
 } from "@/chain/evm-wallet";
 
 import {
@@ -16,17 +15,20 @@ import {
 } from "./aurora-api";
 
 import {
-    createPrivyIntentsWallet,
+    createIntentsEvmWallet,
     toIntentsEvmProvider,
 } from "./privy-intents-wallet";
 
 interface CreateKeptIntentsRunnerInput {
-    readonly wallet: KeptEvmWallet;
-    readonly provider: EthereumProvider;
+    readonly sourceAddress:
+    string;
+
+    readonly provider:
+    EthereumProvider;
 }
 
 export function createKeptIntentsRunner({
-    wallet,
+    sourceAddress,
     provider,
 }: CreateKeptIntentsRunnerInput) {
     const intentsProvider =
@@ -35,17 +37,23 @@ export function createKeptIntentsRunner({
         );
 
     const intentsWallet =
-        createPrivyIntentsWallet({
-            wallet,
+        createIntentsEvmWallet({
+            address:
+                sourceAddress,
             provider,
         });
 
     return createExecutionRunner({
-        api: intentsConnectApi,
-        wallet: intentsWallet,
+        api:
+            intentsConnectApi,
+
+        wallet:
+            intentsWallet,
+
         plugins: {
             evm,
         },
+
         pluginOptions: {
             provider:
                 intentsProvider,

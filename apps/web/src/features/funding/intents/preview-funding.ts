@@ -9,6 +9,7 @@ import {
 import {
   createKeptFundingPlan,
 } from "./kept-funding-plan";
+import type { FundingAsset } from "./supported-tokens";
 
 type ExecutionRunner =
   ReturnType<
@@ -17,25 +18,30 @@ type ExecutionRunner =
 
 interface PreviewKeptFundingInput {
   readonly runner:
-    ExecutionRunner;
+  ExecutionRunner;
 
   readonly amount:
-    bigint;
+  bigint;
 
   readonly walletAddress:
-    string;
+  string;
+
+  readonly sourceAsset:
+  FundingAsset;
 }
 
 export async function previewKeptFunding({
   runner,
   amount,
   walletAddress,
+  sourceAsset
 }: PreviewKeptFundingInput) {
   try {
     const plan =
       await createKeptFundingPlan({
         amount,
         walletAddress,
+        sourceAsset,
       });
 
     const preview =

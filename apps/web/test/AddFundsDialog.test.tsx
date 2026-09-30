@@ -24,6 +24,7 @@ const {
     executeKeptFunding,
     dispose,
     providerRequest,
+    resolveKeptFundingAssets,
 } = vi.hoisted(() => ({
     getProvider:
         vi.fn(),
@@ -38,6 +39,9 @@ const {
         vi.fn(),
 
     providerRequest:
+        vi.fn(),
+
+    resolveKeptFundingAssets:
         vi.fn(),
 }));
 
@@ -67,9 +71,64 @@ vi.mock(
 );
 
 vi.mock(
+    "../src/features/funding/use-external-funding-wallet.js",
+    () => ({
+        useExternalFundingWallet:
+            () => ({
+                address:
+                    "0x1111111111111111111111111111111111111111",
+
+                availableWallets: [
+                    {
+                        address:
+                            "0x1111111111111111111111111111111111111111",
+
+                        family:
+                            "evm",
+
+                        walletName:
+                            "metamask",
+                    },
+                ],
+
+                clearSelection:
+                    vi.fn(),
+
+                connect:
+                    vi.fn(),
+
+                connected:
+                    true,
+
+                family:
+                    "evm",
+
+                getEvmProvider:
+                    async () => provider,
+
+                getSolanaWallet:
+                    () => null,
+
+                select:
+                    vi.fn(),
+
+                walletClientType:
+                    "metamask",
+            }),
+    }),
+);
+
+vi.mock(
     "../src/features/funding/intents/preview-funding.js",
     () => ({
         previewKeptFunding,
+    }),
+);
+
+vi.mock(
+    "../src/features/funding/intents/supported-tokens.js",
+    () => ({
+        resolveKeptFundingAssets,
     }),
 );
 
@@ -179,6 +238,107 @@ beforeEach(() => {
         },
     });
 
+    resolveKeptFundingAssets.mockResolvedValue({
+        origins: [
+            {
+                assetId:
+                    "nep141:ethereum-usdc",
+
+                blockchain:
+                    "eth",
+
+                contractAddress:
+                    "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+
+                decimals:
+                    6,
+
+                kind:
+                    "token",
+
+                symbol:
+                    "USDC",
+            },
+            {
+                assetId:
+                    "nep141:arbitrum-usdc",
+
+                blockchain:
+                    "arb",
+
+                contractAddress:
+                    "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+
+                decimals:
+                    6,
+
+                kind:
+                    "token",
+
+                symbol:
+                    "USDC",
+            },
+            {
+                assetId:
+                    "nep141:optimism-usdc",
+
+                blockchain:
+                    "op",
+
+                contractAddress:
+                    "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+
+                decimals:
+                    6,
+
+                kind:
+                    "token",
+
+                symbol:
+                    "USDC",
+            },
+            {
+                assetId:
+                    "nep141:base-usdc",
+
+                blockchain:
+                    "base",
+
+                contractAddress:
+                    "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
+
+                decimals:
+                    6,
+
+                kind:
+                    "token",
+
+                symbol:
+                    "USDC",
+            },
+        ],
+
+        destination: {
+            assetId:
+                "nep141:monad-usdc",
+
+            blockchain:
+                "monad",
+
+            contractAddress:
+                null,
+
+            decimals:
+                6,
+
+            kind:
+                "native",
+
+            symbol:
+                "USDC",
+        },
+    });
+
     executeKeptFunding.mockResolvedValue({
         status:
             "complete",
@@ -192,6 +352,120 @@ afterEach(() => {
 describe(
     "AddFundsDialog",
     () => {
+        it(
+            "offers Ethereum, Base, Arbitrum, and Optimism external funding networks",
+            async () => {
+                renderDialog();
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Transfer crypto",
+                        },
+                    ),
+                );
+
+                const network =
+                    await screen.findByLabelText(
+                        "Network",
+                    );
+
+                expect(
+                    network.textContent,
+                ).toContain(
+                    "Ethereum",
+                );
+
+                expect(
+                    network.textContent,
+                ).toContain(
+                    "Base",
+                );
+
+                expect(
+                    network.textContent,
+                ).toContain(
+                    "Arbitrum",
+                );
+
+                expect(
+                    network.textContent,
+                ).toContain(
+                    "Optimism",
+                );
+
+                fireEvent.change(
+                    network,
+                    {
+                        target: {
+                            value:
+                                "arb",
+                        },
+                    },
+                );
+
+                await waitFor(
+                    () => {
+                        expect(
+                            providerRequest,
+                        ).toHaveBeenCalledWith(
+                            expect.objectContaining({
+                                method:
+                                    "wallet_switchEthereumChain",
+
+                                params: [
+                                    {
+                                        chainId:
+                                            "0xa4b1",
+                                    },
+                                ],
+                            }),
+                        );
+                    },
+                );
+
+                fireEvent.change(
+                    screen.getByLabelText(
+                        "Amount",
+                    ),
+                    {
+                        target: {
+                            value:
+                                "20",
+                        },
+                    },
+                );
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Continue",
+                        },
+                    ),
+                );
+
+                await waitFor(
+                    () => {
+                        expect(
+                            previewKeptFunding,
+                        ).toHaveBeenCalledWith(
+                            expect.objectContaining({
+                                sourceAsset:
+                                    expect.objectContaining({
+                                        assetId:
+                                            "nep141:arbitrum-usdc",
+                                    }),
+                            }),
+                        );
+                    },
+                );
+            },
+        );
+
         it(
             "previews a Base USDC transfer",
             async () => {
@@ -208,7 +482,7 @@ describe(
                 );
 
                 fireEvent.change(
-                    screen.getByLabelText(
+                    await screen.findByLabelText(
                         "Amount",
                     ),
                     {
@@ -240,6 +514,12 @@ describe(
 
                                 walletAddress:
                                     "0x1111111111111111111111111111111111111111",
+
+                                sourceAsset:
+                                    expect.objectContaining({
+                                        assetId:
+                                            "nep141:base-usdc",
+                                    }),
                             }),
                         );
                     },
@@ -279,7 +559,7 @@ describe(
                 );
 
                 const amountInput =
-                    screen.getByLabelText(
+                    await screen.findByLabelText(
                         "Amount",
                     );
 
@@ -371,7 +651,7 @@ describe(
                 );
 
                 fireEvent.change(
-                    screen.getByLabelText(
+                    await screen.findByLabelText(
                         "Amount",
                     ),
                     {
@@ -416,6 +696,12 @@ describe(
 
                                 walletAddress:
                                     "0x1111111111111111111111111111111111111111",
+
+                                sourceAsset:
+                                    expect.objectContaining({
+                                        assetId:
+                                            "nep141:base-usdc",
+                                    }),
                             }),
                         );
                     },
@@ -451,7 +737,7 @@ describe(
                 );
 
                 fireEvent.change(
-                    screen.getByLabelText(
+                    await screen.findByLabelText(
                         "Amount",
                     ),
                     {

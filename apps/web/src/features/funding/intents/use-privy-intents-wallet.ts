@@ -9,12 +9,12 @@ import type {
 } from "@/chain/evm-wallet";
 
 import {
-    createPrivyIntentsWallet,
+    createIntentsEvmWallet,
 } from "./privy-intents-wallet";
 
 type IntentsWallet =
     ReturnType<
-        typeof createPrivyIntentsWallet
+        typeof createIntentsEvmWallet
     >;
 
 interface PrivyIntentsState {
@@ -53,8 +53,8 @@ export function usePrivyIntentsWallet(
                 setState({
                     provider,
                     wallet:
-                        createPrivyIntentsWallet({
-                            wallet: keptWallet,
+                        createIntentsEvmWallet({
+                            address: keptWallet.address,
                             provider,
                         }),
                 });

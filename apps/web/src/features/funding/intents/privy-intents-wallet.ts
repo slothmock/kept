@@ -4,8 +4,11 @@ import {
 
 import type {
     EthereumProvider,
-    KeptEvmWallet,
 } from "@/chain/evm-wallet";
+
+import {
+    SUPPORTED_EVM_FUNDING_CHAINS,
+} from "./supported-tokens";
 
 type RunnerOptions =
     Parameters<
@@ -46,22 +49,23 @@ export function toIntentsEvmProvider(
     };
 }
 
-interface CreatePrivyIntentsWalletInput {
-    readonly wallet: KeptEvmWallet;
-    readonly provider: EthereumProvider;
+interface CreateIntentsEvmWalletInput {
+    readonly address: string;
+    readonly provider:
+        EthereumProvider;
 }
 
-export function createPrivyIntentsWallet({
-    wallet,
+export function createIntentsEvmWallet({
+    address,
     provider,
-}: CreatePrivyIntentsWalletInput): IntentsWallet {
+}: CreateIntentsEvmWalletInput): IntentsWallet {
     return {
-        id: "privy-embedded-evm",
+        id: "kept-funding-evm",
 
-        name: "Kept",
+        name: "Funding wallet",
 
         chains: [
-            "base",
+            ...SUPPORTED_EVM_FUNDING_CHAINS,
         ],
 
         signingStandard:
@@ -74,8 +78,7 @@ export function createPrivyIntentsWallet({
             async () => undefined,
 
         getAddress: () =>
-            wallet.address ??
-            undefined,
+            address,
 
         getProviders: () => ({
             evm:
@@ -87,11 +90,13 @@ export function createPrivyIntentsWallet({
         getChainId: async () => {
             const rawChainId =
                 await provider.request({
-                    method: "eth_chainId",
+                    method:
+                        "eth_chainId",
                 });
 
             if (
-                typeof rawChainId !== "string"
+                typeof rawChainId !==
+                "string"
             ) {
                 throw new Error(
                     "Unable to read wallet chain.",

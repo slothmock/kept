@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   useFiatOnramp,
-} from "@privy-io/react-auth";
+} from "@privy-io/react-auth"
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ interface PrivyFundingButtonProps {
   readonly onStarted?: () => Promise<void>;
   readonly onSubmitted?: () => void;
   readonly onConfirmed?: () => void;
+  readonly onError?: (message: string) => void;
 }
 
 export function PrivyFundingButton({
@@ -29,6 +30,7 @@ export function PrivyFundingButton({
   onStarted,
   onSubmitted,
   onConfirmed,
+  onError,
 }: PrivyFundingButtonProps) {
   const {
     fund,
@@ -39,17 +41,9 @@ export function PrivyFundingButton({
     setPending,
   ] = useState(false);
 
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(
-    null,
-  );
-
   async function startFunding():
     Promise<void> {
     setPending(true);
-    setError(null);
 
     try {
       await onStarted?.();
@@ -100,12 +94,29 @@ export function PrivyFundingButton({
         onConfirmed?.();
       }
     } catch (cause) {
+      const cancelled =
+        cause instanceof Error &&
+        cause.message ===
+        "User exited flow";
+
+      if (cancelled) {
+        diagnostics.info(
+          "funding.privy_cancelled",
+        );
+
+        onError?.(
+          "",
+        );
+
+        return;
+      }
+
       diagnostics.error(
         "funding.privy_failed",
         cause,
       );
 
-      setError(
+      onError?.(
         consumerErrorMessage(
           cause,
           "We couldn't start funding. Try again.",
@@ -117,28 +128,17 @@ export function PrivyFundingButton({
   }
 
   return (
-    <div className="space-y-3">
-      <Button
-        type="button"
-        className="w-full"
-        disabled={pending}
-        onClick={() => {
-          void startFunding();
-        }}
-      >
-        {pending
-          ? "Starting funding…"
-          : "Continue"}
-      </Button>
-
-      {error ? (
-        <p
-          className="text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <Button
+      type="button"
+      className="w-full"
+      disabled={pending}
+      onClick={() => {
+        void startFunding();
+      }}
+    >
+      {pending
+        ? "Starting funding…"
+        : "Continue"}
+    </Button>
   );
 }

@@ -5,6 +5,7 @@ import type {
 import {
     consumerErrorMessage,
 } from "@/lib/consumer-error";
+
 import {
     diagnostics,
 } from "@/lib/diagnostics";
@@ -13,35 +14,72 @@ import {
     intentsConnectApi,
 } from "./aurora-api";
 
-const BASE_USDC_ADDRESS =
-    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+export const SUPPORTED_EVM_FUNDING_CHAINS =
+    [
+        "eth",
+        "base",
+        "arb",
+        "op",
+    ] as const;
+
+const SUPPORTED_SOURCE_CHAINS =
+    new Set<string>(
+        SUPPORTED_EVM_FUNDING_CHAINS,
+    );
 
 export interface FundingAsset {
-    readonly assetId: string;
-    readonly symbol: string;
-    readonly blockchain: string;
-    readonly contractAddress: string;
-    readonly decimals: number;
+    readonly assetId:
+    string;
+
+    readonly symbol:
+    string;
+
+    readonly blockchain:
+    string;
+
+    readonly contractAddress:
+    string | null;
+
+    readonly decimals:
+    number;
+
+    readonly kind:
+    "native" | "token";
 }
 
 export interface KeptFundingAssets {
-    readonly origin: FundingAsset;
-    readonly destination: FundingAsset;
+    readonly origins:
+    readonly FundingAsset[];
+
+    readonly destination:
+    FundingAsset;
 }
 
 function toFundingAsset(
-    token: SupportedToken | undefined,
+    token:
+        SupportedToken | undefined,
 ): FundingAsset | null {
     if (
         !token ||
-        typeof token.assetId !== "string" ||
-        typeof token.symbol !== "string" ||
-        typeof token.blockchain !== "string" ||
-        typeof token.contractAddress !== "string" ||
-        typeof token.decimals !== "number"
+        typeof token.assetId !==
+        "string" ||
+        typeof token.symbol !==
+        "string" ||
+        typeof token.blockchain !==
+        "string" ||
+        typeof token.decimals !==
+        "number"
     ) {
         return null;
     }
+
+    const contractAddress =
+        typeof token.contractAddress ===
+            "string" &&
+            token.contractAddress.trim().length >
+            0
+            ? token.contractAddress.trim()
+            : null;
 
     return {
         assetId:
@@ -53,12 +91,29 @@ function toFundingAsset(
         blockchain:
             token.blockchain,
 
-        contractAddress:
-            token.contractAddress,
+        contractAddress,
 
         decimals:
             token.decimals,
+
+        kind:
+            contractAddress
+                ? "token"
+                : "native",
     };
+}
+
+function isKeptSourceToken(
+    token:
+        SupportedToken,
+): boolean {
+    return (
+        typeof token.blockchain ===
+        "string" &&
+        SUPPORTED_SOURCE_CHAINS.has(
+            token.blockchain,
+        )
+    );
 }
 
 export async function resolveKeptFundingAssets():
@@ -68,25 +123,30 @@ export async function resolveKeptFundingAssets():
             await intentsConnectApi
                 .listSupportedTokens();
 
-        const originToken =
-            result.in?.find(
-                (token) =>
-                    token.blockchain === "base" &&
-                    token.symbol === "USDC" &&
-                    token.contractAddress?.toLowerCase() ===
-                    BASE_USDC_ADDRESS,
-            );
+        const origins =
+            result.in
+                ?.filter(
+                    isKeptSourceToken,
+                )
+                .map(
+                    toFundingAsset,
+                )
+                .filter(
+                    (
+                        asset,
+                    ): asset is FundingAsset =>
+                        asset !==
+                        null,
+                ) ??
+            [];
 
         const destinationToken =
             result.out?.find(
                 (token) =>
-                    token.blockchain === "monad" &&
-                    token.symbol === "USDC",
-            );
-
-        const origin =
-            toFundingAsset(
-                originToken,
+                    token.blockchain ===
+                    "monad" &&
+                    token.symbol ===
+                    "USDC",
             );
 
         const destination =
@@ -94,20 +154,25 @@ export async function resolveKeptFundingAssets():
                 destinationToken,
             );
 
-        if (!origin) {
+        if (
+            origins.length ===
+            0
+        ) {
             throw new Error(
-                "Base USDC is not currently supported by Aurora Intents.",
+                "No supported funding routes are currently available.",
             );
         }
 
-        if (!destination) {
+        if (
+            !destination
+        ) {
             throw new Error(
                 "Monad USDC is not currently supported by Aurora Intents.",
             );
         }
 
         return {
-            origin,
+            origins,
             destination,
         };
     } catch (cause) {
@@ -116,7 +181,10 @@ export async function resolveKeptFundingAssets():
             cause,
         );
 
-        if (cause instanceof Error) {
+        if (
+            cause instanceof
+            Error
+        ) {
             throw cause;
         }
 
@@ -125,7 +193,9 @@ export async function resolveKeptFundingAssets():
                 cause,
                 "We couldn't load the funding route. Try again.",
             ),
-            { cause },
+            {
+                cause,
+            },
         );
     }
 }

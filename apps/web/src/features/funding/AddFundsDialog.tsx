@@ -1,14 +1,18 @@
 import {
     useCallback,
+    useEffect,
+    useMemo,
     useState,
     type ReactNode,
 } from "react";
+
 import {
     ArrowLeft,
     ArrowRight,
     Landmark,
     WalletCards,
 } from "lucide-react";
+
 import {
     parseUnits,
 } from "viem";
@@ -17,7 +21,11 @@ import {
     useKeptEvmWallet,
     type EthereumProvider,
 } from "@/chain/evm-wallet";
-import { Button } from "@/components/ui/button";
+
+import {
+    Button,
+} from "@/components/ui/button";
+
 import {
     Dialog,
     DialogContent,
@@ -25,106 +33,220 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+
+import {
+    Input,
+} from "@/components/ui/input";
+
 import {
     readBaseUsdcBalance,
 } from "@/features/funding/base-usdc";
-import {
-    PrivyFundingButton,
-} from "@/features/funding/PrivyFundingButton";
-import {
-    BASE_USDC,
-} from "@/features/funding/intents/kept-funding-recipe";
-import {
-    previewKeptFunding,
-} from "@/features/funding/intents/preview-funding";
+
 import {
     executeKeptFunding,
 } from "@/features/funding/execute-funding";
+
+import {
+    BASE_USDC,
+} from "@/features/funding/intents/kept-funding-recipe";
+
+import {
+    previewKeptFunding,
+} from "@/features/funding/intents/preview-funding";
+
 import {
     createKeptIntentsRunner,
 } from "@/features/funding/intents/runner";
+
+import {
+    resolveKeptFundingAssets,
+    type FundingAsset,
+} from "@/features/funding/intents/supported-tokens";
+
+import {
+    PrivyFundingButton,
+} from "@/features/funding/PrivyFundingButton";
+
 import {
     waitForBaseUsdcIncrease,
 } from "@/features/funding/reconcile-base-usdc";
+
 import {
     diagnostics,
 } from "@/lib/diagnostics";
 
-const BASE_CHAIN_ID =
-    8453;
+import {
+    FundingAssetPicker,
+    FormatFundingChainName,
+} from "@/features/funding/FundingAssetPicker";
+
+import {
+    readFundingAssetBalances,
+} from "@/features/funding/intents/funding-asset-balances";
+
+import {
+    useExternalFundingWallet,
+    type ExternalFundingWalletOption,
+} from "@/features/funding/use-external-funding-wallet";
 
 const BASE_CHAIN =
     "eip155:8453" as const;
 
-const BASE_CHAIN_ID_HEX =
-    "0x2105";
-
 const MIN_FIAT_ONRAMP =
     20;
 
-async function switchToBase(provider: EthereumProvider): Promise<void> {
+const SOURCE_NETWORK_ORDER =
+    [
+        "eth",
+        "base",
+        "arb",
+        "op",
+    ] as const;
 
-    try {
-        await provider.request({
-            method:
-                "wallet_switchEthereumChain",
+interface EvmFundingChain {
+    readonly id:
+    number;
 
-            params: [
-                {
-                    chainId:
-                        BASE_CHAIN_ID_HEX,
-                },
-            ],
-        });
-    } catch (error) {
-        const code =
-            typeof error === "object" &&
-                error !== null &&
-                "code" in error
-                ? error.code
-                : undefined;
+    readonly name:
+    string;
 
-        if (
-            code !==
-            4902
-        ) {
-            throw error;
-        }
+    readonly nativeCurrency: {
+        readonly name:
+        string;
 
-        await provider.request({
-            method:
-                "wallet_addEthereumChain",
+        readonly symbol:
+        string;
 
-            params: [
-                {
-                    chainId:
-                        BASE_CHAIN_ID_HEX,
+        readonly decimals:
+        number;
+    };
 
-                    chainName:
-                        "Base",
+    readonly rpcUrls:
+    readonly string[];
 
-                    nativeCurrency: {
-                        name:
-                            "Ether",
-                        symbol:
-                            "ETH",
-                        decimals:
-                            18,
-                    },
-
-                    rpcUrls: [
-                        "https://mainnet.base.org",
-                    ],
-
-                    blockExplorerUrls: [
-                        "https://basescan.org",
-                    ],
-                },
-            ],
-        });
-    }
+    readonly blockExplorerUrls:
+    readonly string[];
 }
+
+const EVM_FUNDING_CHAINS:
+    Readonly<
+        Record<
+            string,
+            EvmFundingChain
+        >
+    > = {
+    ethereum: {
+        id: 1,
+        name: "Ethereum",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://ethereum-rpc.publicnode.com",
+        ],
+        blockExplorerUrls: [
+            "https://etherscan.io",
+        ],
+    },
+
+    eth: {
+        id: 1,
+        name: "Ethereum",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://ethereum-rpc.publicnode.com",
+        ],
+        blockExplorerUrls: [
+            "https://etherscan.io",
+        ],
+    },
+
+    optimism: {
+        id: 10,
+        name: "Optimism",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://mainnet.optimism.io",
+        ],
+        blockExplorerUrls: [
+            "https://optimistic.etherscan.io",
+        ],
+    },
+
+    op: {
+        id: 10,
+        name: "Optimism",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://mainnet.optimism.io",
+        ],
+        blockExplorerUrls: [
+            "https://optimistic.etherscan.io",
+        ],
+    },
+
+    base: {
+        id: 8453,
+        name: "Base",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://mainnet.base.org",
+        ],
+        blockExplorerUrls: [
+            "https://basescan.org",
+        ],
+    },
+
+    arbitrum: {
+        id: 42161,
+        name: "Arbitrum",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://arb1.arbitrum.io/rpc",
+        ],
+        blockExplorerUrls: [
+            "https://arbiscan.io",
+        ],
+    },
+
+    arb: {
+        id: 42161,
+        name: "Arbitrum",
+        nativeCurrency: {
+            name: "Ether",
+            symbol: "ETH",
+            decimals: 18,
+        },
+        rpcUrls: [
+            "https://arb1.arbitrum.io/rpc",
+        ],
+        blockExplorerUrls: [
+            "https://arbiscan.io",
+        ],
+    },
+};
 
 async function readChainId(
     provider: EthereumProvider,
@@ -163,13 +285,108 @@ async function readChainId(
     return chainId;
 }
 
+async function switchToFundingChain(
+    provider: EthereumProvider,
+    blockchain: string,
+): Promise<void> {
+    const chain =
+        EVM_FUNDING_CHAINS[
+        blockchain
+        ];
+
+    if (
+        !chain
+    ) {
+        throw new Error(
+            `${blockchain} isn't currently supported for wallet transfers.`,
+        );
+    }
+
+    const currentChainId =
+        await readChainId(
+            provider,
+        );
+
+    if (
+        currentChainId ===
+        chain.id
+    ) {
+        return;
+    }
+
+    const chainId =
+        `0x${chain.id.toString(
+            16,
+        )}`;
+
+    try {
+        await provider.request({
+            method:
+                "wallet_switchEthereumChain",
+
+            params: [
+                {
+                    chainId,
+                },
+            ],
+        });
+    } catch (error) {
+        const code =
+            typeof error ===
+                "object" &&
+                error !==
+                null &&
+                "code" in
+                error
+                ? error.code
+                : undefined;
+
+        if (
+            code !==
+            4902
+        ) {
+            throw error;
+        }
+
+        await provider.request({
+            method:
+                "wallet_addEthereumChain",
+
+            params: [
+                {
+                    chainId,
+
+                    chainName:
+                        chain.name,
+
+                    nativeCurrency:
+                        chain.nativeCurrency,
+
+                    rpcUrls: [
+                        ...chain.rpcUrls,
+                    ],
+
+                    blockExplorerUrls: [
+                        ...chain.blockExplorerUrls,
+                    ],
+                },
+            ],
+        });
+    }
+}
+
 async function restoreChain(
     provider: EthereumProvider,
     chainId: number,
 ): Promise<void> {
+    const currentChainId =
+        await readChainId(
+            provider,
+        );
+
     if (
-        chainId ===
-        BASE_CHAIN_ID
+        currentChainId ===
+        chainId
     ) {
         return;
     }
@@ -181,7 +398,9 @@ async function restoreChain(
         params: [
             {
                 chainId:
-                    `0x${chainId.toString(16)}`,
+                    `0x${chainId.toString(
+                        16,
+                    )}`,
             },
         ],
     });
@@ -192,7 +411,8 @@ type FundingView =
     | "crypto";
 
 interface AddFundsDialogProps {
-    readonly open: boolean;
+    readonly open:
+    boolean;
 
     readonly walletAddress:
     string | null;
@@ -214,83 +434,506 @@ export function AddFundsDialog({
     const [
         view,
         setView,
-    ] = useState<FundingView>(
-        "choose",
-    );
+    ] =
+        useState<FundingView>(
+            "choose",
+        );
 
     const [
         cryptoAmount,
         setCryptoAmount,
-    ] = useState("");
+    ] =
+        useState("");
 
     const [
         previewing,
         setPreviewing,
-    ] = useState(false);
+    ] =
+        useState(false);
 
     const [
         previewStatus,
         setPreviewStatus,
-    ] = useState<
-        string | null
-    >(null);
+    ] =
+        useState<
+            string | null
+        >(null);
 
     const [
         previewError,
         setPreviewError,
-    ] = useState<
-        string | null
-    >(null);
+    ] =
+        useState<
+            string | null
+        >(null);
 
     const [
         fiatStartingBalance,
         setFiatStartingBalance,
-    ] = useState<
-        bigint | null
-    >(null);
+    ] =
+        useState<
+            bigint | null
+        >(null);
 
     const [
         fiatStatus,
         setFiatStatus,
-    ] = useState<
-        string | null
-    >(null);
+    ] =
+        useState<
+            string | null
+        >(null);
 
     const [
         fiatError,
         setFiatError,
-    ] = useState<
-        string | null
-    >(null);
+    ] =
+        useState<
+            string | null
+        >(null);
 
     const [
         executing,
         setExecuting,
-    ] = useState(false);
+    ] =
+        useState(false);
 
     const [
         executionStatus,
         setExecutionStatus,
-    ] = useState<
-        string | null
-    >(null);
+    ] =
+        useState<
+            string | null
+        >(null);
 
     const [
         executionError,
         setExecutionError,
-    ] = useState<
-        string | null
-    >(null);
+    ] =
+        useState<
+            string | null
+        >(null);
 
     const [
         previewedCryptoAmount,
         setPreviewedCryptoAmount,
-    ] = useState<
-        bigint | null
-    >(null);
+    ] =
+        useState<
+            bigint | null
+        >(null);
+
+    const [
+        sourceBlockchain,
+        setSourceBlockchain,
+    ] =
+        useState<
+            string | null
+        >(null);
+
+    const [
+        switchingSourceNetwork,
+        setSwitchingSourceNetwork,
+    ] =
+        useState(false);
+
+    const [
+        sourceNetworkError,
+        setSourceNetworkError,
+    ] =
+        useState<
+            string | null
+        >(null);
+
+    const [
+        sourceAssets,
+        setSourceAssets,
+    ] =
+        useState<
+            readonly FundingAsset[]
+        >([]);
+
+    const [
+        sourceAssetId,
+        setSourceAssetId,
+    ] =
+        useState<
+            string | null
+        >(null);
+
+    const [
+        sourceAssetBalances,
+        setSourceAssetBalances,
+    ] =
+        useState<
+            ReadonlyMap<
+                string,
+                bigint | null
+            >
+        >(
+            new Map(),
+        );
+
+    const [
+        sourceAssetBalancesLoading,
+        setSourceAssetBalancesLoading,
+    ] =
+        useState(
+            false,
+        );
+
+    const [
+        sourceAssetsLoading,
+        setSourceAssetsLoading,
+    ] =
+        useState(false);
+
+    const [
+        sourceAssetsError,
+        setSourceAssetsError,
+    ] =
+        useState<
+            string | null
+        >(null);
+
+
 
     const wallet =
         useKeptEvmWallet();
+
+    const externalWallet =
+        useExternalFundingWallet();
+
+    const sourceAsset =
+        useMemo(
+            () => {
+                if (
+                    !sourceAssetId
+                ) {
+                    return null;
+                }
+
+                return (
+                    sourceAssets.find(
+                        (
+                            asset,
+                        ) =>
+                            asset.assetId ===
+                            sourceAssetId,
+                    ) ??
+                    null
+                );
+            },
+            [
+                sourceAssetId,
+                sourceAssets,
+            ],
+        );
+
+    const walletCompatibleSourceAssets =
+        useMemo(
+            () => {
+                return sourceAssets.filter(
+                    (
+                        asset,
+                    ) =>
+                        SOURCE_NETWORK_ORDER.includes(
+                            asset.blockchain as typeof SOURCE_NETWORK_ORDER[number],
+                        ),
+                );
+            },
+            [
+                sourceAssets,
+            ],
+        );
+
+    const availableSourceBlockchains =
+        useMemo(
+            () =>
+                SOURCE_NETWORK_ORDER.filter(
+                    (
+                        blockchain,
+                    ) =>
+                        walletCompatibleSourceAssets.some(
+                            (
+                                asset,
+                            ) =>
+                                asset.blockchain ===
+                                blockchain,
+                        ),
+                ),
+            [
+                walletCompatibleSourceAssets,
+            ],
+        );
+
+    const filteredSourceAssets =
+        useMemo(
+            () => {
+                if (
+                    !sourceBlockchain
+                ) {
+                    return [];
+                }
+
+                return walletCompatibleSourceAssets.filter(
+                    (
+                        asset,
+                    ) =>
+                        asset.blockchain ===
+                        sourceBlockchain,
+                );
+            },
+            [
+                sourceBlockchain,
+                walletCompatibleSourceAssets,
+            ],
+        );
+
+    useEffect(
+        () => {
+            if (
+                !open ||
+                view !==
+                "crypto"
+            ) {
+                return;
+            }
+
+            let cancelled =
+                false;
+
+            void (
+                async () => {
+                    setSourceAssetsLoading(
+                        true,
+                    );
+
+                    setSourceAssetsError(
+                        null,
+                    );
+
+                    try {
+                        const {
+                            origins,
+                        } =
+                            await resolveKeptFundingAssets();
+
+                        if (
+                            cancelled
+                        ) {
+                            return;
+                        }
+
+                        setSourceAssets(
+                            origins,
+                        );
+
+                        setSourceBlockchain(
+                            (
+                                current,
+                            ) => {
+                                if (
+                                    current &&
+                                    origins.some(
+                                        (
+                                            asset,
+                                        ) =>
+                                            asset.blockchain ===
+                                            current,
+                                    )
+                                ) {
+                                    return current;
+                                }
+
+                                const baseAsset =
+                                    origins.find(
+                                        (
+                                            asset,
+                                        ) =>
+                                            asset.blockchain ===
+                                            "base",
+                                    );
+
+                                return (
+                                    baseAsset?.blockchain ??
+                                    origins[0]?.blockchain ??
+                                    null
+                                );
+                            },
+                        );
+
+                        setSourceAssetId(
+                            (
+                                current,
+                            ) => {
+                                if (
+                                    current &&
+                                    origins.some(
+                                        (
+                                            asset,
+                                        ) =>
+                                            asset.assetId ===
+                                            current,
+                                    )
+                                ) {
+                                    return current;
+                                }
+
+                                const baseUsdc =
+                                    origins.find(
+                                        (
+                                            asset,
+                                        ) =>
+                                            asset.blockchain ===
+                                            "base" &&
+                                            asset.symbol ===
+                                            "USDC",
+                                    );
+
+                                return (
+                                    baseUsdc
+                                        ?.assetId ??
+                                    origins[0]
+                                        ?.assetId ??
+                                    null
+                                );
+                            },
+                        );
+                    } catch (
+                    error
+                    ) {
+                        if (
+                            cancelled
+                        ) {
+                            return;
+                        }
+
+                        setSourceAssets(
+                            [],
+                        );
+
+                        setSourceAssetId(
+                            null,
+                        );
+
+                        setSourceAssetsError(
+                            error instanceof
+                                Error
+                                ? error.message
+                                : "We couldn't load supported funding options.",
+                        );
+                    } finally {
+                        if (
+                            !cancelled
+                        ) {
+                            setSourceAssetsLoading(
+                                false,
+                            );
+                        }
+                    }
+                }
+            )();
+
+            return () => {
+                cancelled =
+                    true;
+            };
+        },
+        [
+            open,
+            view,
+        ],
+    );
+
+    useEffect(
+        () => {
+            if (
+                !open ||
+                view !==
+                "crypto" ||
+                !externalWallet.address ||
+                walletCompatibleSourceAssets.length ===
+                0
+            ) {
+                return;
+            }
+
+            let cancelled =
+                false;
+
+            const externalAddress =
+                externalWallet.address;
+
+            void (
+                async () => {
+                    setSourceAssetBalancesLoading(
+                        true,
+                    );
+
+                    try {
+                        const balances =
+                            await readFundingAssetBalances(
+                                externalAddress as `0x${string}`,
+                                walletCompatibleSourceAssets,
+                            );
+
+                        if (
+                            cancelled
+                        ) {
+                            return;
+                        }
+
+                        setSourceAssetBalances(
+                            new Map(
+                                balances.map(
+                                    (
+                                        result,
+                                    ) => [
+                                            result.assetId,
+                                            result.balance,
+                                        ],
+                                ),
+                            ),
+                        );
+                    } catch (
+                    error
+                    ) {
+                        diagnostics.warn(
+                            "funding.asset_balances_failed",
+                            error,
+                        );
+
+                        if (
+                            !cancelled
+                        ) {
+                            setSourceAssetBalances(
+                                new Map(),
+                            );
+                        }
+                    } finally {
+                        if (
+                            !cancelled
+                        ) {
+                            setSourceAssetBalancesLoading(
+                                false,
+                            );
+                        }
+                    }
+                }
+            )();
+
+            return () => {
+                cancelled =
+                    true;
+            };
+        },
+        [
+            open,
+            view,
+            externalWallet.address,
+            walletCompatibleSourceAssets,
+        ],
+    );
+
 
     const resetDialogState =
         useCallback(
@@ -329,6 +972,48 @@ export function AddFundsDialog({
 
                 setExecuting(
                     false,
+                );
+
+                setExecutionStatus(
+                    null,
+                );
+
+                setExecutionError(
+                    null,
+                );
+
+                setSourceAssets(
+                    [],
+                );
+
+                setSourceAssetId(
+                    null,
+                );
+
+                setSourceAssetsLoading(
+                    false,
+                );
+
+                setSourceAssetsError(
+                    null,
+                );
+            },
+            [],
+        );
+
+    const invalidateCryptoPreview =
+        useCallback(
+            () => {
+                setPreviewedCryptoAmount(
+                    null,
+                );
+
+                setPreviewStatus(
+                    null,
+                );
+
+                setPreviewError(
+                    null,
                 );
 
                 setExecutionStatus(
@@ -428,16 +1113,128 @@ export function AddFundsDialog({
             ],
         );
 
-    const executeFunding =
+    const handleFiatError =
+        useCallback(
+            (
+                message:
+                    string,
+            ) => {
+                setFiatStatus(
+                    null,
+                );
+
+                setFiatStartingBalance(
+                    null,
+                );
+
+                setFiatError(
+                    message || null,
+                );
+            },
+            [],
+        );
+
+    const handleSourceNetworkChange =
+        useCallback(
+            async (
+                blockchain:
+                    string,
+            ) => {
+                if (
+                    !externalWallet.address ||
+                    switchingSourceNetwork
+                ) {
+                    return;
+                }
+
+                invalidateCryptoPreview();
+
+                setSourceNetworkError(
+                    null,
+                );
+
+                setSwitchingSourceNetwork(
+                    true,
+                );
+
+                try {
+                    const provider =
+                        await externalWallet
+                            .getEvmProvider();
+
+                    if (
+                        !provider
+                    ) {
+                        throw new Error(
+                            "Connected wallet provider is unavailable.",
+                        );
+                    }
+
+                    await switchToFundingChain(
+                        provider,
+                        blockchain,
+                    );
+
+                    setSourceBlockchain(
+                        blockchain,
+                    );
+
+                    const firstAsset =
+                        sourceAssets.find(
+                            (
+                                asset,
+                            ) =>
+                                asset.blockchain ===
+                                blockchain,
+                        );
+
+                    setSourceAssetId(
+                        firstAsset?.assetId ??
+                        null,
+                    );
+
+                    setCryptoAmount(
+                        "",
+                    );
+                } catch (
+                error
+                ) {
+                    diagnostics.warn(
+                        "funding.source_network_switch_failed",
+                        error,
+                    );
+
+                    setSourceNetworkError(
+                        error instanceof
+                            Error
+                            ? error.message
+                            : "We couldn't switch networks.",
+                    );
+                } finally {
+                    setSwitchingSourceNetwork(
+                        false,
+                    );
+                }
+            },
+            [
+                externalWallet,
+                invalidateCryptoPreview,
+                sourceAssets,
+                switchingSourceNetwork,
+            ],
+        );
+
+    const executeEmbeddedFunding =
         useCallback(
             async (
                 amount: bigint,
-            ) => {
+            ): Promise<boolean> => {
                 if (
                     !walletAddress ||
+                    !wallet.address ||
                     executing
                 ) {
-                    return;
+                    return false;
                 }
 
                 setExecuting(
@@ -453,6 +1250,30 @@ export function AddFundsDialog({
                 );
 
                 try {
+                    const {
+                        origins,
+                    } =
+                        await resolveKeptFundingAssets();
+
+                    const fiatSourceAsset =
+                        origins.find(
+                            (
+                                asset,
+                            ) =>
+                                asset.blockchain ===
+                                "base" &&
+                                asset.symbol ===
+                                "USDC",
+                        );
+
+                    if (
+                        !fiatSourceAsset
+                    ) {
+                        throw new Error(
+                            "Base USDC is not currently supported by Aurora Intents.",
+                        );
+                    }
+
                     const provider =
                         await wallet
                             .getProvider();
@@ -470,28 +1291,30 @@ export function AddFundsDialog({
                             provider,
                         );
 
-                    await switchToBase(
+                    await switchToFundingChain(
                         provider,
+                        "base",
                     );
 
                     const runner =
                         createKeptIntentsRunner({
-                            wallet,
+                            sourceAddress:
+                                wallet.address,
+
                             provider,
                         });
 
                     try {
-                        const execution =
-                            await executeKeptFunding({
-                                runner,
-                                amount,
-                                walletAddress,
-                            });
+                        await executeKeptFunding({
+                            runner,
 
-                        console.log(
-                            "Aurora funding execution:",
-                            execution,
-                        );
+                            amount,
+
+                            walletAddress,
+
+                            sourceAsset:
+                                fiatSourceAsset,
+                        });
 
                         setExecutionStatus(
                             "Your money has been added to Kept.",
@@ -504,6 +1327,8 @@ export function AddFundsDialog({
                                     amount.toString(),
                             },
                         );
+
+                        return true;
                     } finally {
                         runner.dispose();
 
@@ -512,16 +1337,16 @@ export function AddFundsDialog({
                                 provider,
                                 previousChainId,
                             );
-                        } catch (
-                        restoreError
-                        ) {
-                            console.warn(
-                                "Unable to restore previous wallet network:",
+                        } catch (restoreError) {
+                            diagnostics.warn(
+                                "funding.wallet_network_restore_failed",
                                 restoreError,
                             );
                         }
                     }
-                } catch (error) {
+                } catch (
+                error
+                ) {
                     diagnostics.error(
                         "funding.intents_user_failed",
                         error,
@@ -537,6 +1362,8 @@ export function AddFundsDialog({
                             ? error.message
                             : "We couldn't finish adding your money.",
                     );
+
+                    return false;
                 } finally {
                     setExecuting(
                         false,
@@ -546,6 +1373,142 @@ export function AddFundsDialog({
             [
                 executing,
                 wallet,
+                walletAddress,
+            ],
+        );
+
+    const executeExternalFunding =
+        useCallback(
+            async (
+                amount: bigint,
+            ): Promise<boolean> => {
+                if (
+                    !walletAddress ||
+                    !externalWallet.address ||
+                    !sourceAsset ||
+                    executing
+                ) {
+                    return false;
+                }
+
+                setExecuting(
+                    true,
+                );
+
+                setExecutionStatus(
+                    "Waiting for your wallet…",
+                );
+
+                setExecutionError(
+                    null,
+                );
+
+                try {
+                    const provider =
+                        await externalWallet
+                            .getEvmProvider();
+
+                    if (
+                        !provider
+                    ) {
+                        throw new Error(
+                            "Connect a wallet to continue.",
+                        );
+                    }
+
+                    const previousChainId =
+                        await readChainId(
+                            provider,
+                        );
+
+                    await switchToFundingChain(
+                        provider,
+                        sourceAsset.blockchain,
+                    );
+
+                    const runner =
+                        createKeptIntentsRunner({
+                            sourceAddress:
+                                externalWallet.address,
+
+                            provider,
+                        });
+
+                    try {
+                        await executeKeptFunding({
+                            runner,
+
+                            amount,
+
+                            walletAddress,
+
+                            sourceAsset,
+                        });
+
+                        setExecutionStatus(
+                            "Your money has been added to Kept.",
+                        );
+
+                        diagnostics.info(
+                            "funding.external_intents_complete",
+                            {
+                                amount:
+                                    amount.toString(),
+
+                                sourceAsset:
+                                    sourceAsset.symbol,
+
+                                sourceChain:
+                                    sourceAsset.blockchain,
+                            },
+                        );
+
+                        return true;
+                    } finally {
+                        runner.dispose();
+
+                        try {
+                            await restoreChain(
+                                provider,
+                                previousChainId,
+                            );
+                        } catch (restoreError) {
+                            diagnostics.warn(
+                                "funding.external_wallet_network_restore_failed",
+                                restoreError,
+                            );
+                        }
+                    }
+                } catch (
+                error
+                ) {
+                    diagnostics.error(
+                        "funding.external_intents_failed",
+                        error,
+                    );
+
+                    setExecutionStatus(
+                        null,
+                    );
+
+                    setExecutionError(
+                        error instanceof
+                            Error
+                            ? error.message
+                            : "We couldn't complete your transfer.",
+                    );
+
+                    return false;
+                } finally {
+                    setExecuting(
+                        false,
+                    );
+                }
+            },
+            [
+                executing,
+                externalWallet,
+                sourceAsset,
                 walletAddress,
             ],
         );
@@ -603,23 +1566,28 @@ export function AddFundsDialog({
                         },
                     );
 
-                    console.log(
-                        "Base USDC received:",
-                        received.toString(),
-                    );
 
                     setFiatStatus(
                         "Your money has arrived. Moving it into Kept…",
                     );
 
-                    await executeFunding(
-                        received,
-                    );
+                    const succeeded =
+                        await executeEmbeddedFunding(
+                            received,
+                        );
 
                     setFiatStatus(
                         null,
                     );
-                } catch (error) {
+
+                    if (
+                        !succeeded
+                    ) {
+                        return;
+                    }
+                } catch (
+                error
+                ) {
                     diagnostics.error(
                         "funding.privy_reconciliation_failed",
                         error,
@@ -638,7 +1606,7 @@ export function AddFundsDialog({
                 }
             },
             [
-                executeFunding,
+                executeEmbeddedFunding,
                 fiatStartingBalance,
                 walletAddress,
             ],
@@ -654,6 +1622,26 @@ export function AddFundsDialog({
                     return;
                 }
 
+                if (
+                    !externalWallet.address
+                ) {
+                    setPreviewError(
+                        "Connect a wallet to continue.",
+                    );
+
+                    return;
+                }
+
+                if (
+                    !sourceAsset
+                ) {
+                    setPreviewError(
+                        "Choose a funding option to continue.",
+                    );
+
+                    return;
+                }
+
                 let amount:
                     bigint;
 
@@ -661,11 +1649,11 @@ export function AddFundsDialog({
                     amount =
                         parseUnits(
                             cryptoAmount,
-                            6,
+                            sourceAsset.decimals,
                         );
                 } catch {
                     setPreviewError(
-                        "Enter a valid USDC amount.",
+                        `Enter a valid ${sourceAsset.symbol} amount.`,
                     );
 
                     return;
@@ -700,14 +1688,14 @@ export function AddFundsDialog({
 
                 try {
                     const provider =
-                        await wallet
-                            .getProvider();
+                        await externalWallet
+                            .getEvmProvider();
 
                     if (
                         !provider
                     ) {
                         throw new Error(
-                            "Wallet provider is unavailable.",
+                            "Connected wallet provider is unavailable.",
                         );
                     }
 
@@ -716,24 +1704,28 @@ export function AddFundsDialog({
                             provider,
                         );
 
-                    await switchToBase(
+                    await switchToFundingChain(
                         provider,
+                        sourceAsset.blockchain,
                     );
 
                     const runner =
                         createKeptIntentsRunner({
-                            wallet,
+                            sourceAddress:
+                                externalWallet.address,
+
                             provider,
                         });
 
                     try {
-                        const {
-                            preview,
-                        } =
-                            await previewKeptFunding({
+                        await previewKeptFunding({
                                 runner,
+
                                 amount,
+
                                 walletAddress,
+
+                                sourceAsset,
                             });
 
                         setPreviewedCryptoAmount(
@@ -748,10 +1740,6 @@ export function AddFundsDialog({
                             null,
                         );
 
-                        console.log(
-                            "Aurora funding preview:",
-                            preview,
-                        );
 
                         setPreviewStatus(
                             "Your transfer route is ready.",
@@ -764,20 +1752,16 @@ export function AddFundsDialog({
                                 provider,
                                 previousChainId,
                             );
-                        } catch (
-                        restoreError
-                        ) {
-                            console.warn(
-                                "Unable to restore previous wallet network:",
+                        } catch (restoreError) {
+                            diagnostics.warn(
+                                "funding.external_wallet_network_restore_failed",
                                 restoreError,
                             );
                         }
                     }
-                } catch (error) {
-                    console.error(
-                        "Aurora funding preview failed:",
-                        error,
-                    );
+                } catch (
+                error
+                ) {
 
                     setPreviewedCryptoAmount(
                         null,
@@ -797,36 +1781,11 @@ export function AddFundsDialog({
             },
             [
                 cryptoAmount,
+                externalWallet,
                 previewing,
-                wallet,
+                sourceAsset,
                 walletAddress,
             ],
-        );
-
-    const invalidateCryptoPreview =
-        useCallback(
-            () => {
-                setPreviewedCryptoAmount(
-                    null,
-                );
-
-                setPreviewStatus(
-                    null,
-                );
-
-                setPreviewError(
-                    null,
-                );
-
-                setExecutionStatus(
-                    null,
-                );
-
-                setExecutionError(
-                    null,
-                );
-            },
-            [],
         );
 
     return (
@@ -834,6 +1793,7 @@ export function AddFundsDialog({
             open={
                 open
             }
+
             onOpenChange={
                 handleOpenChange
             }
@@ -845,35 +1805,47 @@ export function AddFundsDialog({
                         walletAddress={
                             walletAddress
                         }
+
                         fiatStatus={
                             fiatStatus
                         }
+
                         fiatError={
                             fiatError
                         }
+
                         executionStatus={
                             executionStatus
                         }
+
                         executionError={
                             executionError
                         }
+
                         executing={
                             executing
                         }
+
                         onFiatStarted={
                             handleFiatStarted
                         }
+
                         onFiatSubmitted={() => {
                             setFiatStatus(
                                 "Your purchase is being processed…",
                             );
                         }}
+
                         onFiatConfirmed={() => {
                             void handleFiatConfirmed();
                         }}
+
+                        onFiatError={handleFiatError}
+
                         onUseAvailableCash={
                             handleUseAvailableCash
                         }
+
                         onTransferCrypto={() => {
                             invalidateCryptoPreview();
 
@@ -887,37 +1859,146 @@ export function AddFundsDialog({
                         walletAddress={
                             walletAddress
                         }
+
+                        externalWalletConnected={
+                            externalWallet.connected
+                        }
+
+                        externalWalletAddress={
+                            externalWallet.address
+                        }
+
+                        externalWalletClientType={
+                            externalWallet.walletClientType
+                        }
+
+                        availableExternalWallets={
+                            externalWallet.availableWallets
+                        }
+
+                        sourceBlockchains={
+                            availableSourceBlockchains
+                        }
+
+                        sourceBlockchain={
+                            sourceBlockchain
+                        }
+
+                        sourceNetworkError={
+                            sourceNetworkError
+                        }
+
+                        switchingSourceNetwork={
+                            switchingSourceNetwork
+                        }
+
+                        onSourceNetworkChange={(
+                            blockchain,
+                        ) => {
+                            void handleSourceNetworkChange(
+                                blockchain,
+                            );
+                        }}
+
+                        sourceAssets={
+                            filteredSourceAssets
+                        }
+
+                        sourceAsset={
+                            sourceAsset
+                        }
+
+                        sourceAssetsLoading={
+                            sourceAssetsLoading
+                        }
+
+                        sourceAssetsError={
+                            sourceAssetsError
+                        }
+
+                        sourceAssetBalances={
+                            sourceAssetBalances
+                        }
+
+                        sourceAssetBalancesLoading={
+                            sourceAssetBalancesLoading
+                        }
+
                         amount={
                             cryptoAmount
                         }
+
                         previewing={
                             previewing
                         }
+
                         previewStatus={
                             previewStatus
                         }
+
                         previewError={
                             previewError
                         }
+
                         executing={
                             executing
                         }
+
                         executionStatus={
                             executionStatus
                         }
+
                         executionError={
                             executionError
                         }
+
                         canExecute={
                             previewedCryptoAmount !==
                             null
                         }
+
+                        onSelectExternalWallet={(address) => {
+                            invalidateCryptoPreview();
+
+                            externalWallet.select(
+                                address,
+                            );
+                        }}
+
+                        onChangeExternalWallet={() => {
+                            invalidateCryptoPreview();
+
+                            externalWallet.clearSelection();
+                        }}
+
+                        onConnectExternalWallet={() => {
+                            invalidateCryptoPreview();
+
+                            void externalWallet.connect();
+                        }}
+
+                        onSourceAssetChange={(
+                            assetId,
+                        ) => {
+                            invalidateCryptoPreview();
+
+                            setCryptoAmount(
+                                "",
+                            );
+
+                            setSourceAssetId(
+                                assetId,
+                            );
+                        }}
+
                         onAmountChange={
                             setCryptoAmount
                         }
+
                         onPreviewInvalidated={
                             invalidateCryptoPreview
                         }
+
                         onBack={() => {
                             invalidateCryptoPreview();
 
@@ -925,9 +2006,11 @@ export function AddFundsDialog({
                                 "choose",
                             );
                         }}
+
                         onPreviewRoute={() => {
                             void handlePreviewRoute();
                         }}
+
                         onExecute={() => {
                             if (
                                 previewedCryptoAmount ===
@@ -936,7 +2019,7 @@ export function AddFundsDialog({
                                 return;
                             }
 
-                            void executeFunding(
+                            void executeExternalFunding(
                                 previewedCryptoAmount,
                             );
                         }}
@@ -957,6 +2040,7 @@ function FundingChoiceView({
     onFiatStarted,
     onFiatSubmitted,
     onFiatConfirmed,
+    onFiatError,
     onTransferCrypto,
     onUseAvailableCash,
 }: {
@@ -987,6 +2071,10 @@ function FundingChoiceView({
     readonly onFiatConfirmed:
     () => void;
 
+    readonly onFiatError: (
+        message: string
+    ) => void;
+
     readonly onTransferCrypto:
     () => void;
 
@@ -1010,7 +2098,9 @@ function FundingChoiceView({
                 icon={
                     <Landmark className="size-5" />
                 }
+
                 title="Buy USDC"
+
                 description="Add new money using card or another supported payment method."
             >
                 {walletAddress ? (
@@ -1018,40 +2108,48 @@ function FundingChoiceView({
                         address={
                             walletAddress
                         }
+
                         asset={
                             BASE_USDC
                         }
+
                         chain={
                             BASE_CHAIN
                         }
+
                         defaultAmount={
                             String(
                                 MIN_FIAT_ONRAMP,
                             )
                         }
+
                         onStarted={
                             onFiatStarted
                         }
+
                         onSubmitted={
                             onFiatSubmitted
                         }
+
                         onConfirmed={
                             onFiatConfirmed
                         }
+                        onError={onFiatError}
                     />
                 ) : (
                     <Button
                         className="w-full"
                         disabled
                     >
-                        Preparing your
-                        account…
+                        Preparing your account…
                     </Button>
                 )}
 
                 {fiatStatus ? (
                     <p className="mt-3 text-sm text-muted-foreground">
-                        {fiatStatus}
+                        {
+                            fiatStatus
+                        }
                     </p>
                 ) : null}
 
@@ -1060,13 +2158,17 @@ function FundingChoiceView({
                         className="mt-3 text-sm text-destructive"
                         role="alert"
                     >
-                        {fiatError}
+                        {
+                            fiatError
+                        }
                     </p>
                 ) : null}
 
                 {executionStatus ? (
                     <p className="mt-3 text-sm text-muted-foreground">
-                        {executionStatus}
+                        {
+                            executionStatus
+                        }
                     </p>
                 ) : null}
 
@@ -1075,16 +2177,17 @@ function FundingChoiceView({
                         className="mt-3 text-sm text-destructive"
                         role="alert"
                     >
-                        {executionError}
+                        {
+                            executionError
+                        }
                     </p>
                 ) : null}
 
                 {executing ? (
                     <p className="mt-3 text-xs text-muted-foreground">
-                        Keep this window
-                        open while Kept
-                        finishes adding
-                        your money.
+                        Keep this window open
+                        while Kept finishes
+                        adding your money.
                     </p>
                 ) : null}
             </FundingOption>
@@ -1093,15 +2196,19 @@ function FundingChoiceView({
                 icon={
                     <WalletCards className="size-5" />
                 }
+
                 title="Use available cash"
+
                 description="Move money already available in Kept into savings."
             >
                 <Button
                     type="button"
                     className="w-full"
+
                     disabled={
                         executing
                     }
+
                     onClick={
                         onUseAvailableCash
                     }
@@ -1114,16 +2221,20 @@ function FundingChoiceView({
                 icon={
                     <ArrowRight className="size-5" />
                 }
+
                 title="Transfer crypto"
-                description="Use crypto you already own on another network."
+
+                description="Use crypto you already own in another wallet."
             >
                 <Button
                     type="button"
                     className="w-full"
+
                     disabled={
                         !walletAddress ||
                         executing
                     }
+
                     onClick={
                         onTransferCrypto
                     }
@@ -1137,6 +2248,23 @@ function FundingChoiceView({
 
 function CryptoFundingView({
     walletAddress,
+    externalWalletConnected,
+    externalWalletAddress,
+    externalWalletClientType,
+    availableExternalWallets,
+
+    sourceAssets,
+    sourceAsset,
+    sourceAssetsLoading,
+    sourceAssetsError,
+    sourceAssetBalances,
+    sourceAssetBalancesLoading,
+
+    sourceBlockchains,
+    sourceBlockchain,
+    switchingSourceNetwork,
+    sourceNetworkError,
+
     amount,
     previewing,
     previewStatus,
@@ -1145,6 +2273,12 @@ function CryptoFundingView({
     executionStatus,
     executionError,
     canExecute,
+
+    onConnectExternalWallet,
+    onSelectExternalWallet,
+    onChangeExternalWallet,
+    onSourceAssetChange,
+    onSourceNetworkChange,
     onAmountChange,
     onPreviewInvalidated,
     onBack,
@@ -1153,6 +2287,55 @@ function CryptoFundingView({
 }: {
     readonly walletAddress:
     string | null;
+
+    readonly externalWalletConnected:
+    boolean;
+
+    readonly externalWalletAddress:
+    string | null;
+
+    readonly externalWalletClientType:
+    string | null;
+
+    readonly availableExternalWallets:
+    readonly ExternalFundingWalletOption[];
+
+    readonly sourceBlockchains:
+    readonly string[];
+
+    readonly sourceBlockchain:
+    string | null;
+
+    readonly switchingSourceNetwork:
+    boolean;
+
+    readonly sourceNetworkError:
+    string | null;
+
+    readonly onSourceNetworkChange: (
+        blockchain: string,
+    ) => void;
+
+    readonly sourceAssets:
+    readonly FundingAsset[];
+
+    readonly sourceAsset:
+    FundingAsset | null;
+
+    readonly sourceAssetsLoading:
+    boolean;
+
+    readonly sourceAssetsError:
+    string | null;
+
+    readonly sourceAssetBalances:
+    ReadonlyMap<
+        string,
+        bigint | null
+    >;
+
+    readonly sourceAssetBalancesLoading:
+    boolean;
 
     readonly amount:
     string;
@@ -1178,6 +2361,20 @@ function CryptoFundingView({
     readonly canExecute:
     boolean;
 
+    readonly onConnectExternalWallet:
+    () => void;
+
+    readonly onSelectExternalWallet: (
+        address: string,
+    ) => void;
+
+    readonly onChangeExternalWallet:
+    () => void;
+
+    readonly onSourceAssetChange: (
+        assetId: string,
+    ) => void;
+
     readonly onAmountChange: (
         value: string,
     ) => void;
@@ -1194,6 +2391,17 @@ function CryptoFundingView({
     readonly onExecute:
     () => void;
 }) {
+    const shortAddress =
+        externalWalletAddress
+            ? `${externalWalletAddress.slice(
+                0,
+                6,
+            )}…${externalWalletAddress.slice(
+                -4,
+            )}`
+            : null;
+
+
     return (
         <div className="space-y-5">
             <Button
@@ -1201,9 +2409,11 @@ function CryptoFundingView({
                 variant="ghost"
                 size="sm"
                 className="-ml-2"
+
                 disabled={
                     executing
                 }
+
                 onClick={
                     onBack
                 }
@@ -1219,162 +2429,447 @@ function CryptoFundingView({
                 </DialogTitle>
 
                 <DialogDescription>
-                    Move USDC you already
-                    own into your Kept
-                    account.
+                    Move crypto you
+                    already own into
+                    your Kept account.
                 </DialogDescription>
             </DialogHeader>
 
             <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <p className="font-medium">
-                            USDC
-                        </p>
+                <p className="text-sm font-medium">
+                    Source wallet
+                </p>
 
-                        <p className="text-sm text-muted-foreground">
-                            From Base
-                        </p>
+                {externalWalletConnected ? (
+                    <div className="mt-2 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium capitalize">
+                                {externalWalletClientType ??
+                                    "External wallet"}
+                            </p>
+
+                            <p className="truncate text-sm text-muted-foreground">
+                                {shortAddress}
+                            </p>
+                        </div>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+
+                            disabled={
+                                executing
+                            }
+
+                            onClick={
+                                onChangeExternalWallet
+                            }
+                        >
+                            Change
+                        </Button>
                     </div>
+                ) : (
+                    <div className="mt-3 space-y-3">
+                        {availableExternalWallets.length >
+                            0 ? (
+                            <>
+                                <p className="text-sm text-muted-foreground">
+                                    Choose which wallet
+                                    you'd like to fund
+                                    Kept from.
+                                </p>
 
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                                <div className="space-y-2">
+                                    {availableExternalWallets.map(
+                                        (
+                                            wallet,
+                                        ) => {
+                                            const walletShortAddress =
+                                                `${wallet.address.slice(
+                                                    0,
+                                                    6,
+                                                )}…${wallet.address.slice(
+                                                    -4,
+                                                )}`;
 
-                    <div className="text-right">
-                        <p className="font-medium">
-                            USDC
-                        </p>
+                                            return (
+                                                <Button
+                                                    key={
+                                                        `${wallet.walletName}:${wallet.address}`
+                                                    }
 
-                        <p className="text-sm text-muted-foreground">
-                            To Kept
-                        </p>
+                                                    type="button"
+
+                                                    variant="outline"
+
+                                                    className="w-full justify-between"
+
+                                                    disabled={
+                                                        executing
+                                                    }
+
+                                                    onClick={() => {
+                                                        onSelectExternalWallet(
+                                                            wallet.address,
+                                                        );
+                                                    }}
+                                                >
+                                                    <span className="capitalize">
+                                                        {
+                                                            wallet.walletName
+                                                        }
+                                                    </span>
+
+                                                    <span className="text-muted-foreground">
+                                                        {
+                                                            walletShortAddress
+                                                        }
+                                                    </span>
+                                                </Button>
+                                            );
+                                        },
+                                    )}
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full"
+
+                                    disabled={
+                                        executing
+                                    }
+
+                                    onClick={
+                                        onConnectExternalWallet
+                                    }
+                                >
+                                    Connect another wallet
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-sm leading-6 text-muted-foreground">
+                                    Connect the wallet
+                                    that holds the crypto
+                                    you'd like to transfer.
+                                </p>
+
+                                <Button
+                                    type="button"
+                                    className="w-full"
+
+                                    disabled={
+                                        executing
+                                    }
+
+                                    onClick={
+                                        onConnectExternalWallet
+                                    }
+                                >
+                                    Connect wallet
+                                </Button>
+                            </>
+                        )}
                     </div>
-                </div>
+                )}
             </div>
 
-            <div className="space-y-2">
-                <label
-                    htmlFor="crypto-funding-amount"
-                    className="text-sm font-medium"
-                >
-                    Amount
-                </label>
+            {externalWalletConnected ? (
+                <>
+                    <div className="grid gap-4 sm:grid-cols-[0.85fr_1.15fr]">
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="crypto-funding-network"
+                                className="text-sm font-medium"
+                            >
+                                Network
+                            </label>
 
-                <div className="relative">
-                    <Input
-                        id="crypto-funding-amount"
-                        inputMode="decimal"
-                        placeholder="20.00"
-                        value={
-                            amount
-                        }
-                        disabled={
-                            previewing ||
-                            executing
-                        }
-                        onChange={(
-                            event,
-                        ) => {
-                            onAmountChange(
-                                event.target.value,
-                            );
+                            <select
+                                id="crypto-funding-network"
+                                value={
+                                    sourceBlockchain ??
+                                    ""
+                                }
+                                disabled={
+                                    switchingSourceNetwork ||
+                                    previewing ||
+                                    executing
+                                }
+                                onChange={(
+                                    event,
+                                ) => {
+                                    onSourceNetworkChange(
+                                        event.target.value,
+                                    );
+                                }}
+                                className="flex h-15 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {sourceBlockchains.map(
+                                    (
+                                        blockchain,
+                                    ) => (
+                                        <option
+                                            key={
+                                                blockchain
+                                            }
+                                            value={
+                                                blockchain
+                                            }
+                                        >
+                                            {
+                                                FormatFundingChainName(
+                                                    blockchain,
+                                                )
+                                            }
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                        </div>
 
-                            onPreviewInvalidated();
-                        }}
-                    />
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                                Asset
+                            </label>
 
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
-                        USDC
-                    </span>
-                </div>
-            </div>
+                            {sourceAssetsLoading ? (
+                                <div className="flex h-10 items-center rounded-md border px-3 text-sm text-muted-foreground">
+                                    Loading assets…
+                                </div>
+                            ) : sourceAssetsError ? (
+                                <div className="flex h-10 items-center rounded-md border border-destructive px-3 text-sm text-destructive">
+                                    Couldn't load assets
+                                </div>
+                            ) : sourceAssets.length > 0 ? (
+                                <FundingAssetPicker
+                                    assets={
+                                        sourceAssets
+                                    }
+                                    selectedAsset={
+                                        sourceAsset
+                                    }
+                                    balances={
+                                        sourceAssetBalances
+                                    }
+                                    balancesLoading={
+                                        sourceAssetBalancesLoading
+                                    }
+                                    disabled={
+                                        switchingSourceNetwork ||
+                                        previewing ||
+                                        executing
+                                    }
+                                    onSelect={
+                                        onSourceAssetChange
+                                    }
+                                />
+                            ) : (
+                                <div className="flex h-10 items-center rounded-md border px-3 text-sm text-muted-foreground">
+                                    No supported assets
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
-            {!canExecute ? (
-                <Button
-                    type="button"
-                    className="w-full"
-                    disabled={
-                        !walletAddress ||
-                        previewing ||
-                        executing ||
-                        amount.trim()
-                            .length ===
-                        0
-                    }
-                    onClick={
-                        onPreviewRoute
-                    }
-                >
-                    {previewing
-                        ? "Checking transfer…"
-                        : "Continue"}
-                </Button>
+                    {switchingSourceNetwork ? (
+                        <p className="text-xs text-muted-foreground">
+                            Confirm the network change in your wallet…
+                        </p>
+                    ) : null}
+
+                    {sourceNetworkError ? (
+                        <p
+                            className="text-sm text-destructive"
+                            role="alert"
+                        >
+                            {
+                                sourceNetworkError
+                            }
+                        </p>
+                    ) : null}
+
+                    {sourceAsset ? (
+                        <>
+                            <div className="rounded-lg border bg-muted/20 p-4">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <p className="font-medium">
+                                            {
+                                                sourceAsset.symbol
+                                            }
+                                        </p>
+
+                                        <p className="text-sm text-muted-foreground">
+                                            {
+                                                FormatFundingChainName(
+                                                    sourceAsset.blockchain,
+                                                )
+                                            }
+                                        </p>
+                                    </div>
+
+                                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+
+                                    <div className="text-right">
+                                        <p className="font-medium">
+                                            USDC
+                                        </p>
+
+                                        <p className="text-sm text-muted-foreground">
+                                            Kept (Monad)
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label
+                                    htmlFor="crypto-funding-amount"
+                                    className="text-sm font-medium"
+                                >
+                                    Amount
+                                </label>
+
+                                <div className="relative">
+                                    <Input
+                                        id="crypto-funding-amount"
+
+                                        inputMode="decimal"
+
+                                        placeholder="0.00"
+
+                                        value={
+                                            amount
+                                        }
+
+                                        disabled={
+                                            previewing ||
+                                            executing
+                                        }
+
+                                        onChange={(
+                                            event,
+                                        ) => {
+                                            onAmountChange(
+                                                event.target.value,
+                                            );
+
+                                            onPreviewInvalidated();
+                                        }}
+                                    />
+
+                                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                                        {
+                                            sourceAsset.symbol
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+
+                            {!canExecute ? (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+
+                                    disabled={
+                                        !walletAddress ||
+                                        !externalWalletConnected ||
+                                        previewing ||
+                                        executing ||
+                                        amount
+                                            .trim()
+                                            .length ===
+                                        0
+                                    }
+
+                                    onClick={
+                                        onPreviewRoute
+                                    }
+                                >
+                                    {previewing
+                                        ? "Checking transfer…"
+                                        : "Continue"}
+                                </Button>
+                            ) : null}
+
+                            {previewStatus ? (
+                                <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-sm">
+                                        {
+                                            previewStatus
+                                        }
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Review the transfer before confirming.
+                                    </p>
+                                </div>
+                            ) : null}
+
+                            {previewError ? (
+                                <p
+                                    className="text-sm text-destructive"
+                                    role="alert"
+                                >
+                                    {
+                                        previewError
+                                    }
+                                </p>
+                            ) : null}
+
+                            {canExecute ? (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+
+                                    disabled={
+                                        executing ||
+                                        !externalWalletConnected
+                                    }
+
+                                    onClick={
+                                        onExecute
+                                    }
+                                >
+                                    {executing
+                                        ? "Adding money…"
+                                        : "Confirm transfer"}
+                                </Button>
+                            ) : null}
+
+                            {executionStatus ? (
+                                <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-sm">
+                                        {
+                                            executionStatus
+                                        }
+                                    </p>
+                                </div>
+                            ) : null}
+
+                            {executionError ? (
+                                <p
+                                    className="text-sm text-destructive"
+                                    role="alert"
+                                >
+                                    {
+                                        executionError
+                                    }
+                                </p>
+                            ) : null}
+
+                            <p className="text-xs leading-5 text-muted-foreground">
+                                Kept converts the selected asset to USDC during
+                                the transfer.<br />
+                                Network and provider fees may apply.
+                            </p>
+                        </>
+                    ) : null}
+                </>
             ) : null}
-
-            {previewStatus ? (
-                <div className="rounded-lg border bg-muted/20 p-3">
-                    <p className="text-sm">
-                        {previewStatus}
-                    </p>
-
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        Review the amount
-                        before confirming
-                        your transfer.
-                    </p>
-                </div>
-            ) : null}
-
-            {previewError ? (
-                <p
-                    className="text-sm text-destructive"
-                    role="alert"
-                >
-                    {previewError}
-                </p>
-            ) : null}
-
-            {canExecute ? (
-                <Button
-                    type="button"
-                    className="w-full"
-                    disabled={
-                        executing
-                    }
-                    onClick={
-                        onExecute
-                    }
-                >
-                    {executing
-                        ? "Adding money…"
-                        : "Confirm transfer"}
-                </Button>
-            ) : null}
-
-            {executionStatus ? (
-                <div className="rounded-lg border bg-muted/20 p-3">
-                    <p className="text-sm">
-                        {
-                            executionStatus
-                        }
-                    </p>
-                </div>
-            ) : null}
-
-            {executionError ? (
-                <p
-                    className="text-sm text-destructive"
-                    role="alert"
-                >
-                    {executionError}
-                </p>
-            ) : null}
-
-            <p className="text-xs leading-5 text-muted-foreground">
-                Transfers are routed
-                securely into Kept.
-                Network and provider
-                fees may apply.
-            </p>
         </div>
     );
 }
@@ -1401,22 +2896,30 @@ function FundingOption({
         <div className="rounded-lg border p-4">
             <div className="flex gap-3">
                 <div className="grid size-10 shrink-0 place-items-center rounded-full bg-muted">
-                    {icon}
+                    {
+                        icon
+                    }
                 </div>
 
                 <div>
                     <p className="font-medium">
-                        {title}
+                        {
+                            title
+                        }
                     </p>
 
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        {description}
+                        {
+                            description
+                        }
                     </p>
                 </div>
             </div>
 
             <div className="mt-4">
-                {children}
+                {
+                    children
+                }
             </div>
         </div>
     );

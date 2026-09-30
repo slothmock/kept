@@ -1,5 +1,3 @@
-// apps/web/src/features/funding/intents/execute-funding.ts
-
 import type {
     createExecutionRunner,
 } from "@aurora-is-near/intents-connect";
@@ -10,6 +8,7 @@ import {
 import {
     createKeptFundingPlan,
 } from "@/features/funding/intents/kept-funding-plan";
+import type { FundingAsset } from "./intents/supported-tokens";
 
 type ExecutionRunner =
     ReturnType<
@@ -18,25 +17,30 @@ type ExecutionRunner =
 
 interface ExecuteKeptFundingInput {
     readonly runner:
-        ExecutionRunner;
+    ExecutionRunner;
 
     readonly amount:
-        bigint;
+    bigint;
 
     readonly walletAddress:
-        string;
+    string;
+
+    readonly sourceAsset:
+    FundingAsset;
 }
 
 export async function executeKeptFunding({
     runner,
     amount,
     walletAddress,
+    sourceAsset,
 }: ExecuteKeptFundingInput) {
     try {
         const plan =
             await createKeptFundingPlan({
                 amount,
                 walletAddress,
+                sourceAsset,
             });
 
         const execution =

@@ -4,44 +4,70 @@ import type {
 
 import {
     resolveKeptFundingAssets,
+    type FundingAsset,
 } from "./supported-tokens";
 
 export interface KeptFundingRecipeParams {
-    readonly recipient: string;
+    readonly recipient:
+    string;
 }
 
 interface CreateKeptFundingPlanInput {
-    readonly amount: bigint;
-    readonly walletAddress: string;
+    readonly amount:
+    bigint;
+
+    readonly walletAddress:
+    string;
+
+    readonly sourceAsset:
+    FundingAsset;
 }
 
 export async function createKeptFundingPlan({
     amount,
     walletAddress,
+    sourceAsset,
 }: CreateKeptFundingPlanInput) {
     const {
-        origin,
         destination,
     } =
         await resolveKeptFundingAssets();
 
-    const recipe: Recipe<KeptFundingRecipeParams> = {
-        id: "kept-funding",
+    const destinationTokenAddress =
+        destination.contractAddress;
 
-        intent: "fund_kept",
+    if (!destinationTokenAddress) {
+        throw new Error(
+            "Monad USDC is not configured correctly.",
+        );
+    }
 
-        title: "Add money to Kept",
+    const recipe:
+        Recipe<KeptFundingRecipeParams> = {
+        id:
+            "kept-funding",
 
-        flow: "bridge-in",
+        intent:
+            "fund_kept",
 
-        type: "evm",
+        title:
+            "Add money to Kept",
+
+        flow:
+            "bridge-in",
+
+        type:
+            "evm",
 
         destination: {
-            chain: "monad",
+            chain:
+                "monad",
+
             assetId:
                 destination.assetId,
+
             tokenAddress:
-                destination.contractAddress,
+                destinationTokenAddress,
         },
 
         buildSteps: (
@@ -54,7 +80,7 @@ export async function createKeptFundingPlan({
         ) => [
                 {
                     to:
-                        destination.contractAddress,
+                        destinationTokenAddress,
 
                     functionSignature:
                         "transfer(address,uint256)",
@@ -80,7 +106,7 @@ export async function createKeptFundingPlan({
 
         quote: {
             originAsset:
-                origin.assetId,
+                sourceAsset.assetId,
 
             destinationAsset:
                 destination.assetId,
@@ -96,14 +122,15 @@ export async function createKeptFundingPlan({
         },
 
         originChain:
-            "base",
+            sourceAsset.blockchain,
 
         originToken: {
             contractAddress:
-                origin.contractAddress,
+                sourceAsset.contractAddress ??
+                "",
 
             decimals:
-                origin.decimals,
+                sourceAsset.decimals,
         },
 
         depositViaWallet:
