@@ -29,6 +29,14 @@ import type { SavingsPerformanceReader } from "./savings-performance.js";
 
 import type { SavingsMarketStatusReader } from "./savings-market-status.js";
 
+import {
+  createHmac,
+} from "node:crypto";
+
+import {
+  isIP,
+} from "node:net";
+
 export interface AuthenticatedIdentity {
   readonly privyUserId: string;
 
@@ -67,6 +75,12 @@ export interface ApiDependencies {
   readonly savingsPerformance: SavingsPerformanceReader;
 
   readonly savingsMarketStatus: SavingsMarketStatusReader;
+
+  readonly moonPay: {
+    readonly baseUrl: string;
+    readonly publishableKey: string;
+    readonly secretKey: string;
+  };
 }
 
 export interface BuildAppOptions {
@@ -77,6 +91,68 @@ export interface BuildAppOptions {
     readonly baseUrl: string;
     readonly apiKey: string;
   };
+}
+
+function canonicalizeClientIp(
+  rawIp: string,
+): string {
+  let ip =
+    rawIp.trim();
+
+  if (
+    ip.startsWith("[")
+  ) {
+    const closingBracket =
+      ip.indexOf("]");
+
+    if (
+      closingBracket > 0
+    ) {
+      ip =
+        ip.slice(
+          1,
+          closingBracket,
+        );
+    }
+  } else {
+    const ipv4WithPort =
+      ip.match(
+        /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/,
+      );
+
+    if (
+      ipv4WithPort?.[1]
+    ) {
+      ip =
+        ipv4WithPort[1];
+    }
+  }
+
+  if (
+    ip.toLowerCase()
+      .startsWith(
+        "::ffff:",
+      )
+  ) {
+    const mapped =
+      ip.slice(7);
+
+    if (
+      isIP(mapped) === 4
+    ) {
+      return mapped;
+    }
+  }
+
+  if (
+    isIP(ip) === 0
+  ) {
+    throw new PersistenceValidationError(
+      "Invalid client IP address",
+    );
+  }
+
+  return ip.toLowerCase();
 }
 
 function allowedWebOrigins(webOrigin: string): string[] {
@@ -587,7 +663,132 @@ export function buildApp(
     },
   );
 
-  app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+app.post(
+  "/v1/moonpay/offramp-url",
+  async (
+    request,
+    reply,
+  ) =>
+    handle(
+      request,
+      reply,
+      async () => {
+        try {
+          const body =
+            requireObject(
+              request.body,
+            );
+
+          const amount =
+            requireString(
+              body,
+              "amount",
+            );
+
+          const secretKey =
+            dependencies.moonPay
+              .secretKey;
+
+          const publishableKey =
+            dependencies.moonPay
+              .publishableKey;
+
+          const trueClientIpHeader =
+            request.headers[
+              "true-client-ip"
+            ];
+
+          const rawClientIp =
+            typeof trueClientIpHeader ===
+            "string"
+              ? trueClientIpHeader
+              : request.ip;
+
+          if (
+            !rawClientIp
+          ) {
+            throw new PersistenceValidationError(
+              "Unable to determine client IP address",
+            );
+          }
+
+          const customerIp =
+            canonicalizeClientIp(
+              rawClientIp,
+            );
+
+          const ipHash =
+            createHmac(
+              "sha256",
+              secretKey,
+            )
+              .update(
+                customerIp,
+              )
+              .digest(
+                "base64",
+              );
+
+          const url =
+            new URL(
+              dependencies.moonPay
+                .baseUrl,
+            );
+
+          url.searchParams.set(
+            "apiKey",
+            publishableKey,
+          );
+
+          url.searchParams.set(
+            "baseCurrencyCode",
+            "usdc",
+          );
+
+          url.searchParams.set(
+            "baseCurrencyAmount",
+            amount,
+          );
+
+          url.searchParams.set(
+            "lockAmount",
+            "true",
+          );
+
+          url.searchParams.set(
+            "allowedIpAddress",
+            ipHash,
+          );
+
+          const signature =
+            createHmac(
+              "sha256",
+              secretKey,
+            )
+              .update(
+                url.search,
+              )
+              .digest(
+                "base64",
+              );
+
+          url.searchParams.set(
+            "signature",
+            signature,
+          );
+
+          return {
+            url:
+              url.toString(),
+          };
+        } catch (error) {
+          throw error;
+        }
+      },
+    ),
+);
+
+    app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 
   app.get(
     "/v1/account/transactions",

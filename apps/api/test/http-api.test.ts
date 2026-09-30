@@ -194,6 +194,13 @@ function buildDependencies(
             "0",
         }),
     },
+
+    moonPay: {
+      baseUrl: "https://api.moonpay.example",
+      publishableKey: "moonpay-publishable-key",
+      secretKey: "moonpay-secret-key",
+    },
+
     savingsPerformance: {
       readPerformance:
         async () => ({

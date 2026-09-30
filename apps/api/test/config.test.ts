@@ -14,6 +14,9 @@ const requiredEnvironment = {
   KEPT_SAVINGS_VAULT_ADDRESS: "0x0000000000000000000000000000000000000002",
   AURORA_INTENTS_BASE_URL: "https://intents-connect-alpha-api.aurora.dev",
   AURORA_INTENTS_API_KEY: "test-aurora-key",
+  MOONPAY_WIDGET_BASE_URL: "https://widget.moonpay.example",
+  VITE_MOONPAY_PUBLISHABLE_KEY: "moonpay-publishable-key",
+  MOONPAY_SECRET_KEY: "moonpay-secret-key",
 } satisfies NodeJS.ProcessEnv;
 
 describe("API configuration", () => {
@@ -63,6 +66,15 @@ describe("API configuration", () => {
 
       auroraIntentsApiKey:
         "test-aurora-key",
+
+      moonPayBaseUrl:
+        "https://widget.moonpay.example",
+
+      moonPayPublishableKey:
+        "moonpay-publishable-key",
+
+      moonPaySecretKey:
+        "moonpay-secret-key",
     });
   });
 

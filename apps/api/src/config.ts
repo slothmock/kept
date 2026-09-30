@@ -15,6 +15,9 @@ export interface ApiConfig {
   readonly commitmentWindowOverrideSeconds?: number | undefined;
   readonly auroraIntentsBaseUrl: string;
   readonly auroraIntentsApiKey: string;
+  readonly moonPayPublishableKey: string;
+  readonly moonPaySecretKey: string;
+  readonly moonPayBaseUrl: string;
 }
 
 function parseCommitmentWindowOverride(
@@ -202,6 +205,24 @@ export function loadApiConfig(
       "AURORA_INTENTS_API_KEY",
     );
 
+  const moonPayBaseUrl =
+    requireValue(
+      environment,
+      "MOONPAY_WIDGET_BASE_URL"
+    );
+
+  const moonPayPublishableKey =
+    requireValue(
+      environment,
+      "VITE_MOONPAY_PUBLISHABLE_KEY",
+    );
+
+  const moonPaySecretKey =
+    requireValue(
+      environment,
+      "MOONPAY_SECRET_KEY",
+    );
+
   return {
     databaseUrl,
     privyAppId,
@@ -217,5 +238,8 @@ export function loadApiConfig(
     commitmentWindowOverrideSeconds,
     auroraIntentsBaseUrl,
     auroraIntentsApiKey,
+    moonPayBaseUrl,
+    moonPayPublishableKey,
+    moonPaySecretKey,
   };
 }

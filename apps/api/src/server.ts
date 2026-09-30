@@ -293,6 +293,13 @@ const app = buildApp(
 
     commitmentSettlementVerifier:
       settlementVerifier,
+
+    moonPay: {
+      publishableKey: config.moonPayPublishableKey,
+
+      secretKey: config.moonPaySecretKey,
+      baseUrl: config.moonPayBaseUrl,
+    },
   },
   {
     enableLogging: true,
