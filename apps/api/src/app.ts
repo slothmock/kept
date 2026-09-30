@@ -58,6 +58,8 @@ export interface ApiDependencies {
     | "listCommitments"
     | "activateCommitment"
     | "cancelCommitment"
+    | "listTransactions"
+    | "recordTransaction"
   >;
 
   readonly commitmentSettlementVerifier?: CommitmentSettlementVerifier;
@@ -226,6 +228,84 @@ function requireIdempotencyKey(request: FastifyRequest): string {
   }
 
   return value;
+}
+
+function optionalString(
+  body: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value =
+    body[key];
+
+  if (
+    value === undefined
+    || value === null
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value !== "string"
+  ) {
+    throw new PersistenceValidationError(
+      `${key} must be a string`,
+    );
+  }
+
+  return value;
+}
+
+function requirePositiveAtomicAmount(
+  body: Record<string, unknown>,
+  key: string,
+): string {
+  const value =
+    requireString(
+      body,
+      key,
+    );
+
+  if (
+    !/^\d{1,78}$/.test(value)
+    || BigInt(value) <= 0n
+  ) {
+    throw new PersistenceValidationError(
+      `${key} must be a positive integer`,
+    );
+  }
+
+  return value;
+}
+
+const CLIENT_TRANSACTION_TYPES = [
+  "SAVINGS_DEPOSIT",
+  "SAVINGS_WITHDRAWAL",
+  "CRYPTO_WITHDRAWAL",
+] as const;
+
+type ClientTransactionType =
+  typeof CLIENT_TRANSACTION_TYPES[number];
+
+function requireClientTransactionType(
+  body: Record<string, unknown>,
+): ClientTransactionType {
+  const value =
+    requireString(
+      body,
+      "type",
+    );
+
+  if (
+    !CLIENT_TRANSACTION_TYPES.includes(
+      value as ClientTransactionType,
+    )
+  ) {
+    throw new PersistenceValidationError(
+      "transaction type is invalid",
+    );
+  }
+
+  return value as ClientTransactionType;
 }
 
 async function settlementRequest<T>(operation: () => Promise<T>): Promise<T> {
@@ -508,6 +588,126 @@ export function buildApp(
   );
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+
+  app.get(
+    "/v1/account/transactions",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        () =>
+          dependencies.persistence
+            .listTransactions(
+              asAuthenticatedRequest(
+                request,
+              ).user.id,
+            ),
+      ),
+  );
+
+  app.post(
+    "/v1/account/transactions",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const auth =
+            asAuthenticatedRequest(
+              request,
+            );
+
+          const body =
+            requireObject(
+              request.body,
+            );
+
+          const chainIdValue =
+            optionalString(
+              body,
+              "chainId",
+            );
+
+          let chainId:
+            bigint | null =
+            null;
+
+          if (chainIdValue) {
+            try {
+              chainId =
+                BigInt(
+                  chainIdValue,
+                );
+            } catch {
+              throw new PersistenceValidationError(
+                "chainId must be an integer",
+              );
+            }
+          }
+
+          return dependencies.persistence
+            .recordTransaction({
+              userId:
+                auth.user.id,
+
+              idempotencyKey:
+                requireIdempotencyKey(
+                  request,
+                ),
+
+              type:
+                requireClientTransactionType(
+                  body,
+                ),
+
+              amountAtomic:
+                requirePositiveAtomicAmount(
+                  body,
+                  "amountAtomic",
+                ),
+
+              asset:
+                requireString(
+                  body,
+                  "asset",
+                ),
+
+              description:
+                requireString(
+                  body,
+                  "description",
+                ),
+
+              goalId:
+                optionalString(
+                  body,
+                  "goalId",
+                ),
+
+              chainId,
+
+              transactionHash:
+                optionalString(
+                  body,
+                  "transactionHash",
+                ),
+
+              externalReference:
+                optionalString(
+                  body,
+                  "externalReference",
+                ),
+            });
+        },
+      ),
+  );
+
 
   app.get(
     "/v1/savings/performance",

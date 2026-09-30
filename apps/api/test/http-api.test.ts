@@ -81,6 +81,19 @@ function buildDependencies(
       createGoal: async () => goal,
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],
+      listTransactions: async () => [],
+      recordTransaction: async (input) => ({
+        id: "transaction-1",
+        type: "savings_deposit" as const,
+        status: "completed" as const,
+        amountAtomic: input.amountAtomic,
+        asset: input.asset,
+        description: input.description,
+        goalId: input.goalId ?? null,
+        chainId: input.chainId?.toString() ?? null,
+        transactionHash: input.transactionHash ?? null,
+        createdAt: "2026-09-30T00:00:00.000Z",
+      }),
       archiveGoal: async () => ({
         ...goal,
         status: "ARCHIVED" as const,
@@ -241,6 +254,71 @@ describe("Kept HTTP API", () => {
     const one = await app.inject({ method: "GET", url: `/v1/goals/${goal.id}`, headers: auth });
     expect(one.statusCode).toBe(200);
     expect(one.json()).toEqual(goal);
+    await app.close();
+  });
+
+  it("lists and records account transactions for the authenticated user", async () => {
+    const transaction = {
+      id: "transaction-1",
+      type: "savings_deposit" as const,
+      status: "completed" as const,
+      amountAtomic: "25000000",
+      asset: "USDC",
+      description: "Added to savings",
+      goalId: goal.id,
+      chainId: "143",
+      transactionHash: "0xdeposit",
+      createdAt: "2026-09-30T00:00:00.000Z",
+    };
+    const dependencies = buildDependencies();
+    const listTransactions = vi.spyOn(dependencies.persistence, "listTransactions")
+      .mockResolvedValueOnce([transaction]);
+    const recordTransaction = vi.spyOn(dependencies.persistence, "recordTransaction");
+    const app = buildApp(dependencies);
+
+    const list = await app.inject({
+      method: "GET",
+      url: "/v1/account/transactions",
+      headers: auth,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toEqual([transaction]);
+    expect(listTransactions).toHaveBeenCalledWith(user.id);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/account/transactions",
+      headers: { ...auth, "idempotency-key": "transaction-key" },
+      payload: {
+        type: "SAVINGS_DEPOSIT",
+        amountAtomic: "25000000",
+        asset: "USDC",
+        description: "Added to savings",
+        goalId: goal.id,
+        chainId: "143",
+        transactionHash: "0xdeposit",
+        externalReference: "0xdeposit",
+      },
+    });
+
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({
+      amountAtomic: "25000000",
+      type: "savings_deposit",
+    });
+    expect(recordTransaction).toHaveBeenCalledWith({
+      userId: user.id,
+      idempotencyKey: "transaction-key",
+      type: "SAVINGS_DEPOSIT",
+      amountAtomic: "25000000",
+      asset: "USDC",
+      description: "Added to savings",
+      goalId: goal.id,
+      chainId: 143n,
+      transactionHash: "0xdeposit",
+      externalReference: "0xdeposit",
+    });
+
     await app.close();
   });
 

@@ -87,6 +87,35 @@ export interface GoalAllocationDto {
   readonly unallocatedSharesAtomic: string;
 }
 
+export type TransactionType =
+  | "fiat_funding"
+  | "crypto_funding"
+  | "savings_deposit"
+  | "savings_withdrawal"
+  | "crypto_withdrawal"
+  | "reward";
+
+export type TransactionStatus =
+  | "pending"
+  | "completed"
+  | "failed";
+
+export interface TransactionDto {
+  readonly id: string;
+  readonly type: TransactionType;
+  readonly status: TransactionStatus;
+  readonly amountAtomic: string;
+  readonly asset: string;
+  readonly description: string;
+  readonly goalId: string | null;
+  readonly chainId: string | null;
+  readonly transactionHash:
+  | string
+  | null;
+
+  readonly createdAt: string;
+}
+
 function requireNonBlank(value: string, field: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -315,6 +344,109 @@ function mapCommitment(row: CommitmentRecord): CommitmentDto {
   };
 }
 
+type AccountTransactionRow = {
+  readonly id: string;
+
+  readonly userId: string;
+
+  readonly goalId: string | null;
+
+  readonly type:
+  | "FIAT_FUNDING"
+  | "CRYPTO_FUNDING"
+  | "SAVINGS_DEPOSIT"
+  | "SAVINGS_WITHDRAWAL"
+  | "CRYPTO_WITHDRAWAL"
+  | "REWARD";
+
+  readonly status:
+  | "PENDING"
+  | "COMPLETED"
+  | "FAILED";
+
+  readonly amountAtomic: string;
+
+  readonly asset: string;
+
+  readonly description: string;
+
+  readonly chainId:
+  | bigint
+  | null;
+
+  readonly transactionHash:
+  | string
+  | null;
+
+  readonly externalReference:
+  | string
+  | null;
+
+  readonly createdAt: Date;
+
+  readonly updatedAt: Date;
+};
+
+function mapTransactionType(
+  type: AccountTransactionRow["type"],
+): TransactionType {
+  switch (type) {
+    case "FIAT_FUNDING":
+      return "fiat_funding";
+
+    case "CRYPTO_FUNDING":
+      return "crypto_funding";
+
+    case "SAVINGS_DEPOSIT":
+      return "savings_deposit";
+
+    case "SAVINGS_WITHDRAWAL":
+      return "savings_withdrawal";
+
+    case "CRYPTO_WITHDRAWAL":
+      return "crypto_withdrawal";
+
+    case "REWARD":
+      return "reward";
+  }
+}
+
+function mapTransactionStatus(
+  status:
+    AccountTransactionRow["status"],
+): TransactionStatus {
+  switch (status) {
+    case "PENDING":
+      return "pending";
+
+    case "COMPLETED":
+      return "completed";
+
+    case "FAILED":
+      return "failed";
+  }
+}
+
+function mapTransaction(
+  row: AccountTransactionRow,
+): TransactionDto {
+  return {
+    id: row.id,
+    type: mapTransactionType(row.type),
+    status: mapTransactionStatus(row.status),
+    amountAtomic: row.amountAtomic,
+    asset: row.asset,
+    description: row.description,
+
+    goalId:
+      row.goalId,
+    chainId: row.chainId?.toString() ?? null,
+
+    transactionHash: row.transactionHash,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export interface KeptPersistenceOptions {
   readonly chainId?: bigint;
   readonly reader?: VaultShareBalanceReader;
@@ -528,6 +660,121 @@ export class KeptPersistenceService {
   async listGoals(userId: string): Promise<readonly GoalDto[]> {
     const goals = await new KeptRepository(this.db).listGoalsForOwner(userId);
     return goals.map(mapGoal);
+  }
+
+  async listTransactions(userId: string):
+    Promise<readonly TransactionDto[]> {
+    const transactions = await new KeptRepository(this.db)
+      .listAccountTransactionsForOwner(userId);
+
+    return transactions.map(mapTransaction);
+  }
+
+  async recordTransaction(input: {
+    readonly userId: string;
+    readonly idempotencyKey: string;
+    readonly goalId?: string | null;
+    readonly type: AccountTransactionRow["type"];
+    readonly status?: AccountTransactionRow["status"];
+    readonly amountAtomic: string;
+    readonly asset: string;
+    readonly description: string;
+    readonly chainId?: bigint | null;
+    readonly transactionHash?: string | null;
+    readonly externalReference?: string | null;
+  }): Promise<TransactionDto> {
+    const request = {
+      userId: input.userId,
+      goalId: input.goalId ?? null,
+      type: input.type,
+      status: input.status ?? "COMPLETED",
+      amountAtomic: input.amountAtomic,
+      asset: input.asset,
+      description: input.description,
+      chainId: input.chainId?.toString() ?? null,
+      transactionHash: input.transactionHash ?? null,
+      externalReference: input.externalReference ?? null,
+    };
+
+    return this.executeIdempotent(
+      input.userId,
+      "account-transaction:record",
+      input.idempotencyKey,
+      request,
+      async (repository) => {
+        const amountAtomic =
+          requireAtomicAmount(
+            input.amountAtomic,
+          );
+
+        if (
+          BigInt(amountAtomic) <= 0n
+        ) {
+          throw new PersistenceValidationError(
+            "transaction amount must be greater than zero",
+          );
+        }
+
+        if (
+          !(await repository.findUser(
+            input.userId,
+          ))
+        ) {
+          throw new NotFoundError(
+            "User",
+          );
+        }
+
+        if (
+          input.goalId
+          && !(
+            await repository
+              .findGoalForOwner(
+                input.userId,
+                input.goalId,
+              )
+          )
+        ) {
+          throw new NotFoundError(
+            "Savings goal",
+          );
+        }
+
+        const now =
+          new Date();
+
+        const transaction =
+          await repository
+            .createAccountTransaction({
+              id: randomUUID(),
+              userId: input.userId,
+              goalId: input.goalId ?? null,
+              type: input.type,
+              status: input.status ?? "COMPLETED",
+              amountAtomic,
+              asset: requireNonBlank(input.asset,
+                  "asset",
+                ),
+              description: requireNonBlank(
+                  input.description,
+                  "description",
+                ),
+              chainId: input.chainId ?? null,
+              transactionHash: input.transactionHash ?? null,
+              externalReference: input.externalReference ?? null,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+        if (!transaction) {
+          throw new Error(
+            "Transaction insert did not return a record",
+          );
+        }
+
+        return mapTransaction(transaction);
+      },
+    );
   }
 
   async getGoalAllocation(

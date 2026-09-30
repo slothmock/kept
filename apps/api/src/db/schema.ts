@@ -7,6 +7,7 @@ import {
   date,
   foreignKey,
   integer,
+  index,
   jsonb,
   numeric,
   pgEnum,
@@ -37,6 +38,27 @@ export const verificationClassEnum = pgEnum("verification_class", [
 export const commitmentStateEnum = pgEnum("commitment_state", COMMITMENT_STATES);
 
 export const goalStatusEnum = pgEnum("goal_status", ["ACTIVE", "COMPLETED", "ARCHIVED"]);
+
+export const accountTransactionTypeEnum = pgEnum(
+  "account_transaction_type",
+  [
+    "FIAT_FUNDING",
+    "CRYPTO_FUNDING",
+    "SAVINGS_DEPOSIT",
+    "SAVINGS_WITHDRAWAL",
+    "CRYPTO_WITHDRAWAL",
+    "REWARD",
+  ],
+);
+
+export const accountTransactionStatusEnum = pgEnum(
+  "account_transaction_status",
+  [
+    "PENDING",
+    "COMPLETED",
+    "FAILED",
+  ],
+);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey(),
@@ -109,6 +131,124 @@ export const goalShareAllocations = pgTable(
     }),
     check("goal_share_allocations_delta_nonzero", sql`${table.shareDeltaAtomic} <> 0`),
     check("goal_share_allocations_reason_not_blank", sql`length(btrim(${table.reason})) > 0`),
+  ],
+);
+
+export const accountTransactions = pgTable(
+  "account_transactions",
+  {
+    id: uuid("id").primaryKey(),
+
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+
+    /**
+     * Optional because account-level operations such as
+     * fiat funding or crypto withdrawals may have no goal.
+     */
+    goalId: uuid("goal_id"),
+
+    type: accountTransactionTypeEnum("type").notNull(),
+
+    status: accountTransactionStatusEnum("status")
+      .notNull()
+      .default("COMPLETED"),
+
+    /**
+     * Always positive.
+     *
+     * Direction is represented by `type`, not by making
+     * deposits positive and withdrawals negative.
+     *
+     * USDC currently uses 6 decimals.
+     */
+    amountAtomic: numeric("amount_atomic", {
+      precision: 78,
+      scale: 0,
+    }).notNull(),
+
+    asset: text("asset")
+      .notNull()
+      .default("USDC"),
+
+    description: text("description")
+      .notNull(),
+
+    /**
+     * Monad/Solana/etc.
+     *
+     * Null for fiat-only events.
+     */
+    chainId: bigint("chain_id", {
+      mode: "bigint",
+    }),
+
+    /**
+     * On-chain transaction hash/signature where applicable.
+     */
+    transactionHash: text("transaction_hash"),
+
+    /**
+     * Provider/callback/deposit identifier.
+     *
+     * This gives us a clean idempotency boundary for things
+     * such as fiat providers and bridge/on-ramp callbacks.
+     */
+    externalReference: text("external_reference"),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    }).notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [
+        table.goalId,
+        table.userId,
+      ],
+      foreignColumns: [
+        savingsGoals.id,
+        savingsGoals.userId,
+      ],
+      name: "account_transactions_goal_owner_fk",
+    }),
+
+    index("account_transactions_user_created_idx")
+      .on(
+        table.userId,
+        table.createdAt,
+      ),
+
+    uniqueIndex(
+      "account_transactions_user_external_reference_unique",
+    )
+      .on(
+        table.userId,
+        table.externalReference,
+      )
+      .where(
+        sql`${table.externalReference} IS NOT NULL`,
+      ),
+
+    check(
+      "account_transactions_amount_positive",
+      sql`${table.amountAtomic} > 0`,
+    ),
+
+    check(
+      "account_transactions_asset_not_blank",
+      sql`length(btrim(${table.asset})) > 0`,
+    ),
+
+    check(
+      "account_transactions_description_not_blank",
+      sql`length(btrim(${table.description})) > 0`,
+    ),
   ],
 );
 
@@ -211,6 +351,7 @@ export const schema = {
   wallets,
   savingsGoals,
   goalShareAllocations,
+  accountTransactions,
   commitmentDefinitions,
   userCommitments,
   idempotencyRecords,

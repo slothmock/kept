@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, lte, sql } from "drizzle-orm";
 import type { CommitmentState, JsonValue } from "../domain/commitments/index.js";
 import type { KeptDatabase } from "../db/client.js";
 import {
+  accountTransactions,
   commitmentDefinitions,
   goalShareAllocations,
   idempotencyRecords,
@@ -148,6 +149,43 @@ export class KeptRepository {
       .from(savingsGoals)
       .where(eq(savingsGoals.userId, userId))
       .orderBy(desc(savingsGoals.createdAt), desc(savingsGoals.id));
+  }
+
+  async createAccountTransaction(
+    input:
+      typeof accountTransactions.$inferInsert,
+  ) {
+    const [transaction] =
+      await this.db
+        .insert(accountTransactions)
+        .values(input)
+        .returning();
+
+    return transaction;
+  }
+
+  async listAccountTransactionsForOwner(
+    userId: string,
+    limit = 100,
+  ) {
+    return this.db
+      .select()
+      .from(accountTransactions)
+      .where(
+        eq(
+          accountTransactions.userId,
+          userId,
+        ),
+      )
+      .orderBy(
+        desc(
+          accountTransactions.createdAt,
+        ),
+        desc(
+          accountTransactions.id,
+        ),
+      )
+      .limit(limit);
   }
 
   async lockGoalsForOwner(userId: string): Promise<void> {
