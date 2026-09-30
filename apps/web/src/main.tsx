@@ -1,6 +1,7 @@
 import { Buffer } from "buffer";
 
 import { PrivyProvider } from "@privy-io/react-auth";
+import { MoonPayProvider } from "@moonpay/moonpay-react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import type { Chain } from "@privy-io/chains";
@@ -45,6 +46,10 @@ const privyAppId =
   import.meta.env
     .VITE_PRIVY_APP_ID;
 
+const moonPayPublishableKey =
+  import.meta.env
+    .VITE_MOONPAY_PUBLISHABLE_KEY;
+
 const localAnvilEnabled =
   import.meta.env
     .VITE_ENABLE_LOCAL_ANVIL ===
@@ -84,6 +89,9 @@ if (!root) {
 if (!privyAppId) {
   root.textContent =
     "VITE_PRIVY_APP_ID is required to start Kept.";
+} else if (!moonPayPublishableKey) {
+  root.textContent =
+    "VITE_MOONPAY_PUBLISHABLE_KEY is required to start Kept.";
 } else {
   createRoot(root).render(
     <PrivyProvider
@@ -108,9 +116,11 @@ if (!privyAppId) {
         },
       }}
     >
-      <BrowserRouter>
-        <KeptApp />
-      </BrowserRouter>
+      <MoonPayProvider apiKey={moonPayPublishableKey} debug={import.meta.env.DEV}>
+        <BrowserRouter>
+          <KeptApp />
+        </BrowserRouter>
+      </MoonPayProvider>
     </PrivyProvider>,
   );
 }
