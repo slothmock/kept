@@ -3,9 +3,12 @@ import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { MoonPayProvider } from "@moonpay/moonpay-react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import type { Chain } from "@privy-io/chains";
 import {
+  arbitrum,
   base,
+  mainnet,
+  optimism,
+  type Chain,
 } from "@privy-io/chains";
 import { monad } from "viem/chains";
 
@@ -70,7 +73,14 @@ const supportedChains:
   Chain[] = [
     keptChain,
     base,
+    mainnet,
+    arbitrum,
+    optimism,
   ];
+
+const defaultChain: Chain = keptChain;
+
+const solanaWalletConnectors = toSolanaWalletConnectors();
 
 const root =
   document.getElementById(
