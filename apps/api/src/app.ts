@@ -1011,6 +1011,60 @@ export function buildApp(
     },
   );
 
+  app.get(
+    "/v1/moonpay/allowed-ip",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const secretKey =
+            dependencies.moonPay
+              .secretKey;
+
+          const forwardedFor =
+            request.headers[
+            "x-forwarded-for"
+            ];
+
+          const clientIp =
+            typeof forwardedFor ===
+              "string"
+              ? forwardedFor
+                .split(",")[0]
+                ?.trim()
+              : request.ip;
+
+          if (
+            !clientIp
+          ) {
+            throw new PersistenceValidationError(
+              "Unable to determine client IP address",
+            );
+          }
+
+          const allowedIpAddress =
+            createHmac(
+              "sha256",
+              secretKey,
+            )
+              .update(
+                clientIp,
+              )
+              .digest(
+                "base64",
+              );
+
+          return {
+            allowedIpAddress,
+          };
+        },
+      ),
+  );
+
 app.post(
   "/v1/moonpay/offramp-url",
   async (
@@ -1136,7 +1190,53 @@ app.post(
     ),
 );
 
-    app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+    app.post(
+    "/v1/moonpay/sign",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const body =
+            requireObject(
+              request.body,
+            );
+
+          const url =
+            requireString(
+              body,
+              "url",
+            );
+
+          const parsed =
+            new URL(
+              url,
+            );
+
+          const signature =
+            createHmac(
+              "sha256",
+              dependencies.moonPay
+                .secretKey,
+            )
+              .update(
+                parsed.search,
+              )
+              .digest(
+                "base64",
+              );
+
+          return {
+            signature,
+          };
+        },
+      ),
+  );
+
+  app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 
   app.get(
     "/v1/account/transactions",

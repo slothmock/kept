@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildApp, type ApiDependencies } from "../src/app.js";
@@ -249,6 +250,36 @@ describe("Kept HTTP API", () => {
     const response = await app.inject({ method: "GET", url: "/v1/goals" });
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: { code: "UNAUTHENTICATED" } });
+    await app.close();
+  });
+
+  it("returns authenticated MoonPay client parameters", async () => {
+    const app = buildApp(buildDependencies());
+    const allowedIp = await app.inject({
+      method: "GET",
+      url: "/v1/moonpay/allowed-ip",
+      headers: { ...auth, "x-forwarded-for": "198.51.100.4, 10.0.0.1" },
+    });
+    expect(allowedIp.statusCode).toBe(200);
+    expect(allowedIp.json()).toEqual({
+      allowedIpAddress: createHmac("sha256", "moonpay-secret-key")
+        .update("198.51.100.4")
+        .digest("base64"),
+    });
+
+    const url = "https://widget.moonpay.example/?apiKey=key&currencyCode=usd";
+    const signature = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/sign",
+      headers: auth,
+      payload: { url },
+    });
+    expect(signature.statusCode).toBe(200);
+    expect(signature.json()).toEqual({
+      signature: createHmac("sha256", "moonpay-secret-key")
+        .update(new URL(url).search)
+        .digest("base64"),
+    });
     await app.close();
   });
 
