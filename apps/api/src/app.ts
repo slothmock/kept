@@ -1239,6 +1239,41 @@ app.post(
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 
   app.get(
+    "/v1/savings/performance",
+
+    async (request, reply) =>
+      handle(
+        request,
+
+        reply,
+
+        async () => {
+          const auth = asAuthenticatedRequest(request);
+
+          if (!auth.identity.wallet) {
+            throw new NotFoundError("Privy embedded wallet");
+          }
+
+          const nowMilliseconds = Math.floor(Date.now() / 1_000) * 1_000;
+
+          return dependencies.savingsPerformance.readPerformance({
+            account: auth.identity.wallet,
+
+            // TODO: Replace with the vault deployment date/block.
+
+            startAt: new Date(0),
+
+            endAt: new Date(nowMilliseconds),
+          });
+        },
+      ),
+  );
+
+  app.get("/v1/savings/market-status", async (request, reply) =>
+    handle(request, reply, () => dependencies.savingsMarketStatus.readStatus()),
+  );
+
+  app.get(
     "/v1/account/transactions",
     async (
       request,
@@ -1357,41 +1392,6 @@ app.post(
       ),
   );
 
-
-  app.get(
-    "/v1/savings/performance",
-
-    async (request, reply) =>
-      handle(
-        request,
-
-        reply,
-
-        async () => {
-          const auth = asAuthenticatedRequest(request);
-
-          if (!auth.identity.wallet) {
-            throw new NotFoundError("Privy embedded wallet");
-          }
-
-          const nowMilliseconds = Math.floor(Date.now() / 1_000) * 1_000;
-
-          return dependencies.savingsPerformance.readPerformance({
-            account: auth.identity.wallet,
-
-            // TODO: Replace with the vault deployment date/block.
-
-            startAt: new Date(0),
-
-            endAt: new Date(nowMilliseconds),
-          });
-        },
-      ),
-  );
-
-  app.get("/v1/savings/market-status", async (request, reply) =>
-    handle(request, reply, () => dependencies.savingsMarketStatus.readStatus()),
-  );
 
   app.get("/v1/goals", async (request, reply) =>
     handle(request, reply, () =>
