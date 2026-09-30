@@ -39,7 +39,7 @@ export function WithdrawDialog({ open, position, amount, status, error, submitti
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent dismissible={!submitting} aria-busy={submitting}>
+      <DialogContent aria-busy={submitting}>
         <form onSubmit={submit} className="space-y-6">
           <DialogHeader>
             <DialogTitle>Withdraw</DialogTitle>

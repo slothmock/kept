@@ -50,8 +50,8 @@ export function LandingPage({ session }: { readonly session: Session }) {
         </Link>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" asChild>
-            <Link to="/verification">How verification works</Link>
+          <Button variant="ghost" render={<Link to="/verification" />}>
+            How verification works
           </Button>
 
           <Button onClick={() => void start()} disabled={signInPending}>
@@ -78,8 +78,8 @@ export function LandingPage({ session }: { readonly session: Session }) {
                 {session.isAuthenticated ? "Open dashboard" : signInPending ? "Opening sign-in…" : "Create your first goal"}
                 <ArrowRight className="size-4" />
               </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link to="/verification">See how commitments work</Link>
+              <Button size="lg" variant="outline" render={<Link to="/verification" />}>
+                See how commitments work
               </Button>
             </div>
             {signInError ? <p className="mt-3 text-sm text-destructive" role="alert">{signInError}</p> : null}

@@ -57,7 +57,7 @@ export function CreateGoalDialog({ open, submitting, error, onOpenChange, onSubm
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent dismissible={!submitting} aria-busy={submitting}>
+      <DialogContent aria-busy={submitting}>
         <form onSubmit={(event) => void submit(event)} className="space-y-6">
           <DialogHeader>
             <DialogTitle>Create a goal</DialogTitle>

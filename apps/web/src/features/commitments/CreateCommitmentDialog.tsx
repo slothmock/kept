@@ -120,7 +120,7 @@ export function CreateCommitmentDialog({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DialogContent dismissible={!submitting} aria-busy={submitting}>
+      <DialogContent aria-busy={submitting}>
         <form
           onSubmit={(event) =>
             void submit(event)

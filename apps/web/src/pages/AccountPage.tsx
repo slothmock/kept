@@ -795,67 +795,61 @@ export function AccountPage({
 
                         <CardContent className="divide-y p-0">
                             <Button
-                                asChild
+                                render={<Link to="/privacy" />}
                                 variant="ghost"
                                 className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
                             >
-                                <Link to="/privacy">
-                                    <div className="text-left">
-                                        <p className="text-sm font-medium">
-                                            Privacy policy
-                                        </p>
+                                <div className="text-left">
+                                    <p className="text-sm font-medium">
+                                        Privacy policy
+                                    </p>
 
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            How Kept handles
-                                            your information.
-                                        </p>
-                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        How Kept handles
+                                        your information.
+                                    </p>
+                                </div>
 
-                                    <ExternalLink className="size-4 text-muted-foreground" />
-                                </Link>
+                                <ExternalLink className="size-4 text-muted-foreground" />
                             </Button>
 
                             <Button
-                                asChild
+                                render={<Link to="/terms" />}
                                 variant="ghost"
                                 className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
                             >
-                                <Link to="/terms">
-                                    <div className="text-left">
-                                        <p className="text-sm font-medium">
-                                            Terms of service
-                                        </p>
+                                <div className="text-left">
+                                    <p className="text-sm font-medium">
+                                        Terms of service
+                                    </p>
 
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            The terms that
-                                            apply when using
-                                            Kept.
-                                        </p>
-                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        The terms that
+                                        apply when using
+                                        Kept.
+                                    </p>
+                                </div>
 
-                                    <ExternalLink className="size-4 text-muted-foreground" />
-                                </Link>
+                                <ExternalLink className="size-4 text-muted-foreground" />
                             </Button>
 
                             <Button
-                                asChild
+                                render={<Link to="/verification" />}
                                 variant="ghost"
                                 className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
                             >
-                                <Link to="/verification">
-                                    <div className="text-left">
-                                        <p className="text-sm font-medium">
-                                            Verification
-                                        </p>
+                                <div className="text-left">
+                                    <p className="text-sm font-medium">
+                                        Verification
+                                    </p>
 
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            How commitments
-                                            are verified.
-                                        </p>
-                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        How commitments
+                                        are verified.
+                                    </p>
+                                </div>
 
-                                    <ExternalLink className="size-4 text-muted-foreground" />
-                                </Link>
+                                <ExternalLink className="size-4 text-muted-foreground" />
                             </Button>
                         </CardContent>
                     </Card>

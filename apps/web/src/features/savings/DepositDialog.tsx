@@ -69,7 +69,6 @@ export function DepositDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        dismissible={!submitting}
         aria-busy={submitting}
         className="sm:max-w-lg"
       >
