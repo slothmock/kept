@@ -1190,7 +1190,7 @@ app.post(
     ),
 );
 
-    app.post(
+  app.post(
     "/v1/moonpay/sign",
     async (
       request,
@@ -1865,3 +1865,28 @@ app.post(
 
   return app;
 }
+function formatUsdcForMoonPay(
+  atomic: bigint,
+): string {
+  const whole =
+    atomic / 1_000_000n;
+
+  const fractional =
+    (
+      atomic % 1_000_000n
+    )
+      .toString()
+      .padStart(
+        6,
+        "0",
+      )
+      .replace(
+        /0+$/,
+        "",
+      );
+
+  return fractional
+    ? `${whole}.${fractional}`
+    : whole.toString();
+}
+
