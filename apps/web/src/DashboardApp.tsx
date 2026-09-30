@@ -880,31 +880,32 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       setDepositStatus("Adding money to your savings…");
 
       try {
-        await submitVaultDeposit({
-          allowance: positionState.position.allowance,
+        const result =
+          await submitVaultDeposit({
+            allowance: positionState.position.allowance,
 
-          assets: parsedAmount.assets,
+            assets: parsedAmount.assets,
 
-          approval,
+            approval,
 
-          deposit,
+            deposit,
 
-          beforeSend: async () => ensureTransactionNetwork(),
+            beforeSend: async () => ensureTransactionNetwork(),
 
-          sender,
+            sender,
 
-          receipts: {
-            waitForTransactionReceipt: async ({ hash }) => {
-              const receipt = await publicClient.waitForTransactionReceipt({
-                hash,
-              });
+            receipts: {
+              waitForTransactionReceipt: async ({ hash }) => {
+                const receipt = await publicClient.waitForTransactionReceipt({
+                  hash,
+                });
 
-              return {
-                status: receipt.status === "success" ? "success" : "reverted",
-              };
+                return {
+                  status: receipt.status === "success" ? "success" : "reverted",
+                };
+              },
             },
-          },
-        });
+          });
 
         setDepositStatus("Money added. Updating your savings…");
 
@@ -919,6 +920,36 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
           refreshSavingsMarketStatus(),
         ]);
+
+        if (api) {
+          await api.recordTransaction(
+            {
+              type:
+                "SAVINGS_DEPOSIT",
+
+              amountAtomic:
+                parsedAmount.assets
+                  .toString(),
+
+              asset:
+                "USDC",
+
+              description:
+                "Added to savings",
+
+              chainId:
+                config.chainId
+                  .toString(),
+
+              transactionHash:
+                result.depositHash,
+
+              externalReference:
+                result.depositHash,
+            },
+            result.depositHash,
+          );
+        }
 
         setDepositStatus("Money added to your savings.");
       } catch (error) {
@@ -936,6 +967,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     });
   }, [
     account,
+    api,
     config,
     depositAmount,
     depositQuoteState,
@@ -996,25 +1028,26 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       setWithdrawStatus("Withdrawing...");
 
       try {
-        await submitVaultWithdrawal({
-          withdrawal,
+        const result =
+          await submitVaultWithdrawal({
+            withdrawal,
 
-          beforeSend: async () => ensureTransactionNetwork(),
+            beforeSend: async () => ensureTransactionNetwork(),
 
-          sender,
+            sender,
 
-          receipts: {
-            waitForTransactionReceipt: async ({ hash }) => {
-              const receipt = await publicClient.waitForTransactionReceipt({
-                hash,
-              });
+            receipts: {
+              waitForTransactionReceipt: async ({ hash }) => {
+                const receipt = await publicClient.waitForTransactionReceipt({
+                  hash,
+                });
 
-              return {
-                status: receipt.status === "success" ? "success" : "reverted",
-              };
+                return {
+                  status: receipt.status === "success" ? "success" : "reverted",
+                };
+              },
             },
-          },
-        });
+          });
 
         setWithdrawStatus("Withdrawal complete. Updating your balance…");
 
@@ -1029,6 +1062,36 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
           refreshSavingsMarketStatus(),
         ]);
+
+        if (api) {
+          await api.recordTransaction(
+            {
+              type:
+                "SAVINGS_WITHDRAWAL",
+
+              amountAtomic:
+                parsedAmount.assets
+                  .toString(),
+
+              asset:
+                "USDC",
+
+              description:
+                "Moved to available cash",
+
+              chainId:
+                config.chainId
+                  .toString(),
+
+              transactionHash:
+                result.withdrawalHash,
+
+              externalReference:
+                result.withdrawalHash,
+            },
+            result.withdrawalHash,
+          );
+        }
 
         setWithdrawStatus("Withdrawal complete.");
       } catch (error) {
@@ -1046,6 +1109,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     });
   }, [
     account,
+    api,
     config,
     ensureTransactionNetwork,
     positionState,
