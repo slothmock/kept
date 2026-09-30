@@ -78,9 +78,55 @@ export interface ReallocateGoalSharesInput {
   readonly shareAmountAtomic: string;
 }
 
+export type TransactionType =
+  | "fiat_funding"
+  | "crypto_funding"
+  | "savings_deposit"
+  | "savings_withdrawal"
+  | "crypto_withdrawal"
+  | "reward";
+
+export type TransactionStatus =
+  | "pending"
+  | "completed"
+  | "failed";
+
+export interface TransactionDto {
+  readonly id: string;
+  readonly type: TransactionType;
+  readonly status: TransactionStatus;
+  readonly amountAtomic: string;
+  readonly asset: string;
+  readonly description: string;
+  readonly goalId: string | null;
+  readonly chainId: string | null;
+  readonly transactionHash: string | null;
+  readonly createdAt: string;
+}
+
+export interface RecordTransactionInput {
+  readonly type:
+  | "SAVINGS_DEPOSIT"
+  | "SAVINGS_WITHDRAWAL"
+  | "CRYPTO_WITHDRAWAL";
+
+  readonly amountAtomic: string;
+  readonly asset: string;
+  readonly description: string;
+  readonly goalId?: string | null;
+  readonly chainId?: string | null;
+  readonly transactionHash?: string | null;
+  readonly externalReference?: string | null;
+}
+
 export interface KeptApi {
   getSavingsPerformance(): Promise<SavingsPerformanceDto>;
   getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
+  listTransactions(): Promise<readonly TransactionDto[]>;
+  recordTransaction(
+    input: RecordTransactionInput,
+    idempotencyKey?: string,
+  ): Promise<TransactionDto>;
   listGoals(): Promise<readonly GoalDto[]>;
   createGoal(input: {
     readonly name: string;
@@ -339,6 +385,16 @@ export function createKeptApi(input: {
       request<SavingsPerformanceDto>("/v1/savings/performance"),
     getSavingsMarketStatus: () =>
       request<SavingsMarketStatusDto>("/v1/savings/market-status"),
+    listTransactions: () => request<readonly TransactionDto[]>("/v1/account/transactions"),
+    recordTransaction: (
+      transaction,
+      requestIdempotencyKey,
+    ) =>
+      post<TransactionDto>(
+        "/v1/account/transactions",
+        transaction,
+        requestIdempotencyKey,
+      ),
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
     archiveGoal: (

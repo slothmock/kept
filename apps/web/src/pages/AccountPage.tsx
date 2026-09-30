@@ -1,8 +1,12 @@
 import {
+    ArrowDownLeft,
     ArrowLeft,
+    ArrowUpRight,
     Check,
     Copy,
     ExternalLink,
+    Gift,
+    History,
     LogOut,
     ShieldCheck,
     UserRound,
@@ -22,6 +26,8 @@ import {
     createKeptApi,
     readApiBaseUrl,
     type SavingsMarketStatusDto,
+    type TransactionDto,
+    type TransactionType,
 } from "@/api/kept-api";
 import type {
     Session,
@@ -158,6 +164,119 @@ function AccountAddress({
     );
 }
 
+const USDC_SCALE =
+    1_000_000n;
+
+function formatTransactionAmount(
+    amountAtomic: string,
+    asset: string,
+): string {
+    if (asset !== "USDC") {
+        return `${amountAtomic} ${asset}`;
+    }
+
+    const amount =
+        BigInt(amountAtomic);
+
+    const whole =
+        amount / USDC_SCALE;
+
+    const fractional =
+        amount % USDC_SCALE;
+
+    const cents =
+        (
+            fractional
+            * 100n
+            / USDC_SCALE
+        )
+            .toString()
+            .padStart(2, "0");
+
+    return `$${whole}.${cents}`;
+}
+
+function transactionLabel(
+    type: TransactionType,
+): string {
+    switch (type) {
+        case "fiat_funding":
+            return "Added funds";
+
+        case "crypto_funding":
+            return "Crypto deposit";
+
+        case "savings_deposit":
+            return "Savings deposit";
+
+        case "savings_withdrawal":
+            return "Savings withdrawal";
+
+        case "crypto_withdrawal":
+            return "Crypto withdrawal";
+
+        case "reward":
+            return "Commitment reward";
+    }
+}
+
+function isIncomingTransaction(
+    type: TransactionType,
+): boolean {
+    return (
+        type === "fiat_funding"
+        || type === "crypto_funding"
+        || type === "reward"
+    );
+}
+
+function TransactionIcon({
+    transaction,
+}: {
+    readonly transaction:
+    TransactionDto;
+}) {
+    if (
+        transaction.type
+        === "reward"
+    ) {
+        return (
+            <Gift
+                className="size-4"
+            />
+        );
+    }
+
+    return isIncomingTransaction(
+        transaction.type,
+    ) ? (
+        <ArrowDownLeft
+            className="size-4"
+        />
+    ) : (
+        <ArrowUpRight
+            className="size-4"
+        />
+    );
+}
+
+function formatTransactionDate(
+    value: string,
+): string {
+    return new Intl.DateTimeFormat(
+        undefined,
+        {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        },
+    ).format(
+        new Date(value),
+    );
+}
+
 export function AccountPage({
     session,
 }: {
@@ -204,6 +323,25 @@ export function AccountPage({
         marketLoading,
         setMarketLoading,
     ] = useState(true);
+
+    const [
+        transactions,
+        setTransactions,
+    ] = useState<
+        readonly TransactionDto[]
+    >([]);
+
+    const [
+        transactionsLoading,
+        setTransactionsLoading,
+    ] = useState(true);
+
+    const [
+        transactionsError,
+        setTransactionsError,
+    ] = useState<
+        string | null
+    >(null);
 
     const apiBaseUrl =
         useMemo(
@@ -306,6 +444,65 @@ export function AccountPage({
             .finally(() => {
                 if (!cancelled) {
                     setMarketLoading(
+                        false,
+                    );
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [api]);
+
+    useEffect(() => {
+        let cancelled =
+            false;
+
+        if (!api) {
+            setTransactionsLoading(
+                false,
+            );
+
+            return;
+        }
+
+        setTransactionsLoading(
+            true,
+        );
+
+        setTransactionsError(
+            null,
+        );
+
+        void api
+            .listTransactions()
+            .then((result) => {
+                if (!cancelled) {
+                    setTransactions(
+                        result,
+                    );
+                }
+            })
+            .catch((error) => {
+                diagnostics.warn(
+                    "account.transactions_failed",
+                    error,
+                );
+
+                if (!cancelled) {
+                    setTransactions([]);
+
+                    setTransactionsError(
+                        consumerErrorMessage(
+                            error,
+                            "We couldn't load your transaction history.",
+                        ),
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setTransactionsLoading(
                         false,
                     );
                 }
@@ -663,6 +860,227 @@ export function AccountPage({
                         </CardContent>
                     </Card>
                 </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle
+                            className="
+        flex
+        items-center
+        gap-2
+        text-base
+      "
+                        >
+                            <History
+                                className="size-4"
+                            />
+
+                            Transaction history
+                        </CardTitle>
+                    </CardHeader>
+
+                    <CardContent>
+                        {transactionsLoading ? (
+                            <div
+                                className="
+          space-y-4
+        "
+                            >
+                                <Skeleton
+                                    className="h-14 w-full"
+                                />
+
+                                <Skeleton
+                                    className="h-14 w-full"
+                                />
+
+                                <Skeleton
+                                    className="h-14 w-full"
+                                />
+                            </div>
+                        ) : transactionsError ? (
+                            <p
+                                className="
+          text-sm
+          text-muted-foreground
+        "
+                                role="alert"
+                            >
+                                {transactionsError}
+                            </p>
+                        ) : transactions.length
+                            === 0 ? (
+                            <div
+                                className="
+          py-8
+          text-center
+        "
+                            >
+                                <History
+                                    className="
+            mx-auto
+            size-5
+            text-muted-foreground
+          "
+                                />
+
+                                <p
+                                    className="
+            mt-3
+            text-sm
+            font-medium
+          "
+                                >
+                                    No transactions yet
+                                </p>
+
+                                <p
+                                    className="
+            mt-1
+            text-sm
+            text-muted-foreground
+          "
+                                >
+                                    Your Kept activity
+                                    will appear here.
+                                </p>
+                            </div>
+                        ) : (
+                            <div
+                                className="
+          divide-y
+        "
+                            >
+                                {transactions.map(
+                                    (transaction) => (
+                                        <div
+                                            key={
+                                                transaction.id
+                                            }
+                                            className="
+                flex
+                items-center
+                gap-4
+                py-4
+                first:pt-0
+                last:pb-0
+              "
+                                        >
+                                            <div
+                                                className="
+                  flex
+                  size-9
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-muted
+                "
+                                            >
+                                                <TransactionIcon
+                                                    transaction={
+                                                        transaction
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div
+                                                className="
+                  min-w-0
+                  flex-1
+                "
+                                            >
+                                                <div
+                                                    className="
+                    flex
+                    items-start
+                    justify-between
+                    gap-4
+                  "
+                                                >
+                                                    <div
+                                                        className="
+                      min-w-0
+                    "
+                                                    >
+                                                        <p
+                                                            className="
+                        truncate
+                        text-sm
+                        font-medium
+                      "
+                                                        >
+                                                            {
+                                                                transaction
+                                                                    .description
+                                                            }
+                                                        </p>
+
+                                                        <p
+                                                            className="
+                        mt-1
+                        text-xs
+                        text-muted-foreground
+                      "
+                                                        >
+                                                            {transactionLabel(
+                                                                transaction
+                                                                    .type,
+                                                            )}
+
+                                                            {" · "}
+
+                                                            {
+                                                                transaction
+                                                                    .status
+                                                            }
+                                                        </p>
+                                                    </div>
+
+                                                    <p
+                                                        className="
+                      shrink-0
+                      text-sm
+                      font-semibold
+                      tabular-nums
+                    "
+                                                    >
+                                                        {isIncomingTransaction(
+                                                            transaction
+                                                                .type,
+                                                        )
+                                                            ? "+"
+                                                            : "-"}
+
+                                                        {formatTransactionAmount(
+                                                            transaction
+                                                                .amountAtomic,
+                                                            transaction
+                                                                .asset,
+                                                        )}
+                                                    </p>
+                                                </div>
+
+                                                <p
+                                                    className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  "
+                                                >
+                                                    {formatTransactionDate(
+                                                        transaction
+                                                            .createdAt,
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ),
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
         </AppShell>
     );
