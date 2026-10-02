@@ -85,6 +85,13 @@ export interface ApiDependencies {
 
   readonly savingsActivityIndex?: {
     readonly isReady: () => boolean;
+    readonly status: () => {
+      readonly ready: boolean;
+      readonly startBlock: bigint | null;
+      readonly currentBlock: bigint | null;
+      readonly targetBlock: bigint | null;
+      readonly progressPercent: number | null;
+    };
     readonly readAccountActivity: (
       account: string,
     ) => Promise<{
@@ -244,9 +251,20 @@ function asAuthenticatedRequest(request: FastifyRequest): AuthenticatedRequest {
 }
 
 class SavingsHistorySynchronizingError extends Error {
-  constructor() {
+  readonly progressPercent: number | null;
+  readonly currentBlock: bigint | null;
+  readonly targetBlock: bigint | null;
+
+  constructor(input: {
+    readonly progressPercent: number | null;
+    readonly currentBlock: bigint | null;
+    readonly targetBlock: bigint | null;
+  }) {
     super("Savings activity history is still synchronizing");
     this.name = "SavingsHistorySynchronizingError";
+    this.progressPercent = input.progressPercent;
+    this.currentBlock = input.currentBlock;
+    this.targetBlock = input.targetBlock;
   }
 }
 
@@ -303,7 +321,14 @@ function sendError(
 ): {
   readonly statusCode: number;
 
-  readonly body: { readonly error: { readonly code: string } };
+  readonly body: {
+    readonly error: {
+      readonly code: string;
+      readonly progressPercent?: number | null;
+      readonly currentBlock?: string | null;
+      readonly targetBlock?: string | null;
+    };
+  };
 } {
   if (error instanceof NotFoundError) {
     request.log.warn(
@@ -373,7 +398,12 @@ function sendError(
 
   if (error instanceof SavingsHistorySynchronizingError) {
     request.log.info(
-      { errorCode: "SAVINGS_HISTORY_SYNCHRONIZING" },
+      {
+        errorCode: "SAVINGS_HISTORY_SYNCHRONIZING",
+        progressPercent: error.progressPercent,
+        currentBlock: error.currentBlock?.toString() ?? null,
+        targetBlock: error.targetBlock?.toString() ?? null,
+      },
       "Savings activity history is synchronizing",
     );
 
@@ -383,6 +413,9 @@ function sendError(
       body: {
         error: {
           code: "SAVINGS_HISTORY_SYNCHRONIZING",
+          progressPercent: error.progressPercent,
+          currentBlock: error.currentBlock?.toString() ?? null,
+          targetBlock: error.targetBlock?.toString() ?? null,
         },
       },
     };
@@ -1434,7 +1467,19 @@ export function buildApp(
                     .savingsActivityIndex!
                     .isReady()
                 ) {
-                  throw new SavingsHistorySynchronizingError();
+                  const syncStatus =
+                    dependencies
+                      .savingsActivityIndex!
+                      .status();
+
+                  throw new SavingsHistorySynchronizingError({
+                    progressPercent:
+                      syncStatus.progressPercent,
+                    currentBlock:
+                      syncStatus.currentBlock,
+                    targetBlock:
+                      syncStatus.targetBlock,
+                  });
                 }
 
                 const [
