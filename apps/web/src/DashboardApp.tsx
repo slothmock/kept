@@ -413,6 +413,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const wallet = useKeptEvmWallet();
 
+  const sender = useKeptTransactionSender(wallet.address);
+
   const transactionCoordinator = useMemo(
     () => getVaultTransactionCoordinator(),
     [],
@@ -495,18 +497,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         : null,
 
     [apiBaseUrl, session.getAccessToken],
-  );
-
-  const sender = useKeptTransactionSender(
-    wallet.address,
-    api
-      ? (transaction) =>
-        api.sendSponsoredTransaction({
-          to: transaction.to,
-          data: transaction.data,
-          chainId: transaction.chainId,
-        })
-      : null,
   );
 
   const publicClient = useMemo(
