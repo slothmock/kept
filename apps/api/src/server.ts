@@ -162,6 +162,20 @@ const savingsPerformance = createSavingsPerformanceReader({
   vaultShares,
 });
 
+const savingsCurrentAssets = {
+  async read(account: string): Promise<bigint> {
+    const shares =
+      await vaultShares.readShares(
+        account,
+      );
+
+    return vaultShares
+      .convertToAssets(
+        shares,
+      );
+  },
+};
+
 const localSupplyCapUsdc = process.env.LOCAL_AAVE_SUPPLY_CAP_USDC
   ? BigInt(process.env.LOCAL_AAVE_SUPPLY_CAP_USDC)
   : 1_000_000n;
@@ -423,6 +437,8 @@ const app = buildApp(
     persistence,
 
     savingsPerformance,
+
+    savingsCurrentAssets,
 
     savingsMarketStatus,
 
