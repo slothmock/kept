@@ -764,6 +764,17 @@ export function AddFundsDialog({
                                         ) =>
                                             asset.blockchain ===
                                             current,
+                                    ) &&
+                                    (
+                                        externalWallet.family ===
+                                            "sol"
+                                            ? current ===
+                                                "sol"
+                                            : externalWallet.family ===
+                                                "evm"
+                                              ? current !==
+                                                "sol"
+                                              : true
                                     )
                                 ) {
                                     return current;
@@ -800,16 +811,33 @@ export function AddFundsDialog({
                                 current,
                             ) => {
                                 if (
-                                    current &&
-                                    origins.some(
-                                        (
-                                            asset,
-                                        ) =>
-                                            asset.assetId ===
-                                            current,
-                                    )
+                                    current
                                 ) {
-                                    return current;
+                                    const currentAsset =
+                                        origins.find(
+                                            (
+                                                asset,
+                                            ) =>
+                                                asset.assetId ===
+                                                current,
+                                        );
+
+                                    if (
+                                        currentAsset &&
+                                        (
+                                            externalWallet.family ===
+                                                "sol"
+                                                ? currentAsset.blockchain ===
+                                                    "sol"
+                                                : externalWallet.family ===
+                                                    "evm"
+                                                  ? currentAsset.blockchain !==
+                                                    "sol"
+                                                  : true
+                                        )
+                                    ) {
+                                        return current;
+                                    }
                                 }
 
                                 const preferredUsdc =
@@ -1909,16 +1937,21 @@ export function AddFundsDialog({
                     } finally {
                         runner.dispose();
 
-                        try {
-                            await restoreChain(
-                                provider,
-                                previousChainId,
-                            );
-                        } catch (restoreError) {
-                            diagnostics.warn(
-                                "funding.external_wallet_network_restore_failed",
-                                restoreError,
-                            );
+                        if (
+                            evmProvider &&
+                            previousChainId !== null
+                        ) {
+                            try {
+                                await restoreChain(
+                                    evmProvider,
+                                    previousChainId,
+                                );
+                            } catch (restoreError) {
+                                diagnostics.warn(
+                                    "funding.external_wallet_network_restore_failed",
+                                    restoreError,
+                                );
+                            }
                         }
                     }
                 } catch (
@@ -2673,7 +2706,7 @@ function CryptoFundingView({
                                             return (
                                                 <Button
                                                     key={
-                                                        `${wallet.walletName}:${wallet.address}`
+                                                        `${wallet.family}:${wallet.walletName}:${wallet.address}`
                                                     }
 
                                                     type="button"
