@@ -7,6 +7,7 @@ import {
 } from "drizzle-orm";
 
 import {
+  decodeEventLog,
   getAddress,
   parseAbiItem,
   type Address,
@@ -27,15 +28,18 @@ const withdrawEvent = parseAbiItem(
   "event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)",
 );
 
+const vaultActivityAbi = [
+  depositEvent,
+  withdrawEvent,
+] as const;
+
 const RPC_BLOCK_RANGE = 100n;
-const RPC_REQUEST_DELAY_MS = 175;
+const RPC_REQUEST_DELAY_MS = 150;
 const CONFIRMATION_DEPTH = 2n;
 
-interface IndexedLog {
-  readonly args: {
-    readonly owner?: Address;
-    readonly assets?: bigint;
-  };
+interface RawIndexedLog {
+  readonly data: Hex;
+  readonly topics: readonly Hex[];
   readonly blockNumber: bigint | null;
   readonly transactionHash: Hex | null;
   readonly logIndex: number | null;
@@ -52,12 +56,9 @@ interface IndexPublicClient {
   }>;
   getLogs(input: {
     readonly address: Address;
-    readonly event:
-      | typeof depositEvent
-      | typeof withdrawEvent;
     readonly fromBlock: bigint;
     readonly toBlock: bigint;
-  }): Promise<readonly IndexedLog[]>;
+  }): Promise<readonly RawIndexedLog[]>;
 }
 
 export interface IndexedVaultActivity {
@@ -66,12 +67,22 @@ export interface IndexedVaultActivity {
   readonly netAssets: bigint;
 }
 
+export interface VaultActivityIndexStatus {
+  readonly ready: boolean;
+  readonly startBlock: bigint | null;
+  readonly currentBlock: bigint | null;
+  readonly targetBlock: bigint | null;
+  readonly progressPercent: number | null;
+}
+
 export interface VaultActivityIndex {
   isReady(): boolean;
+  status(): VaultActivityIndexStatus;
   syncToHead(): Promise<{
     readonly fromBlock: bigint;
     readonly toBlock: bigint;
     readonly eventsIndexed: number;
+    readonly status: VaultActivityIndexStatus;
   } | null>;
   readAccountActivity(
     account: string,
@@ -113,35 +124,114 @@ async function findFirstBlockAtOrAfter(
   return low;
 }
 
-function requireIndexedLog(
-  log: IndexedLog,
+function progressPercent(
+  startBlock: bigint | null,
+  currentBlock: bigint | null,
+  targetBlock: bigint | null,
+): number | null {
+  if (
+    startBlock === null
+    || currentBlock === null
+    || targetBlock === null
+  ) {
+    return null;
+  }
+
+  if (targetBlock <= startBlock) {
+    return currentBlock >= targetBlock
+      ? 100
+      : 0;
+  }
+
+  const completed =
+    currentBlock <= startBlock
+      ? 0n
+      : currentBlock - startBlock;
+
+  const total =
+    targetBlock - startBlock;
+
+  const basisPoints =
+    completed >= total
+      ? 10_000n
+      : completed * 10_000n / total;
+
+  return Number(basisPoints) / 100;
+}
+
+function decodeIndexedLog(
+  log: RawIndexedLog,
 ): {
+  readonly type: "DEPOSIT" | "WITHDRAW";
   readonly owner: Address;
   readonly assets: bigint;
   readonly blockNumber: bigint;
   readonly transactionHash: Hex;
   readonly logIndex: number;
-} {
+} | null {
   if (
-    !log.args.owner
-    || typeof log.args.assets !== "bigint"
-    || log.args.assets < 0n
-    || log.blockNumber === null
+    log.blockNumber === null
     || log.transactionHash === null
     || log.logIndex === null
+    || log.topics.length === 0
   ) {
-    throw new Error(
-      "Vault activity log is incomplete",
-    );
+    return null;
   }
 
-  return {
-    owner: getAddress(log.args.owner),
-    assets: log.args.assets,
-    blockNumber: log.blockNumber,
-    transactionHash: log.transactionHash,
-    logIndex: log.logIndex,
-  };
+  try {
+    const decoded =
+      decodeEventLog({
+        abi: vaultActivityAbi,
+        data: log.data,
+        topics: log.topics as [
+          Hex,
+          ...Hex[],
+        ],
+      });
+
+    if (
+      decoded.eventName !== "Deposit"
+      && decoded.eventName !== "Withdraw"
+    ) {
+      return null;
+    }
+
+    const owner =
+      decoded.args.owner;
+
+    const assets =
+      decoded.args.assets;
+
+    if (
+      typeof owner !== "string"
+      || typeof assets !== "bigint"
+      || assets < 0n
+    ) {
+      throw new Error(
+        "Vault activity log is incomplete",
+      );
+    }
+
+    return {
+      type:
+        decoded.eventName === "Deposit"
+          ? "DEPOSIT"
+          : "WITHDRAW",
+      owner:
+        getAddress(owner),
+      assets,
+      blockNumber:
+        log.blockNumber,
+      transactionHash:
+        log.transactionHash,
+      logIndex:
+        log.logIndex,
+    };
+  } catch {
+    // The vault emits events unrelated to account
+    // deposit/withdraw accounting. Ignore them.
+    return null;
+  }
 }
 
 export function createVaultActivityIndex(input: {
@@ -151,7 +241,30 @@ export function createVaultActivityIndex(input: {
   readonly chainId: number;
   readonly startAt: Date;
 }): VaultActivityIndex {
+  let syncStartBlock: bigint | null = null;
+  let processedBlock: bigint | null = null;
+  let syncTargetBlock: bigint | null = null;
   let ready = false;
+
+  function status(): VaultActivityIndexStatus {
+    return {
+      ready,
+      startBlock:
+        syncStartBlock,
+      currentBlock:
+        processedBlock,
+      targetBlock:
+        syncTargetBlock,
+      progressPercent:
+        ready
+          ? 100
+          : progressPercent(
+            syncStartBlock,
+            processedBlock,
+            syncTargetBlock,
+          ),
+    };
+  }
 
   async function assertChain(): Promise<void> {
     const liveChainId =
@@ -183,14 +296,11 @@ export function createVaultActivityIndex(input: {
     return cursor ?? null;
   }
 
-  async function ensureCursor(
+  async function resolveStartBlock(
     safeHead: bigint,
-  ) {
-    const existing =
-      await findCursor();
-
-    if (existing) {
-      return existing;
+  ): Promise<bigint> {
+    if (syncStartBlock !== null) {
+      return syncStartBlock;
     }
 
     const timestamp =
@@ -206,12 +316,33 @@ export function createVaultActivityIndex(input: {
       );
     }
 
-    const firstBlock =
+    syncStartBlock =
       await findFirstBlockAtOrAfter(
         input.publicClient,
         BigInt(timestamp / 1_000),
         safeHead,
       );
+
+    return syncStartBlock;
+  }
+
+  async function ensureCursor(
+    safeHead: bigint,
+  ) {
+    const startBlock =
+      await resolveStartBlock(
+        safeHead,
+      );
+
+    const existing =
+      await findCursor();
+
+    if (existing) {
+      processedBlock =
+        existing.lastProcessedBlock;
+
+      return existing;
+    }
 
     const [created] =
       await input.db
@@ -221,9 +352,9 @@ export function createVaultActivityIndex(input: {
           chainId: BigInt(input.chainId),
           vaultAddress: input.vault,
           lastProcessedBlock:
-            firstBlock === 0n
+            startBlock === 0n
               ? 0n
-              : firstBlock - 1n,
+              : startBlock - 1n,
           updatedAt: new Date(),
         })
         .returning();
@@ -234,25 +365,27 @@ export function createVaultActivityIndex(input: {
       );
     }
 
+    processedBlock =
+      created.lastProcessedBlock;
+
     return created;
   }
 
   async function persistChunk(
     cursorId: string,
     toBlock: bigint,
-    deposits: readonly IndexedLog[],
-    withdrawals: readonly IndexedLog[],
+    logs: readonly RawIndexedLog[],
   ): Promise<number> {
-    const rows = [
-      ...deposits.map((log) => ({
-        type: "DEPOSIT" as const,
-        log: requireIndexedLog(log),
-      })),
-      ...withdrawals.map((log) => ({
-        type: "WITHDRAW" as const,
-        log: requireIndexedLog(log),
-      })),
-    ];
+    const rows =
+      logs
+        .map(decodeIndexedLog)
+        .filter(
+          (
+            row,
+          ): row is NonNullable<
+            ReturnType<typeof decodeIndexedLog>
+          > => row !== null,
+        );
 
     await input.db.transaction(
       async (tx) => {
@@ -260,24 +393,24 @@ export function createVaultActivityIndex(input: {
           await tx
             .insert(vaultActivityEvents)
             .values(
-              rows.map(({ type, log }) => ({
+              rows.map((row) => ({
                 id: randomUUID(),
                 chainId:
                   BigInt(input.chainId),
                 vaultAddress:
                   input.vault,
                 accountAddress:
-                  log.owner,
+                  row.owner,
                 eventType:
-                  type,
+                  row.type,
                 assetsAtomic:
-                  log.assets.toString(),
+                  row.assets.toString(),
                 blockNumber:
-                  log.blockNumber,
+                  row.blockNumber,
                 transactionHash:
-                  log.transactionHash,
+                  row.transactionHash,
                 logIndex:
-                  log.logIndex,
+                  row.logIndex,
                 createdAt:
                   new Date(),
               })),
@@ -302,11 +435,16 @@ export function createVaultActivityIndex(input: {
       },
     );
 
+    processedBlock =
+      toBlock;
+
     return rows.length;
   }
 
   return {
     isReady: () => ready,
+
+    status,
 
     async syncToHead() {
       await assertChain();
@@ -320,6 +458,9 @@ export function createVaultActivityIndex(input: {
           ? latest - CONFIRMATION_DEPTH
           : 0n;
 
+      syncTargetBlock =
+        safeHead;
+
       const cursor =
         await ensureCursor(
           safeHead,
@@ -329,10 +470,15 @@ export function createVaultActivityIndex(input: {
         cursor.lastProcessedBlock + 1n;
 
       if (fromBlock > safeHead) {
+        processedBlock =
+          cursor.lastProcessedBlock;
+
         ready = true;
 
         return null;
       }
+
+      ready = false;
 
       const firstBlock =
         fromBlock;
@@ -350,26 +496,11 @@ export function createVaultActivityIndex(input: {
             ? candidateTo
             : safeHead;
 
-        const deposits =
+        const logs =
           await input.publicClient
             .getLogs({
               address:
                 input.vault,
-              event:
-                depositEvent,
-              fromBlock,
-              toBlock,
-            });
-
-        await waitForRpcBudget();
-
-        const withdrawals =
-          await input.publicClient
-            .getLogs({
-              address:
-                input.vault,
-              event:
-                withdrawEvent,
               fromBlock,
               toBlock,
             });
@@ -378,8 +509,7 @@ export function createVaultActivityIndex(input: {
           await persistChunk(
             cursor.id,
             toBlock,
-            deposits,
-            withdrawals,
+            logs,
           );
 
         fromBlock =
@@ -398,6 +528,8 @@ export function createVaultActivityIndex(input: {
         toBlock:
           safeHead,
         eventsIndexed,
+        status:
+          status(),
       };
     },
 
