@@ -40,6 +40,11 @@ interface BalanceCardProps {
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
   readonly onRefresh: () => void;
+  readonly stagingFaucetAvailable: boolean;
+  readonly stagingFaucetClaiming: boolean;
+  readonly stagingFaucetStatus: string | null;
+  readonly stagingFaucetError: string | null;
+  readonly onClaimStagingFaucet: () => void;
 }
 
 export function BalanceCard({
@@ -49,6 +54,11 @@ export function BalanceCard({
   onAddMoney,
   onWithdraw,
   onRefresh,
+  stagingFaucetAvailable,
+  stagingFaucetClaiming,
+  stagingFaucetStatus,
+  stagingFaucetError,
+  onClaimStagingFaucet,
 }: BalanceCardProps) {
   const ready = positionState.kind === "ready";
 
@@ -169,15 +179,41 @@ export function BalanceCard({
               </p>
             </div>
 
-            <Button
-              variant="outline"
-              disabled={!hasAvailableCash || transactionPending}
-              onClick={onAddMoney}
-            >
-              Add to savings
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {stagingFaucetAvailable && (
+                <Button
+                  variant="outline"
+                  disabled={stagingFaucetClaiming || transactionPending}
+                  onClick={onClaimStagingFaucet}
+                >
+                  {stagingFaucetClaiming
+                    ? "Getting test funds…"
+                    : "Get test funds"}
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                disabled={!hasAvailableCash || transactionPending}
+                onClick={onAddMoney}
+              >
+                Add to savings
+              </Button>
+            </div>
           </div>
         </div>
+
+        {stagingFaucetStatus && (
+          <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+            {stagingFaucetStatus}
+          </p>
+        )}
+
+        {stagingFaucetError && (
+          <p className="mt-4 text-sm text-destructive" role="alert">
+            {stagingFaucetError}
+          </p>
+        )}
 
         {positionState.kind === "error" && (
           <p className="mt-4 text-sm text-destructive">
