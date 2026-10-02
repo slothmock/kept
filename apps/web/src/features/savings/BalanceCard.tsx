@@ -36,7 +36,10 @@ type SavingsPerformanceState =
       readonly kind: "ready";
       readonly earningsAssets: bigint;
     }
-  | { readonly kind: "synchronizing" }
+  | {
+      readonly kind: "synchronizing";
+      readonly progressPercent: number | null;
+    }
   | { readonly kind: "error" };
 
 interface BalanceCardProps {
@@ -203,7 +206,11 @@ export function BalanceCard({
                 className="text-sm font-medium text-muted-foreground"
                 aria-live="polite"
               >
-                Synchronising…
+                {savingsPerformanceState.progressPercent === null
+                  ? "Synchronising…"
+                  : `Synchronising… ${Math.floor(
+                    savingsPerformanceState.progressPercent,
+                  )}%`}
               </p>
             ) : savingsPerformanceState.kind === "ready" ? (
               <p className="text-lg font-semibold tabular-nums">
