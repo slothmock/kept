@@ -7,6 +7,7 @@ const requiredEnvironment = {
   PRIVY_APP_ID: "privy-app-id",
   PRIVY_JWT_VERIFICATION_KEY: "public-verification-key",
   PRIVY_APP_SECRET: "privy-app-secret",
+  WEB_ORIGIN: "http://localhost:5173",
   MONAD_RPC_URL: "https://rpc.monad.example",
   HELIUS_RPC_URL: "https://helius.example",
   MONAD_CHAIN_ID: "143",
@@ -16,7 +17,7 @@ const requiredEnvironment = {
   AURORA_INTENTS_BASE_URL: "https://intents-connect-alpha-api.aurora.dev",
   AURORA_INTENTS_API_KEY: "test-aurora-key",
   MOONPAY_WIDGET_BASE_URL: "https://widget.moonpay.example",
-  VITE_MOONPAY_PUBLISHABLE_KEY: "moonpay-publishable-key",
+  MOONPAY_PUBLISHABLE_KEY: "moonpay-publishable-key",
   MOONPAY_SECRET_KEY: "moonpay-secret-key",
 } satisfies NodeJS.ProcessEnv;
 

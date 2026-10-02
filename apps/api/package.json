@@ -6,6 +6,10 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "type": "module",
+  "scripts": {
+    "start": "node --import tsx src/server.ts",
+    "migrate": "node --import tsx src/db/migrate.ts"
+  },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@kept/commitment-catalogue": "0.0.0",

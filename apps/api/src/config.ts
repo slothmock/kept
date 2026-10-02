@@ -158,8 +158,10 @@ export function loadApiConfig(
     );
 
   const webOrigin =
-    environment.WEB_ORIGIN?.trim()
-    || "http://localhost:5173";
+    requireValue(
+      environment,
+      "WEB_ORIGIN",
+    );
 
   const monadRpcUrl =
     requireHttpUrl(
@@ -215,13 +217,13 @@ export function loadApiConfig(
   const moonPayBaseUrl =
     requireValue(
       environment,
-      "MOONPAY_WIDGET_BASE_URL"
+      "MOONPAY_WIDGET_BASE_URL",
     );
 
   const moonPayPublishableKey =
     requireValue(
       environment,
-      "VITE_MOONPAY_PUBLISHABLE_KEY",
+      "MOONPAY_PUBLISHABLE_KEY",
     );
 
   const moonPaySecretKey =
