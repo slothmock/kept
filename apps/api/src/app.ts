@@ -79,6 +79,15 @@ export interface ApiDependencies {
 
   readonly savingsMarketStatus: SavingsMarketStatusReader;
 
+  readonly stagingFaucet?: {
+    readonly claim: (
+      wallet: string,
+    ) => Promise<{
+      readonly amountAtomic: string;
+      readonly transactionHash: Hex;
+    }>;
+  };
+
   readonly moonPay: {
     readonly baseUrl: string;
     readonly publishableKey: string;
@@ -1248,6 +1257,34 @@ export function buildApp(
   );
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+
+  app.post(
+    "/v1/staging/faucet",
+    async (request, reply) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          if (
+            dependencies.chainId !== 10_143
+            || !dependencies.stagingFaucet
+          ) {
+            throw new NotFoundError("Staging faucet");
+          }
+
+          const auth =
+            asAuthenticatedRequest(request);
+
+          if (!auth.identity.wallet) {
+            throw new NotFoundError("Privy embedded wallet");
+          }
+
+          return dependencies.stagingFaucet.claim(
+            auth.identity.wallet,
+          );
+        },
+      ),
+  );
 
   app.get(
     "/v1/savings/performance",
