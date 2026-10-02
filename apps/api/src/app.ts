@@ -44,6 +44,8 @@ export interface AuthenticatedIdentity {
   readonly privyUserId: string;
 
   readonly wallet: string | null;
+
+  readonly walletId: string | null;
 }
 
 export interface ApiDependencies {
@@ -84,6 +86,19 @@ export interface ApiDependencies {
       wallet: string,
     ) => Promise<{
       readonly amountAtomic: string;
+      readonly transactionHash: Hex;
+    }>;
+  };
+
+  readonly sponsoredTransactions: {
+    readonly send: (input: {
+      readonly walletId: string;
+      readonly userJwt: string;
+      readonly to: string;
+      readonly data: Hex;
+      readonly chainId: number;
+      readonly idempotencyKey: string;
+    }) => Promise<{
       readonly transactionHash: Hex;
     }>;
   };
@@ -1257,6 +1272,114 @@ export function buildApp(
   );
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+
+  app.post(
+    "/v1/wallet/transactions",
+    async (request, reply) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const auth =
+            asAuthenticatedRequest(request);
+
+          if (
+            !auth.identity.wallet
+            || !auth.identity.walletId
+          ) {
+            throw new NotFoundError(
+              "Privy embedded wallet",
+            );
+          }
+
+          const authorization =
+            request.headers.authorization;
+
+          if (
+            !authorization?.startsWith(
+              "Bearer ",
+            )
+          ) {
+            throw new PersistenceValidationError(
+              "authorization header is required",
+            );
+          }
+
+          const userJwt =
+            authorization
+              .slice("Bearer ".length)
+              .trim();
+
+          if (!userJwt) {
+            throw new PersistenceValidationError(
+              "authorization token is required",
+            );
+          }
+
+          const body =
+            requireObject(
+              request.body,
+            );
+
+          const to =
+            requireString(
+              body,
+              "to",
+            );
+
+          const data =
+            requireString(
+              body,
+              "data",
+            );
+
+          const chainId =
+            requireInteger(
+              body,
+              "chainId",
+            );
+
+          if (
+            !/^0x[0-9a-fA-F]*$/.test(
+              data,
+            )
+          ) {
+            throw new PersistenceValidationError(
+              "data must be hex encoded",
+            );
+          }
+
+          if (
+            chainId
+            !== dependencies.chainId
+          ) {
+            throw new PersistenceValidationError(
+              "transaction chain does not match Kept",
+            );
+          }
+
+          return dependencies
+            .sponsoredTransactions
+            .send({
+              walletId:
+                auth.identity.walletId,
+
+              userJwt,
+
+              to,
+
+              data: data as Hex,
+
+              chainId,
+
+              idempotencyKey:
+                requireIdempotencyKey(
+                  request,
+                ),
+            });
+        },
+      ),
+  );
 
   app.post(
     "/v1/staging/faucet",
