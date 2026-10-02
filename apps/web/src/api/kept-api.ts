@@ -212,6 +212,9 @@ function apiConsumerError(
   status: number,
   code: string,
   cause?: unknown,
+  metadata?: {
+    readonly progressPercent?: number | null;
+  },
 ): ConsumerError {
   if (status === 401 || code === "UNAUTHENTICATED") {
     return new ConsumerError("Your session has expired. Sign in again.", {
@@ -239,6 +242,8 @@ function apiConsumerError(
         code: "synchronizing",
         cause,
         diagnosticCode: code,
+        progressPercent:
+          metadata?.progressPercent,
       },
     );
   }
@@ -415,13 +420,34 @@ export function createKeptApi(input: {
       let code = `HTTP_${response.status}`;
       let responseParseError: unknown;
 
+      let progressPercent: number | null | undefined;
+
       try {
-        const body = (await response.json()) as { error?: { code?: string } };
+        const body = (await response.json()) as {
+          error?: {
+            code?: string;
+            progressPercent?: number | null;
+          };
+        };
+
         code = body.error?.code ?? code;
+
+        progressPercent =
+          typeof body.error?.progressPercent === "number"
+            ? body.error.progressPercent
+            : body.error?.progressPercent === null
+              ? null
+              : undefined;
       } catch (error) {
         responseParseError = error;
       }
-      throw apiConsumerError(response.status, code, responseParseError);
+
+      throw apiConsumerError(
+        response.status,
+        code,
+        responseParseError,
+        { progressPercent },
+      );
     }
 
     try {
