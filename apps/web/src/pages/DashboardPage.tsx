@@ -1067,7 +1067,8 @@ export function DashboardPage(props: DashboardPageProps) {
               }
             }
           )();
-        }
+        }}
+        
 
         onCryptoAmountChange={
 
