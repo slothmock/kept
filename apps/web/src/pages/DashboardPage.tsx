@@ -133,6 +133,12 @@ interface DashboardPageProps {
 
   | {
 
+    readonly kind: "synchronizing";
+
+  }
+
+  | {
+
     readonly kind: "error";
 
   };
