@@ -145,9 +145,9 @@ interface DashboardPageProps {
 
   readonly savingsMarketStatusState: SavingsMarketStatusState;
 
-  readonly onRefreshSavingsPerformance: () => void;
+  readonly onRefreshSavingsPerformance: () => Promise<void>;
 
-  readonly onRefreshSavingsMarketStatus: () => void;
+  readonly onRefreshSavingsMarketStatus: () => Promise<void>;
 
   readonly stagingFaucetAvailable: boolean;
 
@@ -189,9 +189,9 @@ interface DashboardPageProps {
 
   readonly onDismissWithdrawal: () => void;
 
-  readonly onRefreshPosition: () => void;
+  readonly onRefreshPosition: () => Promise<void>;
 
-  readonly onRefreshProductData: () => void;
+  readonly onRefreshProductData: () => Promise<void>;
 
   readonly onCreateGoal: (input: {
 
@@ -619,16 +619,14 @@ export function DashboardPage(props: DashboardPageProps) {
 
         onWithdraw={() => setWithdrawOpen(true)}
 
-        onRefresh={() => {
+        onRefresh={async () => {
+          await onRefreshPosition();
 
-          onRefreshPosition();
+          await onRefreshProductData();
 
-          onRefreshProductData();
+          await onRefreshSavingsPerformance();
 
-          onRefreshSavingsPerformance();
-
-          onRefreshSavingsMarketStatus();
-
+          await onRefreshSavingsMarketStatus();
         }}
 
         stagingFaucetAvailable={stagingFaucetAvailable}
