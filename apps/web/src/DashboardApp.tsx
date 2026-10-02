@@ -979,9 +979,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           return;
         }
 
-        const allocations = await Promise.all(
-          goals.map((goal) => api.getGoalAllocation(goal.id)),
-        );
+        const allocations = [];
+
+        for (const goal of goals) {
+          allocations.push(
+            await api.getGoalAllocation(goal.id),
+          );
+        }
 
         const funding = await readGoalFunding({
           allocations,
@@ -999,13 +1003,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         }
       } catch (error) {
         if (productRequestGate.isCurrent(requestId)) {
-          diagnostics.error("api.goal_funding_refresh_failed", error);
+          diagnostics.warn("api.goal_funding_refresh_failed", error);
 
           setGoalFundingState((current) =>
             fundingRefreshError(
               current,
 
-              "We could not reconcile your goal balances. Refresh before assigning more savings.",
+              consumerErrorMessage(
+                error,
+                "We could not reconcile your goal balances. Refresh before assigning more savings.",
+              ),
             ),
           );
         }
@@ -3395,9 +3402,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         savingsMarketStatusState={savingsMarketStatusState}
 
-        onRefreshSavingsPerformance={() => void refreshSavingsPerformance()}
+        onRefreshSavingsPerformance={refreshSavingsPerformance}
 
-        onRefreshSavingsMarketStatus={() => void refreshSavingsMarketStatus()}
+        onRefreshSavingsMarketStatus={refreshSavingsMarketStatus}
 
         stagingFaucetAvailable={config?.chainId === 10_143}
 
@@ -3463,9 +3470,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         onDismissWithdrawal={dismissWithdrawal}
 
-        onRefreshPosition={() => void refreshPosition()}
+        onRefreshPosition={refreshPosition}
 
-        onRefreshProductData={() => void refreshProductData()}
+        onRefreshProductData={refreshProductData}
 
         onCreateGoal={createGoal}
 
