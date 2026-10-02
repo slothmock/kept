@@ -22,7 +22,6 @@ export interface AuthenticatedWallet {
 export interface AuthenticatedIdentity {
   readonly privyUserId: string;
   readonly wallet: string | null;
-  readonly walletId: string | null;
 }
 
 interface PrivyUserLookup {
@@ -102,9 +101,6 @@ export function createPrivyAuthenticator(
         privyUserId: verified.user_id,
         wallet: wallet
           ? wallet.address
-          : null,
-        walletId: wallet
-          ? wallet.id
           : null,
       };
     } catch {
