@@ -102,6 +102,7 @@ contract StagingYieldStrategy is IYieldStrategy {
         // Accrue against the pre-deposit balance so new money does not
         // receive yield for time before it arrived.
         _accrueYield(balance - assets);
+        lastAccrualTimestamp = block.timestamp;
 
         emit StrategyDeposit(assets);
 
@@ -118,6 +119,7 @@ contract StagingYieldStrategy is IYieldStrategy {
         }
 
         _accrueYield(IERC20(asset).balanceOf(address(this)));
+        lastAccrualTimestamp = block.timestamp;
 
         uint256 available = IERC20(asset).balanceOf(address(this));
 
