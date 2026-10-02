@@ -38,6 +38,18 @@ const vaultAbi = [
       },
     ],
   },
+  {
+    type: "function",
+    name: "totalAssets",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
 ] as const;
 
 const strategyAbi = [
@@ -190,6 +202,7 @@ interface MarketStatusPublicClient {
 }
 
 export interface SavingsMarketStatusDto {
+  readonly tvlAssetsAtomic: string;
   readonly suppliedAssetsAtomic: string | null;
   readonly supplyCapAssetsAtomic: string | null;
   readonly availableToDepositAtomic: string | null;
@@ -292,7 +305,11 @@ export function createSavingsMarketStatusReader(input: {
     async readStatus(): Promise<SavingsMarketStatusDto> {
       await assertChain();
 
-      const [strategyValue, performanceFeeValue] = await Promise.all([
+      const [
+        strategyValue,
+        performanceFeeValue,
+        tvlValue,
+      ] = await Promise.all([
         input.publicClient.readContract({
           address: input.vault,
           abi: vaultAbi,
@@ -303,6 +320,11 @@ export function createSavingsMarketStatusReader(input: {
           abi: vaultAbi,
           functionName: "PROFIT_FEE_BPS",
         }),
+        input.publicClient.readContract({
+          address: input.vault,
+          abi: vaultAbi,
+          functionName: "totalAssets",
+        }),
       ]);
 
       const strategy = requireAddressValue(strategyValue, "Vault strategy");
@@ -310,6 +332,11 @@ export function createSavingsMarketStatusReader(input: {
       const performanceFeeBps = requireBigInt(
         performanceFeeValue,
         "Performance fee",
+      );
+
+      const tvlAssets = requireBigInt(
+        tvlValue,
+        "Vault total assets",
       );
 
       if (input.chainId === MONAD_TESTNET_CHAIN_ID) {
@@ -352,6 +379,7 @@ export function createSavingsMarketStatusReader(input: {
         const vaultIdle = requireBigInt(vaultIdleValue, "Vault idle balance");
 
         return {
+          tvlAssetsAtomic: tvlAssets.toString(),
           suppliedAssetsAtomic: strategyLiquidity.toString(),
           supplyCapAssetsAtomic: null,
           availableToDepositAtomic: null,
@@ -503,6 +531,7 @@ export function createSavingsMarketStatusReader(input: {
       }
 
       return {
+        tvlAssetsAtomic: tvlAssets.toString(),
         suppliedAssetsAtomic:
           suppliedAssets === null ? null : suppliedAssets.toString(),
 
