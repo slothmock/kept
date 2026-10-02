@@ -128,9 +128,15 @@ export interface MoonPayOfframpUrlDto {
   readonly url: string;
 }
 
+export interface StagingFaucetDto {
+  readonly amountAtomic: string;
+  readonly transactionHash: string;
+}
+
 export interface KeptApi {
   getSavingsPerformance(): Promise<SavingsPerformanceDto>;
   getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
+  claimStagingFaucet(): Promise<StagingFaucetDto>;
   listTransactions(): Promise<readonly TransactionDto[]>;
   recordTransaction(
     input: RecordTransactionInput,
@@ -425,6 +431,8 @@ export function createKeptApi(input: {
       request<SavingsPerformanceDto>("/v1/savings/performance"),
     getSavingsMarketStatus: () =>
       request<SavingsMarketStatusDto>("/v1/savings/market-status"),
+    claimStagingFaucet: () =>
+      post<StagingFaucetDto>("/v1/staging/faucet", {}),
     listTransactions: () => request<readonly TransactionDto[]>("/v1/account/transactions"),
     recordTransaction: (
       transaction,
