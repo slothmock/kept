@@ -41,7 +41,7 @@ contract YieldFeesTest is Test {
         token.approve(address(vault), type(uint256).max);
     }
 
-    function test_DepositFeeIsHalfPercentOfGrossShares() public {
+    function test_DepositFeeIsTwentyBasisPointsOfGrossShares() public {
         uint256 grossShares = vault.convertToShares(1_000 * USDC);
         uint256 expectedUserShares = vault.previewDeposit(1_000 * USDC);
         uint256 expectedFeeShares = grossShares - expectedUserShares;
@@ -54,7 +54,7 @@ contract YieldFeesTest is Test {
         assertEq(vault.totalSupply(), grossShares);
         assertEq(aToken.balanceOf(address(strategy)), 1_000 * USDC);
         assertEq(vault.totalAssets(), 1_000 * USDC);
-        assertApproxEqAbs(expectedFeeShares * BPS / grossShares, 50, 1);
+        assertApproxEqAbs(expectedFeeShares * BPS / grossShares, 20, 1);
     }
 
     function test_DepositFeeDoesNotRemoveAssetsFromStrategy() public {
