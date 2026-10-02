@@ -7,6 +7,7 @@ export type ConsumerErrorCode =
   | "request_conflict"
   | "request_in_progress"
   | "service_unavailable"
+  | "synchronizing"
   | "validation_failed"
   | "wallet_unavailable"
   | "wrong_network";
