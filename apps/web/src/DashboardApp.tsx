@@ -614,6 +614,15 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       kind: "unavailable",
     });
 
+  const [stagingFaucetClaiming, setStagingFaucetClaiming] =
+    useState(false);
+
+  const [stagingFaucetStatus, setStagingFaucetStatus] =
+    useState<string | null>(null);
+
+  const [stagingFaucetError, setStagingFaucetError] =
+    useState<string | null>(null);
+
   const refreshSavingsMarketStatus = useCallback(async () => {
     if (!api || !account) {
       setSavingsMarketStatusState({
@@ -662,6 +671,62 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       });
     }
   }, [account, api]);
+
+
+  const claimStagingFaucet = useCallback(async () => {
+    if (
+      !api
+      || !account
+      || config?.chainId !== 10_143
+    ) {
+      setStagingFaucetError(
+        "Test funds are unavailable right now.",
+      );
+
+      return;
+    }
+
+    setStagingFaucetClaiming(true);
+    setStagingFaucetStatus(
+      "Adding test funds to your Kept wallet…",
+    );
+    setStagingFaucetError(null);
+
+    try {
+      const result =
+        await api.claimStagingFaucet();
+
+      setStagingFaucetStatus(
+        `Added ${(
+          BigInt(result.amountAtomic)
+          / 1_000_000n
+        ).toString()} test USDC.`,
+      );
+
+      await refreshPosition();
+    } catch (error) {
+      diagnostics.error(
+        "staging.faucet_claim_failed",
+        error,
+      );
+
+      setStagingFaucetStatus(null);
+
+      setStagingFaucetError(
+        consumerErrorMessage(
+          error,
+          "We could not add test funds. Try again.",
+        ),
+      );
+    } finally {
+      setStagingFaucetClaiming(false);
+    }
+  }, [
+    account,
+    api,
+    config,
+    refreshPosition,
+  ]);
 
   const positionState: PositionState = currentPositionState(
     storedPositionState,
@@ -3287,6 +3352,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         onRefreshSavingsPerformance={() => void refreshSavingsPerformance()}
 
         onRefreshSavingsMarketStatus={() => void refreshSavingsMarketStatus()}
+
+        stagingFaucetAvailable={config?.chainId === 10_143}
+
+        stagingFaucetClaiming={stagingFaucetClaiming}
+
+        stagingFaucetStatus={stagingFaucetStatus}
+
+        stagingFaucetError={stagingFaucetError}
+
+        onClaimStagingFaucet={() => void claimStagingFaucet()}
 
         depositAmount={depositAmount}
 
