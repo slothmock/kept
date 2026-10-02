@@ -179,7 +179,7 @@ interface DashboardPageProps {
 
   readonly onWithdrawAmountChange: (value: string) => void;
 
-  readonly onSubmitWithdrawal: () => void;
+  readonly onSubmitWithdrawal: () => Promise<boolean>;
 
   readonly onDismissWithdrawal: () => void;
 
@@ -1056,10 +1056,17 @@ export function DashboardPage(props: DashboardPageProps) {
 
         }
 
-        onSubmitAvailableCash={
+        onSubmitAvailableCash={() => {
+          void (
+            async () => {
+              const succeeded =
+                await onSubmitWithdrawal();
 
-          onSubmitWithdrawal
-
+              if (succeeded) {
+                setWithdrawOpen(false);
+              }
+            }
+          )();
         }
 
         onCryptoAmountChange={
