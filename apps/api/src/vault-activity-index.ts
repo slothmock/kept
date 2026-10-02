@@ -478,8 +478,8 @@ export function createVaultActivityIndex(input: {
         return null;
       }
 
-      ready = false;
-
+      // Once the initial backfill has completed, keep the
+      // index readable while small incremental catch-up passes run.
       const firstBlock =
         fromBlock;
 
