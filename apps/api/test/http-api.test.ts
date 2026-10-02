@@ -176,6 +176,9 @@ function buildDependencies(
     savingsMarketStatus: {
       readStatus:
         async () => ({
+          tvlAssetsAtomic:
+            "0",
+
           suppliedAssetsAtomic:
             "0",
 
