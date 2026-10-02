@@ -15,6 +15,14 @@ import {
   encodeFunctionData,
   erc20Abi,
 } from "viem";
+
+import {
+  PublicKey,
+} from "@solana/web3.js";
+
+import {
+  useSolanaWallets,
+} from "@privy-io/react-auth/solana";
 import {
   createKeptApi,
   readApiBaseUrl,
@@ -143,6 +151,17 @@ function fundingRefreshError(
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
+
+  const {
+    wallets: solanaWallets,
+  } = useSolanaWallets();
+
+  const externalSolanaWallet =
+    solanaWallets.find(
+      (wallet) =>
+        wallet.walletClientType !==
+        "privy",
+    ) ?? null;
   const [depositAmount, setDepositAmount] = useState("");
 
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
@@ -267,10 +286,38 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             setCryptoDestinationAssetId(
               (
                 current,
-              ) =>
-                current ??
-                destination.assetId,
+              ) => {
+                if (current) {
+                  return current;
+                }
+
+                const solanaAsset =
+                  externalSolanaWallet
+                    ? assets.find(
+                      (
+                        asset,
+                      ) =>
+                        asset.blockchain ===
+                        "sol",
+                    )
+                    : null;
+
+                return (
+                  solanaAsset?.assetId ??
+                  destination.assetId
+                );
+              },
             );
+
+            if (
+              externalSolanaWallet
+            ) {
+              setCryptoRecipient(
+                (current) =>
+                  current ||
+                  externalSolanaWallet.address,
+              );
+            }
           } catch (
           error
           ) {
@@ -295,7 +342,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           true;
       };
     },
-    [],
+    [
+      externalSolanaWallet,
+    ],
   );
 
   const invalidateCryptoPreview =
@@ -1632,6 +1681,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               sourceAddress:
                 account,
 
+              family:
+                "evm",
+
               provider,
             });
 
@@ -1705,18 +1757,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           return;
         }
 
-        if (
-          !isAddress(
-            cryptoRecipient,
-          )
-        ) {
-          setCryptoExecutionError(
-            "Enter a valid wallet address.",
-          );
-
-          return;
-        }
-
         const parsedAmount =
           parseUsdcDepositAmount(
             cryptoWithdrawAmount,
@@ -1785,10 +1825,43 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           return;
         }
 
-        const recipient =
-          getAddress(
-            cryptoRecipient,
-          );
+        let recipient:
+          string;
+
+        if (
+          destinationAsset.blockchain ===
+          "sol"
+        ) {
+          try {
+            recipient =
+              new PublicKey(
+                cryptoRecipient,
+              ).toBase58();
+          } catch {
+            setCryptoExecutionError(
+              "Enter a valid Solana wallet address.",
+            );
+
+            return;
+          }
+        } else {
+          if (
+            !isAddress(
+              cryptoRecipient,
+            )
+          ) {
+            setCryptoExecutionError(
+              "Enter a valid wallet address.",
+            );
+
+            return;
+          }
+
+          recipient =
+            getAddress(
+              cryptoRecipient,
+            );
+        }
 
         const requiredFromSavings =
           parsedAmount.assets >
