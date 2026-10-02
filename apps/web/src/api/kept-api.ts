@@ -47,6 +47,7 @@ export interface SavingsPerformanceDto {
 }
 
 export interface SavingsMarketStatusDto {
+  readonly tvlAssetsAtomic: string;
   readonly suppliedAssetsAtomic: string | null;
   readonly supplyCapAssetsAtomic: string | null;
   readonly availableToDepositAtomic: string;
