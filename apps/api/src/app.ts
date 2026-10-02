@@ -83,6 +83,17 @@ export interface ApiDependencies {
     ) => Promise<bigint>;
   };
 
+  readonly savingsActivityIndex?: {
+    readonly isReady: () => boolean;
+    readonly readAccountActivity: (
+      account: string,
+    ) => Promise<{
+      readonly depositedAssets: bigint;
+      readonly withdrawnAssets: bigint;
+      readonly netAssets: bigint;
+    }>;
+  };
+
   readonly savingsMarketStatus: SavingsMarketStatusReader;
 
   readonly stagingFaucet?: {
@@ -1330,76 +1341,52 @@ export function buildApp(
           const promise =
             dependencies.chainId === 10_143
             && dependencies.savingsCurrentAssets
+            && dependencies.savingsActivityIndex
               ? (async () => {
-                const [
-                  transactions,
-                  currentAssets,
-                ] = await Promise.all([
-                  dependencies.persistence
-                    .listTransactions(
-                      auth.user.id,
-                    ),
-
-                  dependencies.savingsCurrentAssets
-                    ?.read(
-                      auth.identity.wallet!,
-                    ) ?? Promise.resolve(0n),
-                ]);
-
-                let depositedAssets = 0n;
-                let withdrawnAssets = 0n;
-
-                for (
-                  const transaction
-                  of transactions
+                if (
+                  !dependencies
+                    .savingsActivityIndex!
+                    .isReady()
                 ) {
-                  if (
-                    transaction.status
-                    !== "completed"
-                    || transaction.asset
-                    !== "USDC"
-                    || transaction.chainId
-                    !== "10143"
-                  ) {
-                    continue;
-                  }
-
-                  const amount =
-                    BigInt(
-                      transaction.amountAtomic,
-                    );
-
-                  if (
-                    transaction.type
-                    === "savings_deposit"
-                  ) {
-                    depositedAssets += amount;
-                  } else if (
-                    transaction.type
-                    === "savings_withdrawal"
-                  ) {
-                    withdrawnAssets += amount;
-                  }
+                  throw new Error(
+                    "Savings activity history is still synchronizing",
+                  );
                 }
 
-                const netContributions =
-                  depositedAssets
-                  - withdrawnAssets;
+                const [
+                  activity,
+                  currentAssets,
+                ] = await Promise.all([
+                  dependencies
+                    .savingsActivityIndex!
+                    .readAccountActivity(
+                      auth.identity.wallet!,
+                    ),
+
+                  dependencies
+                    .savingsCurrentAssets!
+                    .read(
+                      auth.identity.wallet!,
+                    ),
+                ]);
 
                 const earningsAssets =
                   currentAssets
-                  + withdrawnAssets
-                  - depositedAssets;
+                  + activity.withdrawnAssets
+                  - activity.depositedAssets;
 
                 return {
                   depositedAssetsAtomic:
-                    depositedAssets.toString(),
+                    activity.depositedAssets
+                      .toString(),
 
                   withdrawnAssetsAtomic:
-                    withdrawnAssets.toString(),
+                    activity.withdrawnAssets
+                      .toString(),
 
                   netContributionsAtomic:
-                    netContributions.toString(),
+                    activity.netAssets
+                      .toString(),
 
                   currentAssetsAtomic:
                     currentAssets.toString(),
