@@ -135,6 +135,8 @@ interface DashboardPageProps {
 
     readonly kind: "synchronizing";
 
+    readonly progressPercent: number | null;
+
   }
 
   | {
