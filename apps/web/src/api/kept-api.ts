@@ -133,19 +133,10 @@ export interface StagingFaucetDto {
   readonly transactionHash: string;
 }
 
-export interface SponsoredTransactionDto {
-  readonly transactionHash: string;
-}
-
 export interface KeptApi {
   getSavingsPerformance(): Promise<SavingsPerformanceDto>;
   getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
   claimStagingFaucet(): Promise<StagingFaucetDto>;
-  sendSponsoredTransaction(input: {
-    readonly to: string;
-    readonly data: string;
-    readonly chainId: number;
-  }): Promise<SponsoredTransactionDto>;
   listTransactions(): Promise<readonly TransactionDto[]>;
   recordTransaction(
     input: RecordTransactionInput,
@@ -442,11 +433,6 @@ export function createKeptApi(input: {
       request<SavingsMarketStatusDto>("/v1/savings/market-status"),
     claimStagingFaucet: () =>
       post<StagingFaucetDto>("/v1/staging/faucet", {}),
-    sendSponsoredTransaction: (transaction) =>
-      post<SponsoredTransactionDto>(
-        "/v1/wallet/transactions",
-        transaction,
-      ),
     listTransactions: () => request<readonly TransactionDto[]>("/v1/account/transactions"),
     recordTransaction: (
       transaction,
