@@ -17,12 +17,14 @@ interface ConsumerErrorOptions {
   readonly code?: ConsumerErrorCode;
   readonly cause?: unknown;
   readonly diagnosticCode?: string;
+  readonly progressPercent?: number | null;
 }
 
 export class ConsumerError extends Error {
   readonly code: ConsumerErrorCode | undefined;
   readonly diagnosticCause: unknown;
   readonly diagnosticCode: string | undefined;
+  readonly progressPercent: number | null | undefined;
 
   constructor(message: string, options: ConsumerErrorOptions = {}) {
     super(message);
@@ -30,6 +32,7 @@ export class ConsumerError extends Error {
     this.code = options.code;
     this.diagnosticCause = options.cause;
     this.diagnosticCode = options.diagnosticCode;
+    this.progressPercent = options.progressPercent;
   }
 }
 
