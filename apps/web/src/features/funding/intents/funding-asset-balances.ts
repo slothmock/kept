@@ -12,6 +12,16 @@ import {
     optimism,
 } from "viem/chains";
 
+import {
+    Connection,
+    PublicKey,
+} from "@solana/web3.js";
+
+import {
+    getAccount,
+    getAssociatedTokenAddress,
+} from "@solana/spl-token";
+
 import type {
     FundingAsset,
 } from "@/features/funding/intents/supported-tokens";
@@ -36,6 +46,9 @@ const FUNDING_CHAINS = {
     optimism,
 } as const;
 
+const SOLANA_RPC_URL =
+    "https://api.mainnet-beta.solana.com";
+
 export interface FundingAssetBalance {
     readonly assetId:
     string;
@@ -53,8 +66,116 @@ function getFundingChain(
     ];
 }
 
+async function readSolanaBalances(
+    address: string,
+    assets: readonly FundingAsset[],
+): Promise<
+    readonly FundingAssetBalance[]
+> {
+    let owner:
+        PublicKey;
+
+    try {
+        owner =
+            new PublicKey(
+                address,
+            );
+    } catch {
+        return assets.map(
+            (
+                asset,
+            ) => ({
+                assetId:
+                    asset.assetId,
+
+                balance:
+                    null,
+            }),
+        );
+    }
+
+    const connection =
+        new Connection(
+            SOLANA_RPC_URL,
+            "confirmed",
+        );
+
+    return Promise.all(
+        assets.map(
+            async (
+                asset,
+            ): Promise<FundingAssetBalance> => {
+                try {
+                    if (
+                        asset.kind ===
+                        "native"
+                    ) {
+                        return {
+                            assetId:
+                                asset.assetId,
+
+                            balance:
+                                BigInt(
+                                    await connection
+                                        .getBalance(
+                                            owner,
+                                        ),
+                                ),
+                        };
+                    }
+
+                    if (
+                        !asset.contractAddress
+                    ) {
+                        return {
+                            assetId:
+                                asset.assetId,
+
+                            balance:
+                                null,
+                        };
+                    }
+
+                    const mint =
+                        new PublicKey(
+                            asset.contractAddress,
+                        );
+
+                    const associatedToken =
+                        await getAssociatedTokenAddress(
+                            mint,
+                            owner,
+                        );
+
+                    const account =
+                        await getAccount(
+                            connection,
+                            associatedToken,
+                        );
+
+                    return {
+                        assetId:
+                            asset.assetId,
+
+                        balance:
+                            account.amount,
+                    };
+                } catch {
+                    return {
+                        assetId:
+                            asset.assetId,
+
+                        balance:
+                            null,
+                    };
+                }
+            },
+        ),
+    );
+}
+
 export async function readFundingAssetBalances(
-    address: `0x${string}`,
+    address: string,
     assets: readonly FundingAsset[],
 ): Promise<
     readonly FundingAssetBalance[]
@@ -94,6 +215,16 @@ export async function readFundingAssetBalances(
                     blockchain,
                     chainAssets,
                 ]) => {
+                    if (
+                        blockchain ===
+                        "sol"
+                    ) {
+                        return readSolanaBalances(
+                            address,
+                            chainAssets,
+                        );
+                    }
+
                     const chain =
                         getFundingChain(
                             blockchain,
@@ -124,6 +255,9 @@ export async function readFundingAssetBalances(
                                     http(),
                             });
 
+                        const evmAddress =
+                            address as \`0x\${string}\`;
+
                         const nativeAssets =
                             chainAssets.filter(
                                 (
@@ -148,7 +282,8 @@ export async function readFundingAssetBalances(
                             nativeAssets.length >
                             0
                                 ? await client.getBalance({
-                                    address,
+                                    address:
+                                        evmAddress,
                                 }).catch(
                                     () => null,
                                 )
@@ -167,7 +302,7 @@ export async function readFundingAssetBalances(
                                                 asset,
                                             ) => ({
                                                 address:
-                                                    asset.contractAddress as `0x${string}`,
+                                                    asset.contractAddress as \`0x\${string}\`,
 
                                                 abi:
                                                     erc20Abi,
@@ -176,7 +311,7 @@ export async function readFundingAssetBalances(
                                                     "balanceOf" as const,
 
                                                 args: [
-                                                    address,
+                                                    evmAddress,
                                                 ] as const,
                                             }),
                                         ),
@@ -275,6 +410,6 @@ export function formatFundingAssetBalance(
 
     return trimmedFraction.length >
         0
-        ? `${whole}.${trimmedFraction}`
+        ? \`\${whole}.\${trimmedFraction}\`
         : whole;
 }
