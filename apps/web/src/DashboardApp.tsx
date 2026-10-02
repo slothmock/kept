@@ -673,60 +673,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [account, api]);
 
 
-  const claimStagingFaucet = useCallback(async () => {
-    if (
-      !api
-      || !account
-      || config?.chainId !== 10_143
-    ) {
-      setStagingFaucetError(
-        "Test funds are unavailable right now.",
-      );
-
-      return;
-    }
-
-    setStagingFaucetClaiming(true);
-    setStagingFaucetStatus(
-      "Adding test funds to your Kept wallet…",
-    );
-    setStagingFaucetError(null);
-
-    try {
-      const result =
-        await api.claimStagingFaucet();
-
-      setStagingFaucetStatus(
-        `Added ${(
-          BigInt(result.amountAtomic)
-          / 1_000_000n
-        ).toString()} test USDC.`,
-      );
-
-      await refreshPosition();
-    } catch (error) {
-      diagnostics.error(
-        "staging.faucet_claim_failed",
-        error,
-      );
-
-      setStagingFaucetStatus(null);
-
-      setStagingFaucetError(
-        consumerErrorMessage(
-          error,
-          "We could not add test funds. Try again.",
-        ),
-      );
-    } finally {
-      setStagingFaucetClaiming(false);
-    }
-  }, [
-    account,
-    api,
-    config,
-    refreshPosition,
-  ]);
 
   const positionState: PositionState = currentPositionState(
     storedPositionState,
@@ -877,6 +823,61 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     positionRequestGate,
     publicClient,
     wallet.liveChainId,
+  ]);
+
+  const claimStagingFaucet = useCallback(async () => {
+    if (
+      !api
+      || !account
+      || config?.chainId !== 10_143
+    ) {
+      setStagingFaucetError(
+        "Test funds are unavailable right now.",
+      );
+
+      return;
+    }
+
+    setStagingFaucetClaiming(true);
+    setStagingFaucetStatus(
+      "Adding test funds to your Kept wallet…",
+    );
+    setStagingFaucetError(null);
+
+    try {
+      const result =
+        await api.claimStagingFaucet();
+
+      setStagingFaucetStatus(
+        `Added ${(
+          BigInt(result.amountAtomic)
+          / 1_000_000n
+        ).toString()} test USDC.`,
+      );
+
+      await refreshPosition();
+    } catch (error) {
+      diagnostics.error(
+        "staging.faucet_claim_failed",
+        error,
+      );
+
+      setStagingFaucetStatus(null);
+
+      setStagingFaucetError(
+        consumerErrorMessage(
+          error,
+          "We could not add test funds. Try again.",
+        ),
+      );
+    } finally {
+      setStagingFaucetClaiming(false);
+    }
+  }, [
+    account,
+    api,
+    config,
+    refreshPosition,
   ]);
 
   const refreshProductData = useCallback(async () => {
