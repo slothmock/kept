@@ -158,6 +158,39 @@ function canonicalizeClientIp(
   return ip.toLowerCase();
 }
 
+function getCustomerIp(
+  request: FastifyRequest,
+): string {
+  const trueClientIp =
+    request.headers["true-client-ip"];
+
+  if (typeof trueClientIp === "string") {
+    return canonicalizeClientIp(
+      trueClientIp,
+    );
+  }
+
+  const forwardedFor =
+    request.headers["x-forwarded-for"];
+
+  if (typeof forwardedFor === "string") {
+    const first =
+      forwardedFor
+        .split(",")[0]
+        ?.trim();
+
+    if (first) {
+      return canonicalizeClientIp(
+        first,
+      );
+    }
+  }
+
+  return canonicalizeClientIp(
+    request.ip,
+  );
+}
+
 function allowedWebOrigins(webOrigin: string): string[] {
   if (webOrigin === "http://localhost:5173") {
     return [webOrigin, "http://127.0.0.1:5173"];
@@ -436,7 +469,7 @@ export function buildApp(
 
     methods: ["GET", "POST"],
 
-    allowedHeaders: ["authorization", "content-type", "idempotency-key"],
+    allowedHeaders: ["authorization", "content-type", "idempotency-key", "ngrok-skip-browser-warning"],
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -1025,26 +1058,8 @@ export function buildApp(
             dependencies.moonPay
               .secretKey;
 
-          const forwardedFor =
-            request.headers[
-            "x-forwarded-for"
-            ];
-
           const clientIp =
-            typeof forwardedFor ===
-              "string"
-              ? forwardedFor
-                .split(",")[0]
-                ?.trim()
-              : request.ip;
-
-          if (
-            !clientIp
-          ) {
-            throw new PersistenceValidationError(
-              "Unable to determine client IP address",
-            );
-          }
+            getCustomerIp(request);
 
           const allowedIpAddress =
             createHmac(
@@ -1065,17 +1080,16 @@ export function buildApp(
       ),
   );
 
-app.post(
-  "/v1/moonpay/offramp-url",
-  async (
-    request,
-    reply,
-  ) =>
-    handle(
+  app.post(
+    "/v1/moonpay/offramp-url",
+    async (
       request,
       reply,
-      async () => {
-        try {
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
           const body =
             requireObject(
               request.body,
@@ -1095,28 +1109,9 @@ app.post(
             dependencies.moonPay
               .publishableKey;
 
-          const trueClientIpHeader =
-            request.headers[
-              "true-client-ip"
-            ];
-
-          const rawClientIp =
-            typeof trueClientIpHeader ===
-            "string"
-              ? trueClientIpHeader
-              : request.ip;
-
-          if (
-            !rawClientIp
-          ) {
-            throw new PersistenceValidationError(
-              "Unable to determine client IP address",
-            );
-          }
-
           const customerIp =
-            canonicalizeClientIp(
-              rawClientIp,
+            getCustomerIp(
+              request,
             );
 
           const ipHash =
@@ -1183,12 +1178,9 @@ app.post(
             url:
               url.toString(),
           };
-        } catch (error) {
-          throw error;
-        }
-      },
-    ),
-);
+        },
+      ),
+  );
 
   app.post(
     "/v1/moonpay/sign",

@@ -2066,6 +2066,23 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           return;
         }
 
+        const moonPayWindow =
+          window.open(
+            "about:blank",
+            "_blank",
+          );
+
+        if (!moonPayWindow) {
+          setBankWithdrawError(
+            "Your browser blocked the MoonPay window. Allow popups and try again.",
+          );
+
+          return;
+        }
+
+        moonPayWindow.opener =
+          null;
+
         setBankWithdrawSubmitting(
           true,
         );
@@ -2095,6 +2112,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
                   authorization:
                     `Bearer ${accessToken}`,
+
+                  "ngrok-skip-browser-warning":
+                    "true",
                 },
 
                 body:
@@ -2105,9 +2125,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               },
             );
 
-          if (
-            !response.ok
-          ) {
+          if (!response.ok) {
             const errorText =
               await response.text();
 
@@ -2122,12 +2140,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               string;
             };
 
-          window.location.assign(
+          moonPayWindow.location.replace(
             result.url,
           );
-        } catch (
-        error
-        ) {
+
+          setBankWithdrawStatus(
+            null,
+          );
+        } catch (error) {
+          moonPayWindow.close();
+
           diagnostics.error(
             "withdrawal.moonpay_prepare_failed",
             error,

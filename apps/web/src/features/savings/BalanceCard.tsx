@@ -38,7 +38,6 @@ interface BalanceCardProps {
   readonly transactionPending: boolean;
   readonly savingsPerformanceState: SavingsPerformanceState;
   readonly onAddMoney: () => void;
-  readonly onAddToSavings: () => void;
   readonly onWithdraw: () => void;
   readonly onRefresh: () => void;
 }
@@ -48,13 +47,12 @@ export function BalanceCard({
   transactionPending,
   savingsPerformanceState,
   onAddMoney,
-  onAddToSavings,
   onWithdraw,
   onRefresh,
 }: BalanceCardProps) {
   const ready = positionState.kind === "ready";
 
-  const canWithdraw = ready && positionState.position.withdrawableAssets > 0n;
+  const canWithdraw = ready && positionState.position.withdrawableAssets > 0n || ready && positionState.position.usdcBalance > 0n;
 
   const earnings =
     savingsPerformanceState.kind === "ready"

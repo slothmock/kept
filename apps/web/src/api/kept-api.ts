@@ -335,8 +335,35 @@ export function createKeptApi(input: {
     }
 
     const headers = new Headers(init.headers);
-    headers.set("authorization", `Bearer ${accessToken}`);
-    if (init.body) headers.set("content-type", "application/json");
+
+    headers.set(
+      "authorization",
+      `Bearer ${accessToken}`,
+    );
+
+    if (init.body) {
+      headers.set(
+        "content-type",
+        "application/json",
+      );
+    }
+
+    const apiUrl =
+      new URL(input.baseUrl);
+
+    if (
+      apiUrl.hostname.endsWith(
+        ".ngrok-free.dev",
+      ) ||
+      apiUrl.hostname.endsWith(
+        ".ngrok-free.app",
+      )
+    ) {
+      headers.set(
+        "ngrok-skip-browser-warning",
+        "true",
+      );
+    }
 
     let response: Response;
 

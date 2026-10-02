@@ -591,12 +591,6 @@ export function DashboardPage(props: DashboardPageProps) {
 
         }}
 
-        onAddToSavings={() => {
-
-          setDepositOpen(true);
-
-        }}
-
         onWithdraw={() => setWithdrawOpen(true)}
 
         onRefresh={() => {
