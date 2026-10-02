@@ -458,7 +458,21 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const productRequestGate = useMemo(() => createLatestRequestGate(), []);
 
-  const config = useMemo(() => readVaultConfig(import.meta.env), []);
+  const config = useMemo(() => {
+    const result = readVaultConfig(import.meta.env);
+
+    if (!result) {
+      diagnostics.error("vault.config_invalid", {
+        rpcUrl: import.meta.env.VITE_MONAD_RPC_URL,
+        chainId: import.meta.env.VITE_MONAD_CHAIN_ID,
+        vault: import.meta.env.VITE_KEPT_VAULT_ADDRESS,
+        usdc: import.meta.env.VITE_MONAD_USDC_ADDRESS,
+        localAnvil: import.meta.env.VITE_ENABLE_LOCAL_ANVIL,
+      });
+    }
+
+    return result;
+  }, []);
 
   const commitmentManagerConfig = useMemo(
     () => readCommitmentManagerConfig(import.meta.env),
