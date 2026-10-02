@@ -3,10 +3,7 @@ import {
   createWalletClient,
   getAddress,
   http,
-  type Hex,
 } from "viem";
-
-import { PrivyClient } from "@privy-io/node";
 
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -104,111 +101,6 @@ const repository = new KeptRepository(database.db);
 const publicClient = createPublicClient({
   transport: http(config.monadRpcUrl),
 });
-
-const privy = new PrivyClient({
-  appId: config.privyAppId,
-  appSecret: config.privyAppSecret,
-});
-
-const vaultAsset =
-  await publicClient.readContract({
-    address:
-      config.keptSavingsVaultAddress,
-    abi: stagingVaultAssetAbi,
-    functionName: "asset",
-  });
-
-const sponsoredTransactionTargets =
-  new Set(
-    [
-      getAddress(
-        config.keptSavingsVaultAddress,
-      ),
-      getAddress(
-        config.commitmentManagerAddress,
-      ),
-      getAddress(
-        vaultAsset,
-      ),
-    ].map(
-      (address) =>
-        address.toLowerCase(),
-    ),
-  );
-
-const sponsoredTransactions = {
-  async send(input: {
-    readonly walletId: string;
-    readonly userJwt: string;
-    readonly to: string;
-    readonly data: Hex;
-    readonly chainId: number;
-    readonly idempotencyKey: string;
-  }) {
-    if (
-      input.chainId
-      !== config.monadChainId
-    ) {
-      throw new Error(
-        "Sponsored transaction chain does not match Kept",
-      );
-    }
-
-    const to =
-      getAddress(
-        input.to,
-      );
-
-    if (
-      !sponsoredTransactionTargets.has(
-        to.toLowerCase(),
-      )
-    ) {
-      throw new Error(
-        "Sponsored transaction target is not allowed",
-      );
-    }
-
-    const result =
-      await privy
-        .wallets()
-        .ethereum()
-        .sendTransaction(
-          input.walletId,
-          {
-            caip2:
-              `eip155:${config.monadChainId}`,
-
-            sponsor: true,
-
-            params: {
-              transaction: {
-                to,
-                data:
-                  input.data,
-                chain_id:
-                  config.monadChainId,
-                value: "0x0",
-              },
-            },
-
-            authorization_context: {
-              user_jwts: [
-                input.userJwt,
-              ],
-            },
-
-            idempotency_key:
-              input.idempotencyKey,
-          },
-        );
-
-    return {
-      transactionHash:
-        result.hash as Hex,
-    };
-  },
-};
 
 const verifierAccount = privateKeyToAccount(
   config.commitmentVerifierPrivateKey,
@@ -533,8 +425,6 @@ const app = buildApp(
     savingsPerformance,
 
     savingsMarketStatus,
-
-    sponsoredTransactions,
 
     ...(stagingFaucet
       ? { stagingFaucet }
