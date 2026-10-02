@@ -11,7 +11,7 @@ import {
 } from "@privy-io/react-auth";
 
 import {
-    useSolanaWallets,
+    useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
 
 import {
@@ -129,8 +129,11 @@ export function useExternalFundingWallet():
                     (
                         wallet,
                     ) =>
-                        wallet.walletClientType !==
-                        "privy",
+                        !(
+                            "isPrivyWallet" in
+                            wallet.standardWallet &&
+                            wallet.standardWallet.isPrivyWallet
+                        ),
                 ),
             [
                 solanaWallets,
@@ -163,7 +166,7 @@ export function useExternalFundingWallet():
                             wallet.address,
 
                         walletName:
-                            wallet.walletClientType,
+                            wallet.standardWallet.name,
 
                         family:
                             "sol",
