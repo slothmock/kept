@@ -21,6 +21,8 @@ import { createVaultShareBalanceReader } from "./vault-shares.js";
 
 import { createVaultSavingsActivityReader } from "./vault-activity.js";
 
+import { createVaultActivityIndex } from "./vault-activity-index.js";
+
 import { createSavingsPerformanceReader } from "./savings-performance.js";
 
 import { createSavingsMarketStatusReader } from "./savings-market-status.js";
@@ -35,6 +37,8 @@ import {
 } from "./verifier/index.js";
 
 const VERIFICATION_INTERVAL_MS = 60_000;
+
+const VAULT_ACTIVITY_SYNC_INTERVAL_MS = 30_000;
 
 const VERIFICATION_BATCH_SIZE = 50;
 
@@ -175,6 +179,53 @@ const savingsCurrentAssets = {
       );
   },
 };
+
+const savingsActivityIndex =
+  config.monadChainId === 10_143
+    ? createVaultActivityIndex({
+      db: database.db,
+
+      publicClient: {
+        getChainId: () =>
+          publicClient.getChainId(),
+
+        getBlockNumber: () =>
+          publicClient.getBlockNumber(),
+
+        getBlock: async (request) => {
+          const block =
+            await publicClient.getBlock(
+              request,
+            );
+
+          return {
+            number:
+              block.number,
+            timestamp:
+              block.timestamp,
+          };
+        },
+
+        getLogs: async (request) =>
+          publicClient.getLogs(
+            request as never,
+          ) as never,
+      },
+
+      vault:
+        config.keptSavingsVaultAddress,
+
+      chainId:
+        config.monadChainId,
+
+      startAt:
+        new Date(
+          process.env
+            .VAULT_ACTIVITY_INDEX_START_AT
+          ?? "2026-10-02T00:00:00.000Z",
+        ),
+    })
+    : undefined;
 
 const localSupplyCapUsdc = process.env.LOCAL_AAVE_SUPPLY_CAP_USDC
   ? BigInt(process.env.LOCAL_AAVE_SUPPLY_CAP_USDC)
@@ -440,6 +491,10 @@ const app = buildApp(
 
     savingsCurrentAssets,
 
+    ...(savingsActivityIndex
+      ? { savingsActivityIndex }
+      : {}),
+
     savingsMarketStatus,
 
     ...(stagingFaucet
@@ -477,9 +532,52 @@ const app = buildApp(
 
 let verificationInterval: ReturnType<typeof setInterval> | null = null;
 
+let vaultActivityInterval: ReturnType<typeof setInterval> | null = null;
+
 let verificationRunning = false;
 
+let vaultActivitySyncRunning = false;
+
 let closing = false;
+
+async function runVaultActivitySync(): Promise<void> {
+  if (
+    !savingsActivityIndex
+    || vaultActivitySyncRunning
+    || closing
+  ) {
+    return;
+  }
+
+  vaultActivitySyncRunning = true;
+
+  try {
+    const result =
+      await savingsActivityIndex
+        .syncToHead();
+
+    if (result) {
+      app.log.info(
+        {
+          fromBlock:
+            result.fromBlock.toString(),
+          toBlock:
+            result.toBlock.toString(),
+          eventsIndexed:
+            result.eventsIndexed,
+        },
+        "Vault activity index synchronized",
+      );
+    }
+  } catch (error) {
+    app.log.error(
+      error,
+      "Vault activity index synchronization failed",
+    );
+  } finally {
+    vaultActivitySyncRunning = false;
+  }
+}
 
 async function runVerification(): Promise<void> {
   if (verificationRunning || closing) {
@@ -512,6 +610,12 @@ const close = async (): Promise<void> => {
     clearInterval(verificationInterval);
 
     verificationInterval = null;
+  }
+
+  if (vaultActivityInterval !== null) {
+    clearInterval(vaultActivityInterval);
+
+    vaultActivityInterval = null;
   }
 
   try {
@@ -551,9 +655,15 @@ try {
   // has successfully started.
   await runVerification();
 
+  void runVaultActivitySync();
+
   verificationInterval = setInterval(() => {
     void runVerification();
   }, VERIFICATION_INTERVAL_MS);
+
+  vaultActivityInterval = setInterval(() => {
+    void runVaultActivitySync();
+  }, VAULT_ACTIVITY_SYNC_INTERVAL_MS);
 } catch (error) {
   app.log.error(error, "API startup failed");
 
