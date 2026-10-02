@@ -38,11 +38,24 @@ function readPositiveChainId(value: string | undefined): number | null {
 export function readVaultConfig(environment: PublicEnvironment): VaultConfig | null {
   const rpcUrl = environment.VITE_MONAD_RPC_URL;
   const chainId = readPositiveChainId(environment.VITE_MONAD_CHAIN_ID);
-  const expectedChainId = environment.VITE_ENABLE_LOCAL_ANVIL === "true" ? 31337 : 143;
+  const localAnvilEnabled = environment.VITE_ENABLE_LOCAL_ANVIL === "true";
   const vault = environment.VITE_KEPT_VAULT_ADDRESS;
   const usdc = environment.VITE_MONAD_USDC_ADDRESS;
 
-  if (!isHttpUrl(rpcUrl) || chainId !== expectedChainId || !vault || !usdc || !isAddress(vault) || !isAddress(usdc)) {
+  const supportedChain =
+    chainId === 143 ||
+    chainId === 10143 ||
+    (chainId === 31337 && localAnvilEnabled);
+
+  if (
+    !isHttpUrl(rpcUrl) ||
+    !supportedChain ||
+    (localAnvilEnabled && chainId !== 31337) ||
+    !vault ||
+    !usdc ||
+    !isAddress(vault) ||
+    !isAddress(usdc)
+  ) {
     return null;
   }
 

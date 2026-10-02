@@ -14,6 +14,7 @@ import { monad } from "viem/chains";
 
 import { KeptApp } from "@/KeptApp";
 import { createLocalAnvilChain } from "@/chain/local-anvil-chain";
+import { createMonadTestnetChain } from "@/chain/monad-testnet-chain";
 import { diagnostics } from "@/lib/diagnostics";
 import { readVaultConfig } from "@/vault/config";
 
@@ -50,11 +51,6 @@ const moonPayPublishableKey =
   import.meta.env
     .VITE_MOONPAY_PUBLISHABLE_KEY;
 
-const localAnvilEnabled =
-  import.meta.env
-    .VITE_ENABLE_LOCAL_ANVIL ===
-  "true";
-
 const vaultConfig =
   readVaultConfig(
     import.meta.env,
@@ -62,12 +58,15 @@ const vaultConfig =
 
 const keptChain:
   Chain =
-  localAnvilEnabled &&
-    vaultConfig
+  vaultConfig?.chainId === 31_337
     ? createLocalAnvilChain(
       vaultConfig.rpcUrl,
     )
-    : monad;
+    : vaultConfig?.chainId === 10_143
+      ? createMonadTestnetChain(
+        vaultConfig.rpcUrl,
+      )
+      : monad;
 
 const supportedChains:
   Chain[] = [

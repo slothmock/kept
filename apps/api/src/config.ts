@@ -9,7 +9,7 @@ export interface ApiConfig {
   readonly webOrigin: string;
   readonly monadRpcUrl: string;
   readonly solanaRpcUrl: string;
-  readonly monadChainId: 143 | 31337;
+  readonly monadChainId: 143 | 10143 | 31337;
   readonly commitmentManagerAddress: Address;
   readonly commitmentVerifierPrivateKey: `0x${string}`;
   readonly keptSavingsVaultAddress: Address;
@@ -23,7 +23,7 @@ export interface ApiConfig {
 
 function parseCommitmentWindowOverride(
   environment: NodeJS.ProcessEnv,
-  chainId: 143 | 31337,
+  chainId: 143 | 10143 | 31337,
 ): number | undefined {
   const raw = environment.DEV_COMMITMENT_WINDOW_SECONDS?.trim();
 
@@ -99,11 +99,12 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
-function parseChainId(environment: NodeJS.ProcessEnv): 143 | 31337 {
+function parseChainId(environment: NodeJS.ProcessEnv): 143 | 10143 | 31337 {
   const value = requireValue(environment, "MONAD_CHAIN_ID");
   if (value === "143") return 143;
+  if (value === "10143") return 10143;
   if (value === "31337" && environment.ENABLE_LOCAL_ANVIL === "true") return 31337;
-  throw new Error("MONAD_CHAIN_ID must be 143, or 31337 with ENABLE_LOCAL_ANVIL=true");
+  throw new Error("MONAD_CHAIN_ID must be 143, 10143, or 31337 with ENABLE_LOCAL_ANVIL=true");
 }
 
 function requireHttpUrl(environment: NodeJS.ProcessEnv, key: string): string {

@@ -65,3 +65,27 @@ Before any deployment:
 7. rerun the Monad fork supply/withdraw test against a current block;
 8. review current reserve status and available liquidity;
 9. recheck OpenZeppelin's audited npm `latest` tag.
+
+
+## Monad testnet staging
+
+Kept staging uses Monad testnet rather than production Aave infrastructure.
+
+| Item | Staging value |
+| --- | --- |
+| Monad testnet chain ID | `10143` |
+| Public testnet RPC | `https://rpc.testnet.monad.xyz` |
+| Explorer | `https://testnet.monadscan.com` |
+| Native token | `MON` |
+
+The staging deployment uses `StagingUSDC` and `StagingYieldStrategy`.
+These contracts are restricted to Monad testnet or local Anvil and must not
+be used as production substitutes for Circle USDC or Aave V3. Test yield is
+injected explicitly through `StagingYieldStrategy.fundYield()`.
+
+Production remains:
+
+`KeptSavingsVault -> AaveUSDCStrategy -> Aave V3 on Monad mainnet`.
+
+Official Monad testnet network information:
+https://developers.monad.xyz/

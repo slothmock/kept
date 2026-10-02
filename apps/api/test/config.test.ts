@@ -93,10 +93,18 @@ describe("API configuration", () => {
     ).toThrow("PORT must be a valid TCP port");
   });
 
-  it("allows local Anvil only with explicit opt-in", () => {
+  it("supports Monad testnet and allows local Anvil only with explicit opt-in", () => {
+    expect(
+      loadApiConfig({
+        ...requiredEnvironment,
+        MONAD_CHAIN_ID: "10143",
+      }).monadChainId,
+    ).toBe(10143);
+
     expect(() =>
       loadApiConfig({ ...requiredEnvironment, MONAD_CHAIN_ID: "31337" }),
     ).toThrow("ENABLE_LOCAL_ANVIL=true");
+
     expect(
       loadApiConfig({
         ...requiredEnvironment,
@@ -115,7 +123,7 @@ describe("API configuration", () => {
     ).toThrow("COMMITMENT_MANAGER_ADDRESS must be a valid EVM address");
     expect(() =>
       loadApiConfig({ ...requiredEnvironment, MONAD_CHAIN_ID: "1" }),
-    ).toThrow("MONAD_CHAIN_ID must be 143");
+    ).toThrow("MONAD_CHAIN_ID must be 143, 10143");
   });
 
   it(

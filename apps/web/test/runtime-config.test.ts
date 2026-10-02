@@ -19,7 +19,7 @@ describe("public runtime configuration", () => {
     expect(readApiBaseUrl({ VITE_KEPT_API_URL: "https://api.example.com/" })).toBe("https://api.example.com");
   });
 
-  it("requires Monad mainnet unless local Anvil is explicitly enabled", () => {
+  it("supports Monad mainnet, Monad testnet, and explicitly enabled local Anvil", () => {
     const base = {
       VITE_MONAD_RPC_URL: "https://rpc.monad.example",
       VITE_KEPT_VAULT_ADDRESS: vault,
@@ -28,6 +28,7 @@ describe("public runtime configuration", () => {
 
     expect(readVaultConfig({ ...base, VITE_MONAD_CHAIN_ID: "1" })).toBeNull();
     expect(readVaultConfig({ ...base, VITE_MONAD_CHAIN_ID: "143" })?.chainId).toBe(143);
+    expect(readVaultConfig({ ...base, VITE_MONAD_CHAIN_ID: "10143" })?.chainId).toBe(10143);
     expect(readVaultConfig({
       ...base,
       VITE_ENABLE_LOCAL_ANVIL: "true",
