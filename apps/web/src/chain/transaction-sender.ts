@@ -11,7 +11,10 @@ export interface KeptTransactionSender {
 
 type PrivySendTransaction = (
   transaction: UnsignedVaultTransaction,
-  options?: { readonly address?: string },
+  options?: {
+    readonly address?: string;
+    readonly sponsor?: boolean;
+  },
 ) => Promise<{ readonly hash: Hex }>;
 
 export function createBoundTransactionSender(
@@ -31,6 +34,7 @@ export function createBoundTransactionSender(
 
       const result = await sendTransaction(transaction, {
         address,
+        sponsor: true,
       });
 
       return result.hash;
