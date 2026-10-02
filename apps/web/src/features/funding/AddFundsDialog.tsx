@@ -2034,6 +2034,10 @@ export function AddFundsDialog({
                             externalWallet.walletClientType
                         }
 
+                        externalWalletFamily={
+                            externalWallet.family
+                        }
+
                         availableExternalWallets={
                             externalWallet.availableWallets
                         }
@@ -2414,6 +2418,7 @@ function CryptoFundingView({
     externalWalletConnected,
     externalWalletAddress,
     externalWalletClientType,
+    externalWalletFamily,
     availableExternalWallets,
 
     sourceAssets,
@@ -2459,6 +2464,9 @@ function CryptoFundingView({
 
     readonly externalWalletClientType:
     string | null;
+
+    readonly externalWalletFamily:
+    "evm" | "sol" | null;
 
     readonly availableExternalWallets:
     readonly ExternalFundingWalletOption[];
@@ -2610,9 +2618,9 @@ function CryptoFundingView({
                             <p className="text-sm font-medium capitalize">
                                 {externalWalletClientType ??
                                     "External wallet"}
-                                {externalWallet.family === "sol"
+                                {externalWalletFamily === "sol"
                                     ? " · Solana"
-                                    : externalWallet.family === "evm"
+                                    : externalWalletFamily === "evm"
                                       ? " · EVM"
                                       : ""}
                             </p>
