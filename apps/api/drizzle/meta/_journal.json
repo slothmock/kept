@@ -29,6 +29,13 @@
       "when": 1790721491613,
       "tag": "0003_watery_payback",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790973000000,
+      "tag": "0004_vault_activity_index",
+      "breakpoints": true
     }
   ]
 }
