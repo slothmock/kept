@@ -112,6 +112,9 @@ const vaultActivity = createVaultSavingsActivityReader({
       };
     },
 
+    getCode: (request) =>
+      publicClient.getCode(request),
+
     getLogs: async (request) => publicClient.getLogs(request as never) as never,
   },
 
