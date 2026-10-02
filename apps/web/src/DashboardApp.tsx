@@ -1163,7 +1163,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     void refreshRewardStates(productState.commitments);
   }, [productState, refreshRewardStates]);
 
-  const submitDeposit = useCallback(async () => {
+  const submitDeposit = useCallback(async (): Promise<boolean> => {
     if (
       !config ||
       !publicClient ||
@@ -1172,7 +1172,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     ) {
       setDepositError("Your Kept account is not ready yet.");
 
-      return;
+      return false;
     }
 
     const parsedAmount = parseUsdcDepositAmount(depositAmount);
@@ -1180,7 +1180,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     if ("error" in parsedAmount) {
       setDepositError(parsedAmount.error);
 
-      return;
+      return false;
     }
 
     const minimumError = minimumUsdcDepositError(parsedAmount.assets);
@@ -1188,7 +1188,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     if (minimumError) {
       setDepositError(minimumError);
 
-      return;
+      return false;
     }
 
     if (
@@ -1197,13 +1197,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     ) {
       setDepositError("Wait for the fee details before adding money.");
 
-      return;
+      return false;
     }
 
     if (parsedAmount.assets > positionState.position.usdcBalance) {
       setDepositError("Enter an amount no greater than your available cash.");
 
-      return;
+      return false;
     }
 
     const [approval, deposit] = buildVaultDepositTransactions({
@@ -1214,7 +1214,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       chainId: config.chainId,
     });
 
-    await transactionCoordinator.run("deposit", async () => {
+    let succeeded = false;
+
+    const acquired = await transactionCoordinator.run("deposit", async () => {
       setDepositError(null);
 
       setDepositStatus("Adding money to your savings…");
@@ -1247,19 +1249,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             },
           });
 
-        setDepositStatus("Money added. Updating your savings…");
-
         setDepositAmount("");
-
-        await Promise.all([
-          refreshPosition(),
-
-          refreshProductData(),
-
-          refreshSavingsPerformance(),
-
-          refreshSavingsMarketStatus(),
-        ]);
 
         if (api) {
           await api.recordTransaction(
@@ -1292,6 +1282,18 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         }
 
         setDepositStatus("Money added to your savings.");
+
+        succeeded = true;
+
+        void Promise.allSettled([
+          refreshPosition(),
+
+          refreshProductData(),
+
+          refreshSavingsPerformance(),
+
+          refreshSavingsMarketStatus(),
+        ]);
       } catch (error) {
         diagnostics.warn("vault.deposit_failed", error);
 
@@ -1305,8 +1307,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         );
       }
     });
+
+    return acquired && succeeded;
   }, [
     account,
+    api,
     config,
     depositAmount,
     depositQuoteState,
@@ -1320,7 +1325,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     sender,
     transactionCoordinator,
   ]);
-
   const submitWithdrawal = useCallback(async () => {
     if (
       !config ||
