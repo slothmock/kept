@@ -45,7 +45,7 @@ export interface AuthenticatedIdentity {
 
   readonly wallet: string | null;
 
-  readonly walletId: string | null;
+  readonly walletId?: string | null;
 }
 
 export interface ApiDependencies {
@@ -90,7 +90,7 @@ export interface ApiDependencies {
     }>;
   };
 
-  readonly sponsoredTransactions: {
+  readonly sponsoredTransactions?: {
     readonly send: (input: {
       readonly walletId: string;
       readonly userJwt: string;
@@ -1355,6 +1355,15 @@ export function buildApp(
           ) {
             throw new PersistenceValidationError(
               "transaction chain does not match Kept",
+            );
+          }
+
+          if (
+            !dependencies
+              .sponsoredTransactions
+          ) {
+            throw new NotFoundError(
+              "Sponsored transactions",
             );
           }
 
