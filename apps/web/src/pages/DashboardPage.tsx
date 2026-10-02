@@ -173,7 +173,7 @@ interface DashboardPageProps {
 
   readonly onDepositAmountChange: (value: string) => void;
 
-  readonly onSubmitDeposit: () => void;
+  readonly onSubmitDeposit: () => Promise<boolean>;
 
   readonly onDismissDeposit: () => void;
 
@@ -913,7 +913,18 @@ export function DashboardPage(props: DashboardPageProps) {
 
         onAmountChange={onDepositAmountChange}
 
-        onSubmit={onSubmitDeposit}
+        onSubmit={() => {
+          void (
+            async () => {
+              const succeeded =
+                await onSubmitDeposit();
+
+              if (succeeded) {
+                setDepositOpen(false);
+              }
+            }
+          )();
+        }}
 
       />
 
