@@ -64,7 +64,7 @@ export function SavingsMarketStatus({ state }: SavingsMarketStatusProps) {
       </div>
 
       <div className="border-t px-4 py-3 sm:border-l sm:border-t-0">
-        <p className="text-xs text-muted-foreground">Available liquidity</p>
+        <p className="text-xs text-muted-foreground">TVL</p>
 
         {state.kind === "loading" ? (
           <Skeleton className="mt-2 h-5 w-24" />
