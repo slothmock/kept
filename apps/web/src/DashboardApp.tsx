@@ -2095,6 +2095,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                   sourceAddress:
                     account,
 
+                  family:
+                    "evm",
+
                   provider,
                 });
 
