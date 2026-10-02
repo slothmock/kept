@@ -77,6 +77,12 @@ export interface ApiDependencies {
 
   readonly savingsPerformance: SavingsPerformanceReader;
 
+  readonly savingsCurrentAssets?: {
+    readonly read: (
+      account: string,
+    ) => Promise<bigint>;
+  };
+
   readonly savingsMarketStatus: SavingsMarketStatusReader;
 
   readonly stagingFaucet?: {
@@ -1322,16 +1328,99 @@ export function buildApp(
             Math.floor(now / 1_000) * 1_000;
 
           const promise =
-            dependencies.savingsPerformance.readPerformance({
-              account: auth.identity.wallet,
+            dependencies.chainId === 10_143
+            && dependencies.savingsCurrentAssets
+              ? (async () => {
+                const [
+                  transactions,
+                  currentAssets,
+                ] = await Promise.all([
+                  dependencies.persistence
+                    .listTransactions(
+                      auth.user.id,
+                    ),
 
-              startAt:
-                dependencies.chainId === 10_143
-                  ? new Date("2026-10-02T00:00:00.000Z")
-                  : new Date(0),
+                  dependencies.savingsCurrentAssets
+                    ?.read(
+                      auth.identity.wallet!,
+                    ) ?? Promise.resolve(0n),
+                ]);
 
-              endAt: new Date(nowMilliseconds),
-            });
+                let depositedAssets = 0n;
+                let withdrawnAssets = 0n;
+
+                for (
+                  const transaction
+                  of transactions
+                ) {
+                  if (
+                    transaction.status
+                    !== "completed"
+                    || transaction.asset
+                    !== "USDC"
+                    || transaction.chainId
+                    !== "10143"
+                  ) {
+                    continue;
+                  }
+
+                  const amount =
+                    BigInt(
+                      transaction.amountAtomic,
+                    );
+
+                  if (
+                    transaction.type
+                    === "savings_deposit"
+                  ) {
+                    depositedAssets += amount;
+                  } else if (
+                    transaction.type
+                    === "savings_withdrawal"
+                  ) {
+                    withdrawnAssets += amount;
+                  }
+                }
+
+                const netContributions =
+                  depositedAssets
+                  - withdrawnAssets;
+
+                const earningsAssets =
+                  currentAssets
+                  + withdrawnAssets
+                  - depositedAssets;
+
+                return {
+                  depositedAssetsAtomic:
+                    depositedAssets.toString(),
+
+                  withdrawnAssetsAtomic:
+                    withdrawnAssets.toString(),
+
+                  netContributionsAtomic:
+                    netContributions.toString(),
+
+                  currentAssetsAtomic:
+                    currentAssets.toString(),
+
+                  earningsAssetsAtomic:
+                    earningsAssets.toString(),
+                };
+              })()
+              : dependencies.savingsPerformance
+                .readPerformance({
+                  account:
+                    auth.identity.wallet,
+
+                  startAt:
+                    new Date(0),
+
+                  endAt:
+                    new Date(
+                      nowMilliseconds,
+                    ),
+                });
 
           savingsPerformanceCache.set(
             cacheKey,
