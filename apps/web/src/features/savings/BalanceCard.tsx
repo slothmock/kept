@@ -31,6 +31,7 @@ type SavingsPerformanceState =
       readonly kind: "ready";
       readonly earningsAssets: bigint;
     }
+  | { readonly kind: "synchronizing" }
   | { readonly kind: "error" };
 
 interface BalanceCardProps {
@@ -148,6 +149,13 @@ export function BalanceCard({
 
             {savingsPerformanceState.kind === "loading" ? (
               <Skeleton className="h-6 w-24" />
+            ) : savingsPerformanceState.kind === "synchronizing" ? (
+              <p
+                className="text-sm font-medium text-muted-foreground"
+                aria-live="polite"
+              >
+                Synchronising…
+              </p>
             ) : savingsPerformanceState.kind === "ready" ? (
               <p className="text-lg font-semibold tabular-nums">
                 {earnings !== null && earnings > 0n ? "+" : ""}
