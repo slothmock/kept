@@ -6,6 +6,7 @@ export type ConsumerErrorCode =
   | "request_cancelled"
   | "request_conflict"
   | "request_in_progress"
+  | "rate_limited"
   | "service_unavailable"
   | "synchronizing"
   | "validation_failed"
