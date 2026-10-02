@@ -25,7 +25,10 @@ import {
   type CommitmentSettlementVerifier,
 } from "./commitment-settlement.js";
 
-import type { SavingsPerformanceReader } from "./savings-performance.js";
+import type {
+  SavingsPerformanceDto,
+  SavingsPerformanceReader,
+} from "./savings-performance.js";
 
 import type { SavingsMarketStatusReader } from "./savings-market-status.js";
 
@@ -456,11 +459,22 @@ async function handle<T>(
   }
 }
 
+const SAVINGS_PERFORMANCE_CACHE_TTL_MS = 5_000;
+
 export function buildApp(
   dependencies: ApiDependencies,
 
   options: BuildAppOptions = {},
 ): FastifyInstance {
+  const savingsPerformanceCache =
+    new Map<
+      string,
+      {
+        readonly expiresAt: number;
+        readonly promise: Promise<SavingsPerformanceDto>;
+      }
+    >();
+
   const app = Fastify({
     logger: options.enableLogging
       ? { redact: ["req.headers.authorization"] }
@@ -1251,18 +1265,61 @@ export function buildApp(
             throw new NotFoundError("Privy embedded wallet");
           }
 
-          const nowMilliseconds = Math.floor(Date.now() / 1_000) * 1_000;
+          const cacheKey =
+            auth.identity.wallet.toLowerCase();
 
-          return dependencies.savingsPerformance.readPerformance({
-            account: auth.identity.wallet,
+          const now =
+            Date.now();
 
-            startAt:
-              dependencies.chainId === 10_143
-                ? new Date("2026-10-02T00:00:00.000Z")
-                : new Date(0),
+          const cached =
+            savingsPerformanceCache.get(cacheKey);
 
-            endAt: new Date(nowMilliseconds),
-          });
+          if (
+            cached
+            && cached.expiresAt > now
+          ) {
+            return cached.promise;
+          }
+
+          const nowMilliseconds =
+            Math.floor(now / 1_000) * 1_000;
+
+          const promise =
+            dependencies.savingsPerformance.readPerformance({
+              account: auth.identity.wallet,
+
+              startAt:
+                dependencies.chainId === 10_143
+                  ? new Date("2026-10-02T00:00:00.000Z")
+                  : new Date(0),
+
+              endAt: new Date(nowMilliseconds),
+            });
+
+          savingsPerformanceCache.set(
+            cacheKey,
+            {
+              expiresAt:
+                now + SAVINGS_PERFORMANCE_CACHE_TTL_MS,
+
+              promise,
+            },
+          );
+
+          try {
+            return await promise;
+          } catch (error) {
+            const current =
+              savingsPerformanceCache.get(cacheKey);
+
+            if (
+              current?.promise === promise
+            ) {
+              savingsPerformanceCache.delete(cacheKey);
+            }
+
+            throw error;
+          }
         },
       ),
   );
