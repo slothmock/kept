@@ -567,6 +567,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       readonly earningsAssets: bigint;
     }
     | {
+      readonly kind: "synchronizing";
+    }
+    | {
       readonly kind: "error";
     };
 
@@ -597,6 +600,17 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         earningsAssets: BigInt(performance.earningsAssetsAtomic),
       });
     } catch (error) {
+      if (
+        error instanceof ConsumerError
+        && error.code === "synchronizing"
+      ) {
+        setSavingsPerformanceState({
+          kind: "synchronizing",
+        });
+
+        return;
+      }
+
       diagnostics.warn(
         "savings.performance_refresh_failed",
 
@@ -608,6 +622,27 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       });
     }
   }, [account, api]);
+
+  useEffect(() => {
+    if (
+      savingsPerformanceState.kind
+      !== "synchronizing"
+    ) {
+      return;
+    }
+
+    const timeout =
+      globalThis.setTimeout(() => {
+        void refreshSavingsPerformance();
+      }, 10_000);
+
+    return () => {
+      globalThis.clearTimeout(timeout);
+    };
+  }, [
+    refreshSavingsPerformance,
+    savingsPerformanceState.kind,
+  ]);
 
   const [savingsMarketStatusState, setSavingsMarketStatusState] =
     useState<SavingsMarketStatusState>({
