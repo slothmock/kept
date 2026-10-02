@@ -84,7 +84,7 @@ contract VaultAndStrategyTest is Test {
         assertEq(vault.totalAssets(), 100 * USDC);
 
         uint256 feeBps = treasuryShares * 10_000 / vault.totalSupply();
-        assertApproxEqAbs(feeBps, 50, 1);
+        assertApproxEqAbs(feeBps, 20, 1);
     }
 
     function test_MultipleUsersRemainFairAfterYield() public {
@@ -354,6 +354,6 @@ contract VaultAndStrategyTest is Test {
         uint256 assets = vault.redeem(shares, alice, alice);
         assertEq(assets, expected);
         assertLt(assets, amount);
-        assertApproxEqAbs(assets, amount * 9_950 / 10_000, 2);
+        assertApproxEqAbs(assets, amount * 9_980 / 10_000, 2);
     }
 }
