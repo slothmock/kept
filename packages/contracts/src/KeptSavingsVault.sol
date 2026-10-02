@@ -19,7 +19,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     uint256 public constant BPS_DENOMINATOR = 10_000;
 
     uint16 public constant PROFIT_FEE_BPS = 1_000;
-    uint16 public constant DEPOSIT_FEE_BPS = 50;
+    uint16 public constant DEPOSIT_FEE_BPS = 20;
 
     uint256 internal constant VIRTUAL_SHARES = 1e6;
 
