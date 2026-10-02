@@ -1264,14 +1264,17 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   useEffect(() => {
     void refreshPosition();
+  }, [
+    refreshPosition,
+  ]);
 
+  useEffect(() => {
     void refreshProductData();
 
     void refreshSavingsPerformance();
 
     void refreshSavingsMarketStatus();
   }, [
-    refreshPosition,
     refreshProductData,
     refreshSavingsPerformance,
     refreshSavingsMarketStatus,
