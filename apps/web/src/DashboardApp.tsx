@@ -3476,6 +3476,25 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       <DashboardPage
         walletAddress={wallet.address}
 
+        readSolanaFundingBalances={
+          async (
+            owner,
+          ) => {
+            if (
+              !api
+            ) {
+              throw new Error(
+                "Kept API is unavailable.",
+              );
+            }
+
+            return api
+              .getSolanaFundingBalances(
+                owner,
+              );
+          }
+        }
+
         positionState={positionState}
 
         goalFundingState={goalFundingState}
