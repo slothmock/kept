@@ -250,8 +250,12 @@ function apiConsumerError(
         code: "synchronizing",
         cause,
         diagnosticCode: code,
-        progressPercent:
-          metadata?.progressPercent,
+        ...(metadata?.progressPercent !== undefined
+          ? {
+              progressPercent:
+                metadata.progressPercent,
+            }
+          : {}),
       },
     );
   }
@@ -454,7 +458,11 @@ export function createKeptApi(input: {
         response.status,
         code,
         responseParseError,
-        { progressPercent },
+        progressPercent !== undefined
+          ? {
+              progressPercent,
+            }
+          : undefined,
       );
     }
 
