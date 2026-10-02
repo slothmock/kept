@@ -21,7 +21,7 @@ import {
 } from "@solana/web3.js";
 
 import {
-  useSolanaWallets,
+  useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
 import {
   createKeptApi,
@@ -159,8 +159,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const externalSolanaWallet =
     solanaWallets.find(
       (wallet) =>
-        wallet.walletClientType !==
-        "privy",
+        !(
+          "isPrivyWallet" in
+          wallet.standardWallet &&
+          wallet.standardWallet.isPrivyWallet
+        ),
     ) ?? null;
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -2043,7 +2046,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                           "transfer",
 
                         args: [
-                          recipient,
+                          getAddress(
+                            recipient,
+                          ),
                           parsedAmount.assets,
                         ],
                       }),
