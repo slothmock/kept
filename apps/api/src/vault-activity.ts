@@ -186,6 +186,14 @@ async function findLastBlockAtOrBefore(
 
 const RPC_LOG_BLOCK_RANGE = 100n;
 
+const RPC_LOG_REQUEST_DELAY_MS = 100;
+
+async function waitForRpcBudget(): Promise<void> {
+    await new Promise<void>((resolve) => {
+        setTimeout(resolve, RPC_LOG_REQUEST_DELAY_MS);
+    });
+}
+
 async function getLogsInChunks(
     publicClient: VaultActivityPublicClient,
     input: {
@@ -241,6 +249,13 @@ async function getLogsInChunks(
 
         chunkFrom =
             chunkTo + 1n;
+
+        if (
+            chunkFrom
+            <= input.toBlock
+        ) {
+            await waitForRpcBudget();
+        }
     }
 
     return logs;
@@ -362,11 +377,8 @@ export function createVaultSavingsActivityReader(
                 };
             }
 
-            const [
-                deposits,
-                withdrawals,
-            ] = await Promise.all([
-                getLogsInChunks(
+            const deposits =
+                await getLogsInChunks(
                     input.publicClient,
                     {
                         address: input.vault,
@@ -375,9 +387,12 @@ export function createVaultSavingsActivityReader(
                         fromBlock,
                         toBlock,
                     },
-                ),
+                );
 
-                getLogsInChunks(
+            await waitForRpcBudget();
+
+            const withdrawals =
+                await getLogsInChunks(
                     input.publicClient,
                     {
                         address: input.vault,
@@ -386,8 +401,7 @@ export function createVaultSavingsActivityReader(
                         fromBlock,
                         toBlock,
                     },
-                ),
-            ]);
+                );
 
             const depositedAssets =
                 sumAssets(deposits);
