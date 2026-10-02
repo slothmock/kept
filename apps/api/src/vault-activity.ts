@@ -45,6 +45,11 @@ interface VaultActivityPublicClient {
         readonly blockNumber: bigint;
     }): Promise<Block>;
 
+    getCode(input: {
+        readonly address: Address;
+        readonly blockNumber: bigint;
+    }): Promise<string | undefined>;
+
     getLogs(input: {
         readonly address: Address;
         readonly event:
@@ -184,6 +189,112 @@ async function findLastBlockAtOrBefore(
     return low;
 }
 
+const RPC_LOG_BLOCK_RANGE = 100n;
+
+async function findContractDeploymentBlock(
+    publicClient: VaultActivityPublicClient,
+    address: Address,
+    latestBlock: bigint,
+): Promise<bigint | null> {
+    const latestCode =
+        await publicClient.getCode({
+            address,
+            blockNumber: latestBlock,
+        });
+
+    if (
+        !latestCode
+        || latestCode === "0x"
+    ) {
+        return null;
+    }
+
+    let low = 0n;
+    let high = latestBlock;
+
+    while (low < high) {
+        const middle =
+            low + (high - low) / 2n;
+
+        const code =
+            await publicClient.getCode({
+                address,
+                blockNumber: middle,
+            });
+
+        if (
+            code
+            && code !== "0x"
+        ) {
+            high = middle;
+        } else {
+            low = middle + 1n;
+        }
+    }
+
+    return low;
+}
+
+async function getLogsInChunks(
+    publicClient: VaultActivityPublicClient,
+    input: {
+        readonly address: Address;
+        readonly event:
+        | typeof depositEvent
+        | typeof withdrawEvent;
+        readonly owner: Address;
+        readonly fromBlock: bigint;
+        readonly toBlock: bigint;
+    },
+): Promise<
+    readonly (
+        | DepositLog
+        | WithdrawLog
+    )[]
+> {
+    const logs: (
+        | DepositLog
+        | WithdrawLog
+    )[] = [];
+
+    let chunkFrom =
+        input.fromBlock;
+
+    while (
+        chunkFrom
+        <= input.toBlock
+    ) {
+        const candidateTo =
+            chunkFrom
+            + RPC_LOG_BLOCK_RANGE
+            - 1n;
+
+        const chunkTo =
+            candidateTo
+            < input.toBlock
+                ? candidateTo
+                : input.toBlock;
+
+        const chunk =
+            await publicClient.getLogs({
+                address: input.address,
+                event: input.event,
+                args: {
+                    owner: input.owner,
+                },
+                fromBlock: chunkFrom,
+                toBlock: chunkTo,
+            });
+
+        logs.push(...chunk);
+
+        chunkFrom =
+            chunkTo + 1n;
+    }
+
+    return logs;
+}
+
 function sumAssets(
     logs: readonly (
         | DepositLog
@@ -272,8 +383,9 @@ export function createVaultSavingsActivityReader(
                     .getBlockNumber();
 
             const [
-                fromBlock,
+                requestedFromBlock,
                 toBlock,
+                deploymentBlock,
             ] = await Promise.all([
                 findFirstBlockAtOrAfter(
                     input.publicClient,
@@ -286,12 +398,34 @@ export function createVaultSavingsActivityReader(
                     endTimestamp,
                     latestBlock,
                 ),
+
+                findContractDeploymentBlock(
+                    input.publicClient,
+                    input.vault,
+                    latestBlock,
+                ),
             ]);
 
             if (
-                fromBlock === null
+                requestedFromBlock === null
                 || toBlock === null
-                || fromBlock > toBlock
+                || deploymentBlock === null
+            ) {
+                return {
+                    depositedAssets: 0n,
+                    withdrawnAssets: 0n,
+                    netAssets: 0n,
+                };
+            }
+
+            const fromBlock =
+                requestedFromBlock
+                > deploymentBlock
+                    ? requestedFromBlock
+                    : deploymentBlock;
+
+            if (
+                fromBlock > toBlock
             ) {
                 return {
                     depositedAssets: 0n,
@@ -304,25 +438,27 @@ export function createVaultSavingsActivityReader(
                 deposits,
                 withdrawals,
             ] = await Promise.all([
-                input.publicClient.getLogs({
-                    address: input.vault,
-                    event: depositEvent,
-                    args: {
+                getLogsInChunks(
+                    input.publicClient,
+                    {
+                        address: input.vault,
+                        event: depositEvent,
                         owner: account,
+                        fromBlock,
+                        toBlock,
                     },
-                    fromBlock,
-                    toBlock,
-                }),
+                ),
 
-                input.publicClient.getLogs({
-                    address: input.vault,
-                    event: withdrawEvent,
-                    args: {
+                getLogsInChunks(
+                    input.publicClient,
+                    {
+                        address: input.vault,
+                        event: withdrawEvent,
                         owner: account,
+                        fromBlock,
+                        toBlock,
                     },
-                    fromBlock,
-                    toBlock,
-                }),
+                ),
             ]);
 
             const depositedAssets =
