@@ -1,7 +1,5 @@
 import {
   decodeEventLog,
-  decodeFunctionData,
-  encodeFunctionData,
   getAddress,
   hexToBytes,
   keccak256,
@@ -29,18 +27,6 @@ export const commitmentManagerReadAbi = [
     ],
   },
 ] as const;
-
-const commitmentManagerCreateAbi = [{
-  type: "function",
-  name: "createCommitment",
-  stateMutability: "nonpayable",
-  inputs: [
-    { name: "referenceId", type: "bytes32" },
-    { name: "startAt", type: "uint64" },
-    { name: "endAt", type: "uint64" },
-  ],
-  outputs: [{ name: "commitmentId", type: "uint256" }],
-}] as const;
 
 const commitmentManagerCreatedEventAbi = [{
   type: "event",
@@ -269,40 +255,7 @@ export function createCommitmentSettlementVerifier(input: {
       if (!/^0x[0-9a-fA-F]{64}$/.test(candidate.transactionHash)) {
         throw new CommitmentSettlementMismatchError("Commitment transaction hash is invalid");
       }
-      const transaction = await input.publicClient.getTransaction({
-        hash: candidate.transactionHash,
-      });
-      let decoded: ReturnType<typeof decodeFunctionData<typeof commitmentManagerCreateAbi>>;
-      try {
-        decoded = decodeFunctionData({
-          abi: commitmentManagerCreateAbi,
-          data: transaction.input,
-        });
-      } catch {
-        throw new CommitmentSettlementMismatchError("Commitment transaction calldata is invalid");
-      }
-      const expectedReference = referenceIdForCommitment(candidate.offchainCommitmentId);
-      if (
-        !transaction.to
-        || getAddress(transaction.to) !== input.manager
-        || decoded.functionName !== "createCommitment"
-        || decoded.args[0] !== expectedReference
-        || decoded.args[1] !== timestampSeconds(candidate.startAt)
-        || decoded.args[2] !== timestampSeconds(candidate.endAt)
-        || transaction.input.toLowerCase() !== encodeFunctionData({
-          abi: commitmentManagerCreateAbi,
-          functionName: "createCommitment",
-          args: [
-            expectedReference,
-            timestampSeconds(candidate.startAt),
-            timestampSeconds(candidate.endAt),
-          ],
-        }).toLowerCase()
-      ) {
-        throw new CommitmentSettlementMismatchError(
-          "Commitment transaction does not match the API record",
-        );
-      }
+
       const receipt =
         await input.publicClient.getTransactionReceipt({
           hash: candidate.transactionHash,
@@ -327,32 +280,81 @@ export function createCommitmentSettlementVerifier(input: {
           "Commitment transaction is not successfully confirmed",
         );
       }
-      const commitmentId = parseCommitmentId(candidate.onchainCommitmentId);
-      const owner = getAddress(transaction.from);
-      const matchingEvent = receipt.logs.some((log) => {
-        if (getAddress(log.address) !== input.manager || log.topics.length === 0) return false;
-        try {
-          const decodedEvent = decodeEventLog({
-            abi: commitmentManagerCreatedEventAbi,
-            eventName: "CommitmentCreated",
-            data: log.data,
-            topics: log.topics as [Hex, ...Hex[]],
-          });
-          return decodedEvent.args.commitmentId === commitmentId
-            && getAddress(decodedEvent.args.owner) === owner
-            && decodedEvent.args.referenceId === expectedReference
-            && decodedEvent.args.startAt === timestampSeconds(candidate.startAt)
-            && decodedEvent.args.endAt === timestampSeconds(candidate.endAt);
-        } catch {
-          return false;
+
+      const commitmentId =
+        parseCommitmentId(
+          candidate.onchainCommitmentId,
+        );
+
+      const expectedReference =
+        referenceIdForCommitment(
+          candidate.offchainCommitmentId,
+        );
+
+      let owner: Address | null = null;
+
+      for (const log of receipt.logs) {
+        if (
+          getAddress(log.address)
+          !== input.manager
+          || log.topics.length === 0
+        ) {
+          continue;
         }
-      });
-      if (!matchingEvent) {
+
+        try {
+          const decodedEvent =
+            decodeEventLog({
+              abi:
+                commitmentManagerCreatedEventAbi,
+              eventName:
+                "CommitmentCreated",
+              data:
+                log.data,
+              topics:
+                log.topics as [
+                  Hex,
+                  ...Hex[],
+                ],
+            });
+
+          if (
+            decodedEvent.args.commitmentId
+              === commitmentId
+            && decodedEvent.args.referenceId
+              === expectedReference
+            && decodedEvent.args.startAt
+              === timestampSeconds(
+                candidate.startAt,
+              )
+            && decodedEvent.args.endAt
+              === timestampSeconds(
+                candidate.endAt,
+              )
+          ) {
+            owner =
+              getAddress(
+                decodedEvent.args.owner,
+              );
+
+            break;
+          }
+        } catch {
+          // Ignore unrelated logs.
+        }
+      }
+
+      if (!owner) {
         throw new CommitmentSettlementMismatchError(
           "Commitment transaction receipt does not contain the expected event",
         );
       }
-      return verifyStatus(candidate, undefined, owner);
+
+      return verifyStatus(
+        candidate,
+        undefined,
+        owner,
+      );
     },
     verifyCancelled: (candidate) => {
       let owner: Address;

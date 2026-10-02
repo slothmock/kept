@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   encodeAbiParameters,
   encodeEventTopics,
-  encodeFunctionData,
   getAddress,
   type Hex,
 } from "viem";
@@ -20,17 +19,6 @@ const owner = getAddress("0x2222222222222222222222222222222222222222");
 const offchainId = "00000000-0000-4000-8000-000000000001";
 const referenceId = "0x27df9e4f396b049a38fecd6237c650c5df3f372785585cd7ced3fae81d61e5cd";
 const transactionHash = `0x${"a".repeat(64)}` as Hex;
-const createAbi = [{
-  type: "function",
-  name: "createCommitment",
-  stateMutability: "nonpayable",
-  inputs: [
-    { name: "referenceId", type: "bytes32" },
-    { name: "startAt", type: "uint64" },
-    { name: "endAt", type: "uint64" },
-  ],
-  outputs: [{ name: "commitmentId", type: "uint256" }],
-}] as const;
 const createdEventAbi = [{
   type: "event",
   name: "CommitmentCreated",
@@ -47,13 +35,9 @@ function reader(record: readonly unknown[]) {
   return {
     getChainId: vi.fn().mockResolvedValue(143),
     getTransaction: vi.fn().mockResolvedValue({
-      from: owner,
-      to: manager,
-      input: encodeFunctionData({
-        abi: createAbi,
-        functionName: "createCommitment",
-        args: [referenceId, 2_000n, 3_000n],
-      }),
+      from: getAddress("0x9999999999999999999999999999999999999999"),
+      to: getAddress("0x8888888888888888888888888888888888888888"),
+      input: "0x1234",
     }),
     getTransactionReceipt: vi.fn().mockResolvedValue({
       status: "success",
@@ -115,6 +99,38 @@ describe("server-authoritative commitment settlement verification", () => {
       functionName: "commitments",
       args: [7n],
     }));
+  });
+
+  it("accepts sponsored or relayed transaction envelopes when the receipt event and onchain record match", async () => {
+    const publicClient = reader([
+      owner,
+      referenceId,
+      1_900n,
+      2_000n,
+      3_000n,
+      0n,
+      1,
+      false,
+    ]);
+
+    const verifier = createCommitmentSettlementVerifier({
+      publicClient,
+      manager,
+      chainId: 143,
+    });
+
+    await expect(verifier.verifyActive({
+      offchainCommitmentId: offchainId,
+      onchainCommitmentId: "7",
+      transactionHash,
+      startAt: new Date("1970-01-01T00:33:20.000Z"),
+      endAt: new Date("1970-01-01T00:50:00.000Z"),
+    })).resolves.toMatchObject({
+      owner,
+      chainId: 143,
+    });
+
+    expect(publicClient.getTransaction).not.toHaveBeenCalled();
   });
 
   it("requires a successful creation receipt with two confirmations", async () => {
