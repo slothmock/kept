@@ -558,6 +558,29 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     [config],
   );
 
+  const readSolanaFundingBalances =
+    useCallback(
+      async (
+        owner: string,
+      ) => {
+        if (
+          !api
+        ) {
+          throw new Error(
+            "Kept API is unavailable.",
+          );
+        }
+
+        return api
+          .getSolanaFundingBalances(
+            owner,
+          );
+      },
+      [
+        api,
+      ],
+    );
+
   const account =
     wallet.address && isAddress(wallet.address)
       ? getAddress(wallet.address)
@@ -3477,22 +3500,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         walletAddress={wallet.address}
 
         readSolanaFundingBalances={
-          async (
-            owner,
-          ) => {
-            if (
-              !api
-            ) {
-              throw new Error(
-                "Kept API is unavailable.",
-              );
-            }
-
-            return api
-              .getSolanaFundingBalances(
-                owner,
-              );
-          }
+          readSolanaFundingBalances
         }
 
         positionState={positionState}
