@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useSendTransaction } from "@privy-io/react-auth";
 import type { Hex } from "viem";
 
 import { ConsumerError } from "../lib/consumer-error.js";
@@ -9,21 +8,17 @@ export interface KeptTransactionSender {
   sendTransaction(transaction: UnsignedVaultTransaction): Promise<Hex>;
 }
 
-type PrivySendTransaction = (
+type SponsoredTransactionSender = (
   transaction: UnsignedVaultTransaction,
-  options?: {
-    readonly address?: string;
-    readonly sponsor?: boolean;
-  },
-) => Promise<{ readonly hash: Hex }>;
+) => Promise<{ readonly transactionHash: string }>;
 
 export function createBoundTransactionSender(
-  sendTransaction: PrivySendTransaction,
+  sendTransaction: SponsoredTransactionSender | null,
   address: string | null,
 ): KeptTransactionSender {
   return {
     async sendTransaction(transaction) {
-      if (!address) {
+      if (!address || !sendTransaction) {
         throw new ConsumerError("Your Kept account is not ready yet.", {
           code: "wallet_unavailable",
           cause: new Error(
@@ -32,21 +27,24 @@ export function createBoundTransactionSender(
         });
       }
 
-      const result = await sendTransaction(transaction, {
-        address,
-        sponsor: true,
-      });
+      const result =
+        await sendTransaction(transaction);
 
-      return result.hash;
+      return result.transactionHash as Hex;
     },
   };
 }
 
-export function useKeptTransactionSender(address: string | null): KeptTransactionSender {
-  const { sendTransaction } = useSendTransaction();
-
+export function useKeptTransactionSender(
+  address: string | null,
+  sendTransaction: SponsoredTransactionSender | null,
+): KeptTransactionSender {
   return useMemo(
-    () => createBoundTransactionSender(sendTransaction, address),
+    () =>
+      createBoundTransactionSender(
+        sendTransaction,
+        address,
+      ),
     [address, sendTransaction],
   );
 }
