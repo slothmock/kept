@@ -134,10 +134,18 @@ export interface StagingFaucetDto {
   readonly transactionHash: string;
 }
 
+export interface SolanaFundingBalancesDto {
+  readonly nativeBalance: string;
+  readonly balances: Readonly<Record<string, string>>;
+}
+
 export interface KeptApi {
   getSavingsPerformance(): Promise<SavingsPerformanceDto>;
   getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
   claimStagingFaucet(): Promise<StagingFaucetDto>;
+  getSolanaFundingBalances(
+    owner: string,
+  ): Promise<SolanaFundingBalancesDto>;
   listTransactions(): Promise<readonly TransactionDto[]>;
   recordTransaction(
     input: RecordTransactionInput,
@@ -482,6 +490,11 @@ export function createKeptApi(input: {
       request<SavingsMarketStatusDto>("/v1/savings/market-status"),
     claimStagingFaucet: () =>
       post<StagingFaucetDto>("/v1/staging/faucet", {}),
+    getSolanaFundingBalances: (owner) =>
+      post<SolanaFundingBalancesDto>(
+        "/v1/funding/solana/token-balances",
+        { owner },
+      ),
     listTransactions: () => request<readonly TransactionDto[]>("/v1/account/transactions"),
     recordTransaction: (
       transaction,
