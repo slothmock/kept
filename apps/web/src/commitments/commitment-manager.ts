@@ -137,12 +137,15 @@ export interface ConfirmedCommitmentCreation {
 }
 
 export class CommitmentConfirmationError extends Error {
+  readonly restartable: boolean;
+
   constructor(
     message: string,
-    readonly restartable: boolean,
+    restartable: boolean,
   ) {
     super(message);
     this.name = "CommitmentConfirmationError";
+    this.restartable = restartable;
   }
 }
 
