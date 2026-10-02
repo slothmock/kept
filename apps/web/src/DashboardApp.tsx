@@ -659,6 +659,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         availableToWithdrawAssets: BigInt(status.availableToWithdrawAtomic),
 
+        tvlAssets: BigInt(status.tvlAssetsAtomic),
+
         grossApyBps: Number(status.grossApyBps),
 
         netApyBps: Number(status.netApyBps),
