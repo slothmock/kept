@@ -49,6 +49,31 @@ describe("Kept API consumer errors", () => {
     });
   });
 
+  it("maps savings history synchronization progress", async () => {
+    const api = createKeptApi({
+      baseUrl: "https://api.example",
+      getAccessToken: async () => "token",
+      fetcher: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "SAVINGS_HISTORY_SYNCHRONIZING",
+              progressPercent: 63.42,
+            },
+          }),
+          { status: 503 },
+        ),
+    });
+
+    await expect(
+      api.getSavingsPerformance(),
+    ).rejects.toMatchObject({
+      code: "synchronizing",
+      progressPercent: 63.42,
+      message: "Savings history is synchronising.",
+    });
+  });
+
   it("maps fetch failures without exposing endpoint details", async () => {
     const api = createKeptApi({
       baseUrl: "https://private-api.example",
