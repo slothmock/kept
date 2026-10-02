@@ -22,10 +22,16 @@ export const SUPPORTED_EVM_FUNDING_CHAINS =
         "op",
     ] as const;
 
+export const SUPPORTED_SOLANA_FUNDING_CHAINS =
+    [
+        "sol",
+    ] as const;
+
 const SUPPORTED_SOURCE_CHAINS =
-    new Set<string>(
-        SUPPORTED_EVM_FUNDING_CHAINS,
-    );
+    new Set<string>([
+        ...SUPPORTED_EVM_FUNDING_CHAINS,
+        ...SUPPORTED_SOLANA_FUNDING_CHAINS,
+    ]);
 
 export interface FundingAsset {
     readonly assetId:
