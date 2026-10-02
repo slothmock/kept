@@ -192,11 +192,16 @@ function getCustomerIp(
 }
 
 function allowedWebOrigins(webOrigin: string): string[] {
-  if (webOrigin === "http://localhost:5173") {
-    return [webOrigin, "http://127.0.0.1:5173"];
+  const origins = webOrigin
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (origins.includes("http://localhost:5173")) {
+    origins.push("http://127.0.0.1:5173");
   }
 
-  return [webOrigin];
+  return [...new Set(origins)];
 }
 
 interface AuthenticatedRequest extends FastifyRequest {
