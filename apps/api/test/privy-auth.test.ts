@@ -36,6 +36,7 @@ describe("Privy access-token authentication", () => {
     ).resolves.toEqual({
       privyUserId: "did:privy:user-1",
       wallet: null,
+      walletId: null,
     });
   });
 
