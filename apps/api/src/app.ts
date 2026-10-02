@@ -243,6 +243,13 @@ function asAuthenticatedRequest(request: FastifyRequest): AuthenticatedRequest {
   return request as AuthenticatedRequest;
 }
 
+class SavingsHistorySynchronizingError extends Error {
+  constructor() {
+    super("Savings activity history is still synchronizing");
+    this.name = "SavingsHistorySynchronizingError";
+  }
+}
+
 function sendError(
   request: FastifyRequest,
 
@@ -315,6 +322,23 @@ function sendError(
       statusCode: 503,
 
       body: { error: { code: "SERVICE_UNAVAILABLE" } },
+    };
+  }
+
+  if (error instanceof SavingsHistorySynchronizingError) {
+    request.log.info(
+      { errorCode: "SAVINGS_HISTORY_SYNCHRONIZING" },
+      "Savings activity history is synchronizing",
+    );
+
+    return {
+      statusCode: 503,
+
+      body: {
+        error: {
+          code: "SAVINGS_HISTORY_SYNCHRONIZING",
+        },
+      },
     };
   }
 
@@ -1348,9 +1372,7 @@ export function buildApp(
                     .savingsActivityIndex!
                     .isReady()
                 ) {
-                  throw new Error(
-                    "Savings activity history is still synchronizing",
-                  );
+                  throw new SavingsHistorySynchronizingError();
                 }
 
                 const [
