@@ -606,6 +606,8 @@ async function handle<T>(
 
 const SAVINGS_PERFORMANCE_CACHE_TTL_MS = 5_000;
 
+const SAVINGS_MARKET_STATUS_CACHE_TTL_MS = 15_000;
+
 export function buildApp(
   dependencies: ApiDependencies,
 
@@ -619,6 +621,13 @@ export function buildApp(
         readonly promise: Promise<SavingsPerformanceDto>;
       }
     >();
+
+  let savingsMarketStatusCache: {
+    readonly expiresAt: number;
+    readonly promise: ReturnType<
+      SavingsMarketStatusReader["readStatus"]
+    >;
+  } | null = null;
 
   const app = Fastify({
     logger: options.enableLogging
@@ -1566,8 +1575,56 @@ export function buildApp(
       ),
   );
 
-  app.get("/v1/savings/market-status", async (request, reply) =>
-    handle(request, reply, () => dependencies.savingsMarketStatus.readStatus()),
+  app.get(
+    "/v1/savings/market-status",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const now =
+            Date.now();
+
+          if (
+            savingsMarketStatusCache
+            && savingsMarketStatusCache.expiresAt >
+            now
+          ) {
+            return savingsMarketStatusCache.promise;
+          }
+
+          const promise =
+            dependencies
+              .savingsMarketStatus
+              .readStatus();
+
+          savingsMarketStatusCache = {
+            expiresAt:
+              now +
+              SAVINGS_MARKET_STATUS_CACHE_TTL_MS,
+
+            promise,
+          };
+
+          try {
+            return await promise;
+          } catch (error) {
+            if (
+              savingsMarketStatusCache
+                ?.promise ===
+              promise
+            ) {
+              savingsMarketStatusCache =
+                null;
+            }
+
+            throw error;
+          }
+        },
+      ),
   );
 
   app.get(
