@@ -101,6 +101,7 @@ const SOURCE_NETWORK_ORDER =
         "base",
         "arb",
         "op",
+        "sol",
     ] as const;
 
 interface EvmFundingChain {
@@ -634,13 +635,37 @@ export function AddFundsDialog({
                 return sourceAssets.filter(
                     (
                         asset,
-                    ) =>
-                        SOURCE_NETWORK_ORDER.includes(
-                            asset.blockchain as typeof SOURCE_NETWORK_ORDER[number],
-                        ),
+                    ) => {
+                        if (
+                            !SOURCE_NETWORK_ORDER.includes(
+                                asset.blockchain as typeof SOURCE_NETWORK_ORDER[number],
+                            )
+                        ) {
+                            return false;
+                        }
+
+                        if (
+                            externalWallet.family ===
+                            "sol"
+                        ) {
+                            return asset.blockchain ===
+                                "sol";
+                        }
+
+                        if (
+                            externalWallet.family ===
+                            "evm"
+                        ) {
+                            return asset.blockchain !==
+                                "sol";
+                        }
+
+                        return true;
+                    },
                 );
             },
             [
+                externalWallet.family,
                 sourceAssets,
             ],
         );
@@ -744,17 +769,26 @@ export function AddFundsDialog({
                                     return current;
                                 }
 
-                                const baseAsset =
-                                    origins.find(
-                                        (
-                                            asset,
-                                        ) =>
-                                            asset.blockchain ===
-                                            "base",
-                                    );
+                                const preferredAsset =
+                                    externalWallet.family ===
+                                        "sol"
+                                        ? origins.find(
+                                            (
+                                                asset,
+                                            ) =>
+                                                asset.blockchain ===
+                                                "sol",
+                                        )
+                                        : origins.find(
+                                            (
+                                                asset,
+                                            ) =>
+                                                asset.blockchain ===
+                                                "base",
+                                        );
 
                                 return (
-                                    baseAsset?.blockchain ??
+                                    preferredAsset?.blockchain ??
                                     origins[0]?.blockchain ??
                                     null
                                 );
@@ -778,19 +812,24 @@ export function AddFundsDialog({
                                     return current;
                                 }
 
-                                const baseUsdc =
+                                const preferredUsdc =
                                     origins.find(
                                         (
                                             asset,
                                         ) =>
                                             asset.blockchain ===
-                                            "base" &&
+                                            (
+                                                externalWallet.family ===
+                                                    "sol"
+                                                    ? "sol"
+                                                    : "base"
+                                            ) &&
                                             asset.symbol ===
                                             "USDC",
                                     );
 
                                 return (
-                                    baseUsdc
+                                    preferredUsdc
                                         ?.assetId ??
                                     origins[0]
                                         ?.assetId ??
@@ -839,6 +878,7 @@ export function AddFundsDialog({
             };
         },
         [
+            externalWallet.family,
             open,
             view,
         ],
@@ -1158,22 +1198,36 @@ export function AddFundsDialog({
                 );
 
                 try {
-                    const provider =
-                        await externalWallet
-                            .getEvmProvider();
-
                     if (
-                        !provider
+                        externalWallet.family ===
+                        "sol"
                     ) {
-                        throw new Error(
-                            "Connected wallet provider is unavailable.",
+                        if (
+                            blockchain !==
+                            "sol"
+                        ) {
+                            throw new Error(
+                                "Choose an EVM wallet to use that network.",
+                            );
+                        }
+                    } else {
+                        const provider =
+                            await externalWallet
+                                .getEvmProvider();
+
+                        if (
+                            !provider
+                        ) {
+                            throw new Error(
+                                "Connected wallet provider is unavailable.",
+                            );
+                        }
+
+                        await switchToFundingChain(
+                            provider,
+                            blockchain,
                         );
                     }
-
-                    await switchToFundingChain(
-                        provider,
-                        blockchain,
-                    );
 
                     setSourceBlockchain(
                         blockchain,
@@ -1301,6 +1355,9 @@ export function AddFundsDialog({
                             sourceAddress:
                                 wallet.address,
 
+                            family:
+                                "evm",
+
                             provider,
                         });
 
@@ -1404,35 +1461,85 @@ export function AddFundsDialog({
                 );
 
                 try {
-                    const provider =
-                        await externalWallet
-                            .getEvmProvider();
+                    const family =
+                        externalWallet.family;
 
                     if (
-                        !provider
+                        !family
                     ) {
                         throw new Error(
                             "Connect a wallet to continue.",
                         );
                     }
 
-                    const previousChainId =
-                        await readChainId(
-                            provider,
-                        );
+                    const evmProvider =
+                        family === "evm"
+                            ? await externalWallet
+                                .getEvmProvider()
+                            : null;
 
-                    await switchToFundingChain(
-                        provider,
-                        sourceAsset.blockchain,
-                    );
+                    const solanaProvider =
+                        family === "sol"
+                            ? await externalWallet
+                                .getSolanaProvider()
+                            : null;
+
+                    if (
+                        family === "evm" &&
+                        !evmProvider
+                    ) {
+                        throw new Error(
+                            "Connected wallet provider is unavailable.",
+                        );
+                    }
+
+                    if (
+                        family === "sol" &&
+                        !solanaProvider
+                    ) {
+                        throw new Error(
+                            "Connected Solana wallet provider is unavailable.",
+                        );
+                    }
+
+                    const previousChainId =
+                        evmProvider
+                            ? await readChainId(
+                                evmProvider,
+                            )
+                            : null;
+
+                    if (
+                        evmProvider
+                    ) {
+                        await switchToFundingChain(
+                            evmProvider,
+                            sourceAsset.blockchain,
+                        );
+                    }
 
                     const runner =
-                        createKeptIntentsRunner({
-                            sourceAddress:
-                                externalWallet.address,
+                        family === "sol"
+                            ? createKeptIntentsRunner({
+                                sourceAddress:
+                                    externalWallet.address,
 
-                            provider,
-                        });
+                                family:
+                                    "sol",
+
+                                provider:
+                                    solanaProvider!,
+                            })
+                            : createKeptIntentsRunner({
+                                sourceAddress:
+                                    externalWallet.address,
+
+                                family:
+                                    "evm",
+
+                                provider:
+                                    evmProvider!,
+                            });
 
                     try {
                         await executeKeptFunding({
@@ -1467,16 +1574,21 @@ export function AddFundsDialog({
                     } finally {
                         runner.dispose();
 
-                        try {
-                            await restoreChain(
-                                provider,
-                                previousChainId,
-                            );
-                        } catch (restoreError) {
-                            diagnostics.warn(
-                                "funding.external_wallet_network_restore_failed",
-                                restoreError,
-                            );
+                        if (
+                            evmProvider &&
+                            previousChainId !== null
+                        ) {
+                            try {
+                                await restoreChain(
+                                    evmProvider,
+                                    previousChainId,
+                                );
+                            } catch (restoreError) {
+                                diagnostics.warn(
+                                    "funding.external_wallet_network_restore_failed",
+                                    restoreError,
+                                );
+                            }
                         }
                     }
                 } catch (
@@ -1687,35 +1799,85 @@ export function AddFundsDialog({
                 );
 
                 try {
-                    const provider =
-                        await externalWallet
-                            .getEvmProvider();
+                    const family =
+                        externalWallet.family;
 
                     if (
-                        !provider
+                        !family
                     ) {
                         throw new Error(
                             "Connected wallet provider is unavailable.",
                         );
                     }
 
-                    const previousChainId =
-                        await readChainId(
-                            provider,
-                        );
+                    const evmProvider =
+                        family === "evm"
+                            ? await externalWallet
+                                .getEvmProvider()
+                            : null;
 
-                    await switchToFundingChain(
-                        provider,
-                        sourceAsset.blockchain,
-                    );
+                    const solanaProvider =
+                        family === "sol"
+                            ? await externalWallet
+                                .getSolanaProvider()
+                            : null;
+
+                    if (
+                        family === "evm" &&
+                        !evmProvider
+                    ) {
+                        throw new Error(
+                            "Connected wallet provider is unavailable.",
+                        );
+                    }
+
+                    if (
+                        family === "sol" &&
+                        !solanaProvider
+                    ) {
+                        throw new Error(
+                            "Connected Solana wallet provider is unavailable.",
+                        );
+                    }
+
+                    const previousChainId =
+                        evmProvider
+                            ? await readChainId(
+                                evmProvider,
+                            )
+                            : null;
+
+                    if (
+                        evmProvider
+                    ) {
+                        await switchToFundingChain(
+                            evmProvider,
+                            sourceAsset.blockchain,
+                        );
+                    }
 
                     const runner =
-                        createKeptIntentsRunner({
-                            sourceAddress:
-                                externalWallet.address,
+                        family === "sol"
+                            ? createKeptIntentsRunner({
+                                sourceAddress:
+                                    externalWallet.address,
 
-                            provider,
-                        });
+                                family:
+                                    "sol",
+
+                                provider:
+                                    solanaProvider!,
+                            })
+                            : createKeptIntentsRunner({
+                                sourceAddress:
+                                    externalWallet.address,
+
+                                family:
+                                    "evm",
+
+                                provider:
+                                    evmProvider!,
+                            });
 
                     try {
                         await previewKeptFunding({
@@ -1957,11 +2119,12 @@ export function AddFundsDialog({
                             null
                         }
 
-                        onSelectExternalWallet={(address) => {
+                        onSelectExternalWallet={(address, family) => {
                             invalidateCryptoPreview();
 
                             externalWallet.select(
                                 address,
+                                family,
                             );
                         }}
 
@@ -2366,6 +2529,7 @@ function CryptoFundingView({
 
     readonly onSelectExternalWallet: (
         address: string,
+        family: "evm" | "sol",
     ) => void;
 
     readonly onChangeExternalWallet:
@@ -2446,6 +2610,11 @@ function CryptoFundingView({
                             <p className="text-sm font-medium capitalize">
                                 {externalWalletClientType ??
                                     "External wallet"}
+                                {externalWallet.family === "sol"
+                                    ? " · Solana"
+                                    : externalWallet.family === "evm"
+                                      ? " · EVM"
+                                      : ""}
                             </p>
 
                             <p className="truncate text-sm text-muted-foreground">
@@ -2512,6 +2681,7 @@ function CryptoFundingView({
                                                     onClick={() => {
                                                         onSelectExternalWallet(
                                                             wallet.address,
+                                                            wallet.family,
                                                         );
                                                     }}
                                                 >
