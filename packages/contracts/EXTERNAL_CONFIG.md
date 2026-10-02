@@ -89,3 +89,15 @@ Production remains:
 
 Official Monad testnet network information:
 https://developers.monad.xyz/
+
+
+### Foundry keystore signing
+
+The Monad testnet deployment script does not read a private key from the
+environment. Configure the public deployer address with
+`TESTNET_DEPLOYER_ADDRESS`, then invoke Forge with a configured signer such
+as `--account kept-testnet-deployer`. For keystore-backed deployments, also
+pass `--sender <TESTNET_DEPLOYER_ADDRESS>` so script simulation uses the same
+sender as the signer.
+
+Private keys must remain outside repository environment files.

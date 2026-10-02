@@ -36,10 +36,8 @@ contract DeployMonadTestnet is Script {
     {
         assertTestnetChain();
 
-        uint256 deployerPrivateKey =
-            vm.envUint("TESTNET_DEPLOYER_PRIVATE_KEY");
-
-        address owner = vm.addr(deployerPrivateKey);
+        address owner =
+            vm.envAddress("TESTNET_DEPLOYER_ADDRESS");
 
         address verifier =
             vm.envAddress("TESTNET_COMMITMENT_VERIFIER");
@@ -51,7 +49,9 @@ contract DeployMonadTestnet is Script {
             revert OwnerVerifierCollision();
         }
 
-        vm.startBroadcast(deployerPrivateKey);
+        // Signing is provided externally by Forge, e.g. --account <keystore>.
+        // The deployment script never reads or handles the deployer private key.
+        vm.startBroadcast();
 
         usdc = new StagingUSDC(owner);
 
