@@ -250,6 +250,52 @@ class SavingsHistorySynchronizingError extends Error {
   }
 }
 
+function isRpcRateLimitError(error: unknown): boolean {
+  let current = error;
+
+  for (
+    let depth = 0;
+    depth < 8
+    && current !== null
+    && typeof current === "object";
+    depth += 1
+  ) {
+    const record =
+      current as Record<string, unknown>;
+
+    const message =
+      typeof record.message === "string"
+        ? record.message.toLowerCase()
+        : "";
+
+    const details =
+      typeof record.details === "string"
+        ? record.details.toLowerCase()
+        : "";
+
+    const code =
+      record.code;
+
+    if (
+      code === 429
+      || code === -32011
+      || message.includes("rate limit")
+      || message.includes("requests limited to")
+      || details.includes("rate limit")
+      || details.includes("requests limited to")
+    ) {
+      return true;
+    }
+
+    current =
+      "cause" in record
+        ? record.cause
+        : null;
+  }
+
+  return false;
+}
+
 function sendError(
   request: FastifyRequest,
 
@@ -337,6 +383,22 @@ function sendError(
       body: {
         error: {
           code: "SAVINGS_HISTORY_SYNCHRONIZING",
+        },
+      },
+    };
+  }
+
+  if (isRpcRateLimitError(error)) {
+    request.log.info(
+      { errorCode: "RPC_RATE_LIMITED" },
+      "Monad RPC rate limit reached",
+    );
+
+    return {
+      statusCode: 503,
+      body: {
+        error: {
+          code: "RPC_RATE_LIMITED",
         },
       },
     };
