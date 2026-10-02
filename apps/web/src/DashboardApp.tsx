@@ -3412,7 +3412,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         onDepositAmountChange={setDepositAmount}
 
-        onSubmitDeposit={() => void submitDeposit()}
+        onSubmitDeposit={submitDeposit}
 
         onDismissDeposit={dismissDeposit}
 
