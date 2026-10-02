@@ -157,14 +157,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   } = useSolanaWallets();
 
   const externalSolanaWallet =
-    solanaWallets.find(
-      (wallet) =>
-        !(
-          "isPrivyWallet" in
-          wallet.standardWallet &&
-          wallet.standardWallet.isPrivyWallet
-        ),
-    ) ?? null;
+    solanaWallets[0] ??
+    null;
   const [depositAmount, setDepositAmount] = useState("");
 
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
