@@ -7,6 +7,7 @@ export type SavingsMarketStatusState =
       readonly kind: "ready";
       readonly availableToDepositAssets: bigint | null;
       readonly availableToWithdrawAssets: bigint;
+      readonly tvlAssets: bigint;
       readonly suppliedAssets: bigint | null;
       readonly supplyCapAssets: bigint | null;
       readonly grossApyBps: number;
@@ -71,7 +72,7 @@ export function SavingsMarketStatus({ state }: SavingsMarketStatusProps) {
         ) : state.kind === "ready" ? (
           <>
             <p className="mt-1 text-sm font-semibold tabular-nums">
-              {formatCompactUsdc(state.availableToWithdrawAssets)} USDC
+              {formatCompactUsdc(state.tvlAssets)} USDC
             </p>
           </>
         ) : (
