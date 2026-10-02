@@ -256,7 +256,7 @@ export async function readFundingAssetBalances(
                             });
 
                         const evmAddress =
-                            address as \`0x\${string}\`;
+                            address as `0x${string}`;
 
                         const nativeAssets =
                             chainAssets.filter(
@@ -302,7 +302,7 @@ export async function readFundingAssetBalances(
                                                 asset,
                                             ) => ({
                                                 address:
-                                                    asset.contractAddress as \`0x\${string}\`,
+                                                    asset.contractAddress as `0x${string}`,
 
                                                 abi:
                                                     erc20Abi,
@@ -410,6 +410,6 @@ export function formatFundingAssetBalance(
 
     return trimmedFraction.length >
         0
-        ? \`\${whole}.\${trimmedFraction}\`
+        ? `${whole}.${trimmedFraction}`
         : whole;
 }
