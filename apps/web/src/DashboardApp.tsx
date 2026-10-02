@@ -3422,7 +3422,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         onWithdrawAmountChange={setWithdrawAmount}
 
-        onSubmitWithdrawal={() => void submitWithdrawal()}
+        onSubmitWithdrawal={submitWithdrawal}
 
         onDismissWithdrawal={dismissWithdrawal}
 
