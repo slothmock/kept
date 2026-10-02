@@ -243,6 +243,17 @@ function apiConsumerError(
     );
   }
 
+  if (code === "RPC_RATE_LIMITED") {
+    return new ConsumerError(
+      "Kept is syncing with the network. Try again shortly.",
+      {
+        code: "rate_limited",
+        cause,
+        diagnosticCode: code,
+      },
+    );
+  }
+
   if (status === 409) {
     return new ConsumerError(
       "That request conflicts with a recent change. Refresh and try again.",
