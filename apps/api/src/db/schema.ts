@@ -252,6 +252,66 @@ export const accountTransactions = pgTable(
   ],
 );
 
+export const vaultActivityEvents = pgTable(
+  "vault_activity_events",
+  {
+    id: uuid("id").primaryKey(),
+    chainId: bigint("chain_id", { mode: "bigint" }).notNull(),
+    vaultAddress: text("vault_address").notNull(),
+    accountAddress: text("account_address").notNull(),
+    eventType: text("event_type").notNull(),
+    assetsAtomic: numeric("assets_atomic", {
+      precision: 78,
+      scale: 0,
+    }).notNull(),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    transactionHash: text("transaction_hash").notNull(),
+    logIndex: integer("log_index").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("vault_activity_events_chain_vault_log_unique")
+      .on(
+        table.chainId,
+        sql`lower(${table.vaultAddress})`,
+        table.transactionHash,
+        table.logIndex,
+      ),
+    index("vault_activity_events_account_idx")
+      .on(
+        table.chainId,
+        sql`lower(${table.vaultAddress})`,
+        sql`lower(${table.accountAddress})`,
+      ),
+    check(
+      "vault_activity_events_type_valid",
+      sql`${table.eventType} IN ('DEPOSIT', 'WITHDRAW')`,
+    ),
+    check(
+      "vault_activity_events_assets_nonnegative",
+      sql`${table.assetsAtomic} >= 0`,
+    ),
+  ],
+);
+
+export const vaultActivityCursors = pgTable(
+  "vault_activity_cursors",
+  {
+    id: uuid("id").primaryKey(),
+    chainId: bigint("chain_id", { mode: "bigint" }).notNull(),
+    vaultAddress: text("vault_address").notNull(),
+    lastProcessedBlock: bigint("last_processed_block", { mode: "bigint" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("vault_activity_cursors_chain_vault_unique")
+      .on(
+        table.chainId,
+        sql`lower(${table.vaultAddress})`,
+      ),
+  ],
+);
+
 export const commitmentDefinitions = pgTable(
   "commitment_definitions",
   {
@@ -352,6 +412,8 @@ export const schema = {
   savingsGoals,
   goalShareAllocations,
   accountTransactions,
+  vaultActivityEvents,
+  vaultActivityCursors,
   commitmentDefinitions,
   userCommitments,
   idempotencyRecords,
