@@ -9,23 +9,22 @@ const transaction = {
 } as const;
 
 describe("createBoundTransactionSender", () => {
-  it("routes every send through the sponsored transaction API", async () => {
-    const send = vi.fn(async () => ({
-      transactionHash: "0x1234" as const,
-    }));
+  it("requests Privy gas sponsorship for the selected wallet", async () => {
+    const send = vi.fn(async () => ({ hash: "0x1234" as const }));
     const sender = createBoundTransactionSender(
       send,
       "0x2222222222222222222222222222222222222222",
     );
 
     await expect(sender.sendTransaction(transaction)).resolves.toBe("0x1234");
-    expect(send).toHaveBeenCalledWith(transaction);
+    expect(send).toHaveBeenCalledWith(transaction, {
+      address: "0x2222222222222222222222222222222222222222",
+      sponsor: true,
+    });
   });
 
   it("fails closed when no selected wallet address is available", async () => {
-    const send = vi.fn(async () => ({
-      transactionHash: "0x1234" as const,
-    }));
+    const send = vi.fn(async () => ({ hash: "0x1234" as const }));
     const sender = createBoundTransactionSender(send, null);
 
     await expect(sender.sendTransaction(transaction)).rejects.toThrow(
