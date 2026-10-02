@@ -143,6 +143,16 @@ interface DashboardPageProps {
 
   readonly onRefreshSavingsMarketStatus: () => void;
 
+  readonly stagingFaucetAvailable: boolean;
+
+  readonly stagingFaucetClaiming: boolean;
+
+  readonly stagingFaucetStatus: string | null;
+
+  readonly stagingFaucetError: string | null;
+
+  readonly onClaimStagingFaucet: () => void;
+
   readonly onDeleteGoal: (goal: GoalDto) => Promise<boolean>;
 
   readonly onDismissGoalDeletion: () => void;
@@ -433,6 +443,16 @@ export function DashboardPage(props: DashboardPageProps) {
 
     onRefreshSavingsMarketStatus,
 
+    stagingFaucetAvailable,
+
+    stagingFaucetClaiming,
+
+    stagingFaucetStatus,
+
+    stagingFaucetError,
+
+    onClaimStagingFaucet,
+
     onCreateGoal,
 
     onCreateCommitment,
@@ -604,6 +624,16 @@ export function DashboardPage(props: DashboardPageProps) {
           onRefreshSavingsMarketStatus();
 
         }}
+
+        stagingFaucetAvailable={stagingFaucetAvailable}
+
+        stagingFaucetClaiming={stagingFaucetClaiming}
+
+        stagingFaucetStatus={stagingFaucetStatus}
+
+        stagingFaucetError={stagingFaucetError}
+
+        onClaimStagingFaucet={onClaimStagingFaucet}
 
       />
 
