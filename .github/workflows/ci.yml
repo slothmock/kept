@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - staging
+      - main
+  push:
+    branches:
+      - staging
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: kept_test
+          POSTGRES_USER: kept
+          POSTGRES_PASSWORD: kept_local_dev
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U kept -d kept_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      TEST_DATABASE_URL: postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Lint web app
+        run: npm --workspace @kept/web run lint
+
+      - name: Build web app
+        run: npm --workspace @kept/web run build
+
+  contracts:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Test contracts
+        run: forge test --root packages/contracts
