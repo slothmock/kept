@@ -45,11 +45,6 @@ interface VaultActivityPublicClient {
         readonly blockNumber: bigint;
     }): Promise<Block>;
 
-    getCode(input: {
-        readonly address: Address;
-        readonly blockNumber: bigint;
-    }): Promise<string | undefined>;
-
     getLogs(input: {
         readonly address: Address;
         readonly event:
@@ -190,50 +185,6 @@ async function findLastBlockAtOrBefore(
 }
 
 const RPC_LOG_BLOCK_RANGE = 100n;
-
-async function findContractDeploymentBlock(
-    publicClient: VaultActivityPublicClient,
-    address: Address,
-    latestBlock: bigint,
-): Promise<bigint | null> {
-    const latestCode =
-        await publicClient.getCode({
-            address,
-            blockNumber: latestBlock,
-        });
-
-    if (
-        !latestCode
-        || latestCode === "0x"
-    ) {
-        return null;
-    }
-
-    let low = 0n;
-    let high = latestBlock;
-
-    while (low < high) {
-        const middle =
-            low + (high - low) / 2n;
-
-        const code =
-            await publicClient.getCode({
-                address,
-                blockNumber: middle,
-            });
-
-        if (
-            code
-            && code !== "0x"
-        ) {
-            high = middle;
-        } else {
-            low = middle + 1n;
-        }
-    }
-
-    return low;
-}
 
 async function getLogsInChunks(
     publicClient: VaultActivityPublicClient,
@@ -383,9 +334,8 @@ export function createVaultSavingsActivityReader(
                     .getBlockNumber();
 
             const [
-                requestedFromBlock,
+                fromBlock,
                 toBlock,
-                deploymentBlock,
             ] = await Promise.all([
                 findFirstBlockAtOrAfter(
                     input.publicClient,
@@ -398,34 +348,12 @@ export function createVaultSavingsActivityReader(
                     endTimestamp,
                     latestBlock,
                 ),
-
-                findContractDeploymentBlock(
-                    input.publicClient,
-                    input.vault,
-                    latestBlock,
-                ),
             ]);
 
             if (
-                requestedFromBlock === null
+                fromBlock === null
                 || toBlock === null
-                || deploymentBlock === null
-            ) {
-                return {
-                    depositedAssets: 0n,
-                    withdrawnAssets: 0n,
-                    netAssets: 0n,
-                };
-            }
-
-            const fromBlock =
-                requestedFromBlock
-                > deploymentBlock
-                    ? requestedFromBlock
-                    : deploymentBlock;
-
-            if (
-                fromBlock > toBlock
+                || fromBlock > toBlock
             ) {
                 return {
                     depositedAssets: 0n,
