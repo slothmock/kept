@@ -232,6 +232,17 @@ function apiConsumerError(
     );
   }
 
+  if (code === "SAVINGS_HISTORY_SYNCHRONIZING") {
+    return new ConsumerError(
+      "Savings history is synchronising.",
+      {
+        code: "synchronizing",
+        cause,
+        diagnosticCode: code,
+      },
+    );
+  }
+
   if (status === 409) {
     return new ConsumerError(
       "That request conflicts with a recent change. Refresh and try again.",
