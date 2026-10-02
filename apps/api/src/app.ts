@@ -1256,9 +1256,10 @@ export function buildApp(
           return dependencies.savingsPerformance.readPerformance({
             account: auth.identity.wallet,
 
-            // TODO: Replace with the vault deployment date/block.
-
-            startAt: new Date(0),
+            startAt:
+              dependencies.chainId === 10_143
+                ? new Date("2026-10-02T00:00:00.000Z")
+                : new Date(0),
 
             endAt: new Date(nowMilliseconds),
           });
