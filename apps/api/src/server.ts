@@ -1,4 +1,9 @@
-import { createPublicClient, createWalletClient, http } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  getAddress,
+  http,
+} from "viem";
 
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -39,6 +44,38 @@ const VERIFICATION_BATCH_SIZE = 50;
 // Keep this simple until the final commitment
 // reward economics are decided.
 const WEEKLY_SAVINGS_REWARD_ASSETS = 5_000_000n;
+
+const STAGING_FAUCET_AMOUNT_ASSETS = 1_000_000_000n;
+
+const stagingVaultAssetAbi = [
+  {
+    type: "function",
+    name: "asset",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
+const stagingUsdcAbi = [
+  {
+    type: "function",
+    name: "minters",
+    stateMutability: "view",
+    inputs: [{ name: "minter", type: "address" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "mint",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 const config = loadApiConfig();
 
@@ -275,6 +312,104 @@ const settlementVerifier = createCommitmentSettlementVerifier({
   manager: config.commitmentManagerAddress,
 });
 
+const stagingFaucetClaims =
+  new Set<string>();
+
+const stagingFaucet =
+  config.monadChainId === 10_143
+    ? {
+      async claim(wallet: string) {
+        const recipient =
+          getAddress(wallet);
+
+        const claimKey =
+          recipient.toLowerCase();
+
+        if (
+          stagingFaucetClaims.has(
+            claimKey,
+          )
+        ) {
+          throw new Error(
+            "Staging faucet already claimed for this wallet",
+          );
+        }
+
+        const asset =
+          await publicClient.readContract({
+            address:
+              config.keptSavingsVaultAddress,
+            abi: stagingVaultAssetAbi,
+            functionName: "asset",
+          });
+
+        const verifierIsMinter =
+          await publicClient.readContract({
+            address: asset,
+            abi: stagingUsdcAbi,
+            functionName: "minters",
+            args: [
+              verifierAccount.address,
+            ],
+          });
+
+        if (!verifierIsMinter) {
+          throw new Error(
+            "Staging faucet signer is not authorized as a token minter",
+          );
+        }
+
+        stagingFaucetClaims.add(
+          claimKey,
+        );
+
+        try {
+          const hash =
+            await verifierWalletClient
+              .writeContract({
+                address: asset,
+                abi: stagingUsdcAbi,
+                functionName: "mint",
+                args: [
+                  recipient,
+                  STAGING_FAUCET_AMOUNT_ASSETS,
+                ],
+              });
+
+          const receipt =
+            await publicClient
+              .waitForTransactionReceipt({
+                hash,
+                confirmations: 1,
+              });
+
+          if (
+            receipt.status
+            !== "success"
+          ) {
+            throw new Error(
+              "Staging faucet transaction reverted",
+            );
+          }
+
+          return {
+            amountAtomic:
+              STAGING_FAUCET_AMOUNT_ASSETS
+                .toString(),
+
+            transactionHash: hash,
+          };
+        } catch (error) {
+          stagingFaucetClaims.delete(
+            claimKey,
+          );
+
+          throw error;
+        }
+      },
+    }
+    : undefined;
+
 const app = buildApp(
   {
     authenticate: createPrivyAuthenticator({
@@ -290,6 +425,10 @@ const app = buildApp(
     savingsPerformance,
 
     savingsMarketStatus,
+
+    ...(stagingFaucet
+      ? { stagingFaucet }
+      : {}),
 
     commitmentSettlementVerifier:
       settlementVerifier,
