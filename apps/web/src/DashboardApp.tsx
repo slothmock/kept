@@ -1325,7 +1325,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     sender,
     transactionCoordinator,
   ]);
-  const submitWithdrawal = useCallback(async () => {
+  const submitWithdrawal = useCallback(async (): Promise<boolean> => {
     if (
       !config ||
       !publicClient ||
@@ -1334,7 +1334,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     ) {
       setWithdrawError("Your Kept account is not ready yet.");
 
-      return;
+      return false;
     }
 
     const parsedAmount = parseUsdcDepositAmount(withdrawAmount);
@@ -1342,7 +1342,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     if ("error" in parsedAmount) {
       setWithdrawError(parsedAmount.error);
 
-      return;
+      return false;
     }
 
     if (parsedAmount.assets > positionState.position.withdrawableAssets) {
@@ -1350,7 +1350,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         "Enter an amount no greater than the amount currently available to withdraw.",
       );
 
-      return;
+      return false;
     }
 
     const withdrawal = buildVaultWithdrawTransaction({
@@ -1365,7 +1365,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       chainId: config.chainId,
     });
 
-    await transactionCoordinator.run("withdraw", async () => {
+    let succeeded = false;
+
+    const acquired = await transactionCoordinator.run("withdraw", async () => {
       setWithdrawError(null);
 
       setWithdrawStatus("Withdrawing...");
@@ -1392,19 +1394,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             },
           });
 
-        setWithdrawStatus("Withdrawal complete. Updating your balance…");
-
         setWithdrawAmount("");
-
-        await Promise.all([
-          refreshPosition(),
-
-          refreshProductData(),
-
-          refreshSavingsPerformance(),
-
-          refreshSavingsMarketStatus(),
-        ]);
 
         if (api) {
           await api.recordTransaction(
@@ -1437,6 +1427,18 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         }
 
         setWithdrawStatus("Withdrawal complete.");
+
+        succeeded = true;
+
+        void Promise.allSettled([
+          refreshPosition(),
+
+          refreshProductData(),
+
+          refreshSavingsPerformance(),
+
+          refreshSavingsMarketStatus(),
+        ]);
       } catch (error) {
         diagnostics.warn("vault.withdrawal_failed", error);
 
@@ -1450,8 +1452,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         );
       }
     });
+
+    return acquired && succeeded;
   }, [
     account,
+    api,
     config,
     ensureTransactionNetwork,
     positionState,
@@ -1464,7 +1469,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     transactionCoordinator,
     withdrawAmount,
   ]);
-
   const previewCryptoTransfer =
     useCallback(
       async () => {
