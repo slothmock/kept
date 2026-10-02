@@ -12,9 +12,6 @@ import {KeptTreasury} from "../src/KeptTreasury.sol";
 import {CommitmentManager} from "../src/CommitmentManager.sol";
 import {IKeptTreasury} from "../src/interfaces/IKeptTreasury.sol";
 
-/// @notice Deploys the Kept staging stack to Monad testnet.
-/// @dev Deliberately does not use Aave. Production Aave deployment remains
-/// isolated to Monad mainnet.
 contract DeployMonadTestnet is Script {
     error UnsupportedTestnetChain(uint256 chainId);
     error OwnerVerifierCollision();
@@ -47,6 +44,9 @@ contract DeployMonadTestnet is Script {
         address verifier =
             vm.envAddress("TESTNET_COMMITMENT_VERIFIER");
 
+        uint256 annualYieldBps =
+            vm.envOr("TESTNET_STAGING_APY_BPS", uint256(500));
+
         if (owner == verifier) {
             revert OwnerVerifierCollision();
         }
@@ -74,9 +74,10 @@ contract DeployMonadTestnet is Script {
             new StagingYieldStrategy(
                 address(vault),
                 address(usdc),
-                owner
+                annualYieldBps
             );
 
+        usdc.setMinter(address(strategy), true);
         vault.bindStrategy(address(strategy));
 
         commitmentManager =
@@ -92,6 +93,7 @@ contract DeployMonadTestnet is Script {
 
         console2.log("TESTNET_OWNER", owner);
         console2.log("TESTNET_COMMITMENT_VERIFIER", verifier);
+        console2.log("TESTNET_STAGING_APY_BPS", annualYieldBps);
         console2.log("TESTNET_USDC", address(usdc));
         console2.log("TESTNET_KEPT_TREASURY", address(treasury));
         console2.log("TESTNET_KEPT_VAULT", address(vault));

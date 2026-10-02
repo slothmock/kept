@@ -8,9 +8,14 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @dev Deployment is restricted to Monad testnet or local Anvil.
 contract StagingUSDC is ERC20, Ownable {
     error UnsupportedChain(uint256 chainId);
+    error UnauthorizedMinter(address caller);
 
     uint256 internal constant MONAD_TESTNET_CHAIN_ID = 10143;
     uint256 internal constant ANVIL_CHAIN_ID = 31337;
+
+    mapping(address minter => bool allowed) public minters;
+
+    event MinterUpdated(address indexed minter, bool allowed);
 
     constructor(address initialOwner)
         ERC20("Kept Staging USDC", "kUSDC")
@@ -28,7 +33,16 @@ contract StagingUSDC is ERC20, Ownable {
         return 6;
     }
 
-    function mint(address to, uint256 amount) external onlyOwner {
+    function setMinter(address minter, bool allowed) external onlyOwner {
+        minters[minter] = allowed;
+        emit MinterUpdated(minter, allowed);
+    }
+
+    function mint(address to, uint256 amount) external {
+        if (msg.sender != owner() && !minters[msg.sender]) {
+            revert UnauthorizedMinter(msg.sender);
+        }
+
         _mint(to, amount);
     }
 }

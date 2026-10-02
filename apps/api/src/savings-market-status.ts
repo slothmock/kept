@@ -1,6 +1,7 @@
 import { getAddress, type Address } from "viem";
 
 const MONAD_CHAIN_ID = 143;
+const MONAD_TESTNET_CHAIN_ID = 10_143;
 const LOCAL_ANVIL_CHAIN_ID = 31_337;
 
 // Aave V3 Monad Protocol Data Provider.
@@ -49,6 +50,18 @@ const strategyAbi = [
       {
         name: "",
         type: "address",
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "annualYieldBps",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
       },
     ],
   },
@@ -258,7 +271,10 @@ export function createSavingsMarketStatusReader(input: {
 
   readonly vault: Address;
 
-  readonly chainId: typeof MONAD_CHAIN_ID | typeof LOCAL_ANVIL_CHAIN_ID;
+  readonly chainId:
+    | typeof MONAD_CHAIN_ID
+    | typeof MONAD_TESTNET_CHAIN_ID
+    | typeof LOCAL_ANVIL_CHAIN_ID;
 
   readonly localAave?: LocalAaveMarketConfig;
 }): SavingsMarketStatusReader {
@@ -295,6 +311,55 @@ export function createSavingsMarketStatusReader(input: {
         performanceFeeValue,
         "Performance fee",
       );
+
+      if (input.chainId === MONAD_TESTNET_CHAIN_ID) {
+        const [assetValue, strategyLiquidityValue, annualYieldBpsValue] =
+          await Promise.all([
+            input.publicClient.readContract({
+              address: strategy,
+              abi: strategyAbi,
+              functionName: "asset",
+            }),
+            input.publicClient.readContract({
+              address: strategy,
+              abi: strategyAbi,
+              functionName: "availableLiquidity",
+            }),
+            input.publicClient.readContract({
+              address: strategy,
+              abi: strategyAbi,
+              functionName: "annualYieldBps",
+            }),
+          ]);
+
+        const asset = requireAddressValue(assetValue, "Strategy asset");
+        const strategyLiquidity = requireBigInt(
+          strategyLiquidityValue,
+          "Strategy liquidity",
+        );
+        const grossApyBps = requireNumber(
+          annualYieldBpsValue,
+          "Staging annual yield",
+        );
+
+        const vaultIdleValue = await input.publicClient.readContract({
+          address: asset,
+          abi: erc20ViewAbi,
+          functionName: "balanceOf",
+          args: [input.vault],
+        });
+
+        const vaultIdle = requireBigInt(vaultIdleValue, "Vault idle balance");
+
+        return {
+          suppliedAssetsAtomic: strategyLiquidity.toString(),
+          supplyCapAssetsAtomic: null,
+          availableToDepositAtomic: null,
+          availableToWithdrawAtomic: (vaultIdle + strategyLiquidity).toString(),
+          grossApyBps: grossApyBps.toString(),
+          netApyBps: netApyBps(grossApyBps, performanceFeeBps).toString(),
+        };
+      }
 
       const [assetValue, aTokenValue, strategyLiquidityValue] =
         await Promise.all([

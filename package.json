@@ -25,7 +25,8 @@
     "test:contracts": "forge test --root packages/contracts",
     "test:contracts:fork": "forge test --root packages/contracts --match-contract MonadAaveForkTest --network monad",
     "test:integration": "vitest run apps/api/test/persistence.integration.test.ts",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "staging-yield:run": "node --import tsx apps/api/src/staging-yield-cron.ts"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
