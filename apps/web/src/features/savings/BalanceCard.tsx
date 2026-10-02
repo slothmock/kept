@@ -1,4 +1,9 @@
 import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
   ArrowDownToLine,
   ArrowUpFromLine,
   PiggyBank,
@@ -40,7 +45,7 @@ interface BalanceCardProps {
   readonly savingsPerformanceState: SavingsPerformanceState;
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
-  readonly onRefresh: () => void;
+  readonly onRefresh: () => Promise<void>;
   readonly stagingFaucetAvailable: boolean;
   readonly stagingFaucetClaiming: boolean;
   readonly stagingFaucetStatus: string | null;
@@ -63,6 +68,44 @@ export function BalanceCard({
 }: BalanceCardProps) {
   const ready = positionState.kind === "ready";
 
+  const [refreshCooldownSeconds, setRefreshCooldownSeconds] =
+    useState(0);
+
+  useEffect(() => {
+    if (refreshCooldownSeconds <= 0) {
+      return;
+    }
+
+    const timeout =
+      globalThis.setTimeout(() => {
+        setRefreshCooldownSeconds(
+          (current) =>
+            Math.max(0, current - 1),
+        );
+      }, 1_000);
+
+    return () => {
+      globalThis.clearTimeout(timeout);
+    };
+  }, [refreshCooldownSeconds]);
+
+  const refreshDisabled =
+    transactionPending
+    || refreshCooldownSeconds > 0
+    || positionState.kind === "loading"
+    || savingsPerformanceState.kind === "loading"
+    || savingsPerformanceState.kind === "synchronizing";
+
+  const handleRefresh = () => {
+    if (refreshDisabled) {
+      return;
+    }
+
+    setRefreshCooldownSeconds(10);
+
+    void onRefresh();
+  };
+
   const canWithdraw = ready && positionState.position.withdrawableAssets > 0n || ready && positionState.position.usdcBalance > 0n;
 
   const earnings =
@@ -84,11 +127,17 @@ export function BalanceCard({
           <Button
             variant="ghost"
             size="sm"
-            disabled={transactionPending}
-            onClick={onRefresh}
+            disabled={refreshDisabled}
+            onClick={handleRefresh}
           >
-            <RefreshCw className="size-4" />
-            Refresh
+            <RefreshCw
+              className={
+                `size-4 ${refreshCooldownSeconds > 0 ? "animate-spin" : ""}`
+              }
+            />
+            {refreshCooldownSeconds > 0
+              ? `Refresh in ${refreshCooldownSeconds}s`
+              : "Refresh"}
           </Button>
         </div>
 
