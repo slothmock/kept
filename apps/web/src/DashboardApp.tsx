@@ -287,10 +287,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               (
                 current,
               ) => {
-                if (current) {
-                  return current;
-                }
-
                 const solanaAsset =
                   externalSolanaWallet
                     ? assets.find(
@@ -302,8 +298,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                     )
                     : null;
 
+                if (solanaAsset) {
+                  return solanaAsset.assetId;
+                }
+
                 return (
-                  solanaAsset?.assetId ??
+                  current ??
                   destination.assetId
                 );
               },
