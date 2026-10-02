@@ -568,6 +568,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
     | {
       readonly kind: "synchronizing";
+      readonly progressPercent: number | null;
     }
     | {
       readonly kind: "error";
@@ -606,6 +607,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       ) {
         setSavingsPerformanceState({
           kind: "synchronizing",
+          progressPercent:
+            error.progressPercent ?? null,
         });
 
         return;
