@@ -2,10 +2,13 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+
 packages/contracts/cache/
 packages/contracts/out/
 packages/contracts/broadcast/
 
 .env
-.env.local
+.env.*
+!.env.example
+
 .dev-pids/
