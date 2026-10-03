@@ -4,7 +4,6 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   getAddress,
-  type Address,
   type Hex,
 } from "viem";
 
