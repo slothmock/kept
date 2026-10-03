@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 
 import {
-    formatUnits,
     parseUnits,
 } from "viem";
 
@@ -77,6 +76,10 @@ import {
 } from "@/lib/diagnostics";
 
 import {
+    fundingTransferErrorMessage,
+} from "@/features/funding/funding-transfer-error";
+
+import {
     FundingAssetPicker,
     FormatFundingChainName,
 } from "@/features/funding/FundingAssetPicker";
@@ -95,40 +98,6 @@ const BASE_CHAIN =
 
 const MIN_FIAT_ONRAMP =
     20;
-
-function fundingTransferErrorMessage(
-    error: unknown,
-    asset: FundingAsset,
-): string {
-    if (
-        error instanceof
-        Error
-    ) {
-        const minimumMatch =
-            error.message.match(
-                /Amount is too low for bridge, try at least (\d+)/i,
-            );
-
-        if (
-            minimumMatch?.[1]
-        ) {
-            const minimum =
-                formatUnits(
-                    BigInt(
-                        minimumMatch[1],
-                    ),
-                    asset.decimals,
-                );
-
-            return `The amount is below the minimum transfer size. Try at least ${minimum} ${asset.symbol}.`;
-        }
-    }
-
-    return error instanceof
-        Error
-        ? error.message
-        : "We couldn't prepare your transfer.";
-}
 
 const SOURCE_NETWORK_ORDER =
     [
@@ -1681,6 +1650,7 @@ export function AddFundsDialog({
                         fundingTransferErrorMessage(
                             error,
                             sourceAsset,
+                            "We couldn't prepare your transfer.",
                         ),
                     );
 
@@ -2012,6 +1982,7 @@ export function AddFundsDialog({
                         fundingTransferErrorMessage(
                             error,
                             sourceAsset,
+                            "We couldn't complete your transfer.",
                         ),
                     );
                 } finally {
