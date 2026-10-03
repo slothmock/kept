@@ -62,7 +62,7 @@ export interface ExternalFundingWallet {
         family?:
             ExternalWalletFamily,
     ):
-        void;
+        Promise<void>;
 
     select(
         address: string,
@@ -180,12 +180,41 @@ export function useExternalFundingWallet():
         );
 
     const effectiveSelectedKey =
-        selectedKey ??
-        (
-            availableWallets.length === 1 &&
-            availableWallets[0]
-                ? `${availableWallets[0].family}:${availableWallets[0].address}`
-                : null
+        useMemo(
+            () => {
+                if (
+                    selectedKey &&
+                    availableWallets.some(
+                        (
+                            wallet,
+                        ) =>
+                            `${wallet.family}:${wallet.address}` ===
+                            selectedKey,
+                    )
+                ) {
+                    return selectedKey;
+                }
+
+                if (
+                    availableWallets.length ===
+                    1
+                ) {
+                    const wallet =
+                        availableWallets[0];
+
+                    if (
+                        wallet
+                    ) {
+                        return `${wallet.family}:${wallet.address}`;
+                    }
+                }
+
+                return null;
+            },
+            [
+                availableWallets,
+                selectedKey,
+            ],
         );
 
     const selectedOption =
@@ -247,7 +276,7 @@ export function useExternalFundingWallet():
 
     const connect =
         useCallback(
-            (
+            async (
                 family?:
                     ExternalWalletFamily,
             ) => {
@@ -255,7 +284,7 @@ export function useExternalFundingWallet():
                     family ===
                     "sol"
                 ) {
-                    void connectWallet({
+                    await connectWallet({
                         walletChainType:
                             "solana-only",
 
@@ -276,7 +305,7 @@ export function useExternalFundingWallet():
                     family ===
                     "evm"
                 ) {
-                    void connectWallet({
+                    await connectWallet({
                         walletChainType:
                             "ethereum-only",
                     });
@@ -284,7 +313,7 @@ export function useExternalFundingWallet():
                     return;
                 }
 
-                void connectWallet({
+                await connectWallet({
                     walletChainType:
                         "ethereum-and-solana",
                 });
@@ -306,12 +335,23 @@ export function useExternalFundingWallet():
                     availableWallets.find(
                         (
                             wallet,
-                        ) =>
-                            wallet.address === address &&
-                            (
-                                !family ||
-                                wallet.family === family
-                            ),
+                        ) => {
+                            if (
+                                family &&
+                                wallet.family !==
+                                family
+                            ) {
+                                return false;
+                            }
+
+                            return wallet.family ===
+                                "evm"
+                                ? wallet.address
+                                    .toLowerCase() ===
+                                    address.toLowerCase()
+                                : wallet.address ===
+                                    address;
+                        },
                     );
 
                 if (
