@@ -509,6 +509,7 @@ const app = buildApp(
       publishableKey: config.moonPayPublishableKey,
 
       secretKey: config.moonPaySecretKey,
+      webhookKey: config.moonPayWebhookKey,
       baseUrl: config.moonPayBaseUrl,
     },
   },

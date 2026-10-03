@@ -7,6 +7,7 @@ import {
   commitmentDefinitions,
   goalShareAllocations,
   idempotencyRecords,
+  moonPayOfframpOrders,
   savingsGoals,
   userCommitments,
   users,
@@ -186,6 +187,57 @@ export class KeptRepository {
         ),
       )
       .limit(limit);
+  }
+
+  async createMoonPayOfframpOrder(
+    input: typeof moonPayOfframpOrders.$inferInsert,
+  ) {
+    const [order] = await this.db
+      .insert(moonPayOfframpOrders)
+      .values(input)
+      .returning();
+
+    return order;
+  }
+
+  async findMoonPayOfframpOrderForOwner(
+    userId: string,
+    id: string,
+  ) {
+    const [order] = await this.db
+      .select()
+      .from(moonPayOfframpOrders)
+      .where(and(
+        eq(moonPayOfframpOrders.id, id),
+        eq(moonPayOfframpOrders.userId, userId),
+      ))
+      .limit(1);
+
+    return order ?? null;
+  }
+
+  async updateMoonPayOfframpOrderFromWebhook(input: {
+    readonly id: string;
+    readonly moonPayTransactionId: string;
+    readonly baseCurrencyCode: string;
+    readonly depositWalletAddress: string;
+    readonly depositWalletTag: string | null;
+    readonly now: Date;
+  }) {
+    const [order] = await this.db
+      .update(moonPayOfframpOrders)
+      .set({
+        moonPayTransactionId: input.moonPayTransactionId,
+        baseCurrencyCode: input.baseCurrencyCode,
+        depositWalletAddress: input.depositWalletAddress,
+        depositWalletTag: input.depositWalletTag,
+        status: "AWAITING_DEPOSIT",
+        updatedAt: input.now,
+      })
+      .where(eq(moonPayOfframpOrders.id, input.id))
+      .returning();
+
+    return order ?? null;
   }
 
   async lockGoalsForOwner(userId: string): Promise<void> {
