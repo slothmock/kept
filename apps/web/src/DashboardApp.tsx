@@ -1752,7 +1752,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       },
       [
         account,
-        api,
         config,
         cryptoDestinationAssetId,
         cryptoDestinationAssets,
@@ -2245,6 +2244,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       },
       [
         account,
+        api,
         config,
         cryptoDestinationAssetId,
         cryptoDestinationAssets,
