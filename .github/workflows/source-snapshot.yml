@@ -18,9 +18,18 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Create source archive
         run: |
-          tar             --exclude=.git             --exclude=node_modules             --exclude='*.tsbuildinfo'             -czf "$RUNNER_TEMP/source-snapshot.tar.gz" .
+          tar             --exclude=.git             --exclude='*.tsbuildinfo'             -czf "$RUNNER_TEMP/source-snapshot.tar.gz" .
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
