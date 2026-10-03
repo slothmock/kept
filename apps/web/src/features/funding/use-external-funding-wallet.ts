@@ -58,7 +58,10 @@ export interface ExternalFundingWallet {
     readonly availableWallets:
     readonly ExternalFundingWalletOption[];
 
-    connect():
+    connect(
+        family?:
+            ExternalWalletFamily,
+    ):
         void;
 
     select(
@@ -237,7 +240,43 @@ export function useExternalFundingWallet():
 
     const connect =
         useCallback(
-            () => {
+            (
+                family?:
+                    ExternalWalletFamily,
+            ) => {
+                if (
+                    family ===
+                    "sol"
+                ) {
+                    void connectWallet({
+                        walletChainType:
+                            "solana-only",
+
+                        walletList: [
+                            "solflare",
+                            "phantom",
+                            "backpack",
+                            "jupiter",
+                            "detected_solana_wallets",
+                            "wallet_connect_qr_solana",
+                        ],
+                    });
+
+                    return;
+                }
+
+                if (
+                    family ===
+                    "evm"
+                ) {
+                    void connectWallet({
+                        walletChainType:
+                            "ethereum-only",
+                    });
+
+                    return;
+                }
+
                 void connectWallet({
                     walletChainType:
                         "ethereum-and-solana",
