@@ -2611,6 +2611,25 @@ function CryptoFundingView({
     readonly onExecute:
     () => void;
 }) {
+    const [
+        walletFamilyChooserOpen,
+        setWalletFamilyChooserOpen,
+    ] =
+        useState(false);
+
+    const connectWalletFamily = (
+        family:
+            "evm" | "sol",
+    ) => {
+        setWalletFamilyChooserOpen(
+            false,
+        );
+
+        onConnectExternalWallet(
+            family,
+        );
+    };
+
     const shortAddress =
         externalWalletAddress
             ? `${externalWalletAddress.slice(
@@ -2757,51 +2776,19 @@ function CryptoFundingView({
                                         },
                                     )}
                                 </div>
-
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="w-full"
-
-                                        disabled={
-                                            executing
-                                        }
-
-                                        onClick={() => {
-                                            onConnectExternalWallet(
-                                                "sol",
-                                            );
-                                        }}
-                                    >
-                                        Connect Solana wallet
-                                    </Button>
-
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="w-full"
-
-                                        disabled={
-                                            executing
-                                        }
-
-                                        onClick={() => {
-                                            onConnectExternalWallet(
-                                                "evm",
-                                            );
-                                        }}
-                                    >
-                                        Connect EVM wallet
-                                    </Button>
-                                </div>
                             </>
                         ) : (
-                            <>
-                                <p className="text-sm leading-6 text-muted-foreground">
-                                    Connect the wallet
-                                    that holds the crypto
-                                    you'd like to transfer.
+                            <p className="text-sm leading-6 text-muted-foreground">
+                                Connect the wallet
+                                that holds the crypto
+                                you'd like to transfer.
+                            </p>
+                        )}
+
+                        {walletFamilyChooserOpen ? (
+                            <div className="rounded-lg border bg-muted/20 p-3">
+                                <p className="mb-2 text-sm font-medium">
+                                    Which network does your wallet use?
                                 </p>
 
                                 <div className="grid gap-2 sm:grid-cols-2">
@@ -2814,12 +2801,12 @@ function CryptoFundingView({
                                         }
 
                                         onClick={() => {
-                                            onConnectExternalWallet(
+                                            connectWalletFamily(
                                                 "sol",
                                             );
                                         }}
                                     >
-                                        Connect Solana wallet
+                                        Solana
                                     </Button>
 
                                     <Button
@@ -2832,15 +2819,57 @@ function CryptoFundingView({
                                         }
 
                                         onClick={() => {
-                                            onConnectExternalWallet(
+                                            connectWalletFamily(
                                                 "evm",
                                             );
                                         }}
                                     >
-                                        Connect EVM wallet
+                                        EVM
                                     </Button>
                                 </div>
-                            </>
+
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-2 w-full"
+
+                                    disabled={
+                                        executing
+                                    }
+
+                                    onClick={() => {
+                                        setWalletFamilyChooserOpen(
+                                            false,
+                                        );
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : (
+                            <Button
+                                type="button"
+                                variant={
+                                    availableExternalWallets.length >
+                                        0
+                                        ? "ghost"
+                                        : "default"
+                                }
+                                className="w-full"
+
+                                disabled={
+                                    executing
+                                }
+
+                                onClick={() => {
+                                    setWalletFamilyChooserOpen(
+                                        true,
+                                    );
+                                }}
+                            >
+                                Connect wallet
+                            </Button>
                         )}
                     </div>
                 )}
