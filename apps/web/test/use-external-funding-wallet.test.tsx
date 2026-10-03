@@ -17,8 +17,8 @@ import {
 } from "../src/features/funding/use-external-funding-wallet.js";
 
 const state = vi.hoisted(() => ({
-    evmWallets: [] as any[],
-    solanaWallets: [] as any[],
+    evmWallets: [] as unknown[],
+    solanaWallets: [] as unknown[],
     connectWallet: vi.fn(),
 }));
 
