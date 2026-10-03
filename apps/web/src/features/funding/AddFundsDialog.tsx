@@ -1148,10 +1148,6 @@ export function AddFundsDialog({
                     null,
                 );
 
-                setPreviewTab(
-                    "transfer",
-                );
-
                 setPreviewStatus(
                     null,
                 );
@@ -3218,9 +3214,13 @@ function CryptoFundingView({
                                         0
                                     }
 
-                                    onClick={
-                                        onPreviewRoute
-                                    }
+                                    onClick={() => {
+                                        setPreviewTab(
+                                            "transfer",
+                                        );
+
+                                        onPreviewRoute();
+                                    }}
                                 >
                                     {previewing
                                         ? "Checking transfer…"
