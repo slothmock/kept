@@ -413,10 +413,6 @@ export function AccountPage({
             false;
 
         if (!api) {
-            setMarketLoading(
-                false,
-            );
-
             return;
         }
 
@@ -459,20 +455,8 @@ export function AccountPage({
             false;
 
         if (!api) {
-            setTransactionsLoading(
-                false,
-            );
-
             return;
         }
-
-        setTransactionsLoading(
-            true,
-        );
-
-        setTransactionsError(
-            null,
-        );
 
         void api
             .listTransactions()
