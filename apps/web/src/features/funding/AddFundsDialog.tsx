@@ -2182,10 +2182,12 @@ export function AddFundsDialog({
                             externalWallet.clearSelection();
                         }}
 
-                        onConnectExternalWallet={() => {
+                        onConnectExternalWallet={(family) => {
                             invalidateCryptoPreview();
 
-                            void externalWallet.connect();
+                            void externalWallet.connect(
+                                family,
+                            );
                         }}
 
                         onSourceAssetChange={(
@@ -2576,8 +2578,10 @@ function CryptoFundingView({
     readonly canExecute:
     boolean;
 
-    readonly onConnectExternalWallet:
-    () => void;
+    readonly onConnectExternalWallet: (
+        family:
+            "evm" | "sol",
+    ) => void;
 
     readonly onSelectExternalWallet: (
         address: string,
@@ -2607,6 +2611,25 @@ function CryptoFundingView({
     readonly onExecute:
     () => void;
 }) {
+    const [
+        walletFamilyChooserOpen,
+        setWalletFamilyChooserOpen,
+    ] =
+        useState(false);
+
+    const connectWalletFamily = (
+        family:
+            "evm" | "sol",
+    ) => {
+        setWalletFamilyChooserOpen(
+            false,
+        );
+
+        onConnectExternalWallet(
+            family,
+        );
+    };
+
     const shortAddress =
         externalWalletAddress
             ? `${externalWalletAddress.slice(
@@ -2753,46 +2776,100 @@ function CryptoFundingView({
                                         },
                                     )}
                                 </div>
+                            </>
+                        ) : (
+                            <p className="text-sm leading-6 text-muted-foreground">
+                                Connect the wallet
+                                that holds the crypto
+                                you'd like to transfer.
+                            </p>
+                        )}
+
+                        {walletFamilyChooserOpen ? (
+                            <div className="rounded-lg border bg-muted/20 p-3">
+                                <p className="mb-2 text-sm font-medium">
+                                    Which network does your wallet use?
+                                </p>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    <Button
+                                        type="button"
+                                        className="w-full"
+
+                                        disabled={
+                                            executing
+                                        }
+
+                                        onClick={() => {
+                                            connectWalletFamily(
+                                                "sol",
+                                            );
+                                        }}
+                                    >
+                                        Solana
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full"
+
+                                        disabled={
+                                            executing
+                                        }
+
+                                        onClick={() => {
+                                            connectWalletFamily(
+                                                "evm",
+                                            );
+                                        }}
+                                    >
+                                        EVM
+                                    </Button>
+                                </div>
 
                                 <Button
                                     type="button"
                                     variant="ghost"
-                                    className="w-full"
+                                    size="sm"
+                                    className="mt-2 w-full"
 
                                     disabled={
                                         executing
                                     }
 
-                                    onClick={
-                                        onConnectExternalWallet
-                                    }
+                                    onClick={() => {
+                                        setWalletFamilyChooserOpen(
+                                            false,
+                                        );
+                                    }}
                                 >
-                                    Connect another wallet
+                                    Cancel
                                 </Button>
-                            </>
+                            </div>
                         ) : (
-                            <>
-                                <p className="text-sm leading-6 text-muted-foreground">
-                                    Connect the wallet
-                                    that holds the crypto
-                                    you'd like to transfer.
-                                </p>
+                            <Button
+                                type="button"
+                                variant={
+                                    availableExternalWallets.length >
+                                        0
+                                        ? "ghost"
+                                        : "default"
+                                }
+                                className="w-full"
 
-                                <Button
-                                    type="button"
-                                    className="w-full"
+                                disabled={
+                                    executing
+                                }
 
-                                    disabled={
-                                        executing
-                                    }
-
-                                    onClick={
-                                        onConnectExternalWallet
-                                    }
-                                >
-                                    Connect wallet
-                                </Button>
-                            </>
+                                onClick={() => {
+                                    setWalletFamilyChooserOpen(
+                                        true,
+                                    );
+                                }}
+                            >
+                                Connect wallet
+                            </Button>
                         )}
                     </div>
                 )}
