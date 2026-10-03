@@ -1148,6 +1148,10 @@ export function AddFundsDialog({
                     null,
                 );
 
+                setPreviewTab(
+                    "transfer",
+                );
+
                 setPreviewStatus(
                     null,
                 );
@@ -1901,6 +1905,10 @@ export function AddFundsDialog({
 
                 setPreviewDetails(
                     null,
+                );
+
+                setPreviewTab(
+                    "transfer",
                 );
 
                 try {
@@ -2742,16 +2750,6 @@ function CryptoFundingView({
             "transfer",
         );
 
-    useEffect(
-        () => {
-            setPreviewTab(
-                "transfer",
-            );
-        },
-        [
-            previewDetails,
-        ],
-    );
 
     const connectWalletFamily = (
         family:
