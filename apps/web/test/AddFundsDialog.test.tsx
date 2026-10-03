@@ -565,8 +565,18 @@ describe(
                 );
 
                 expect(
+                    screen.getByRole(
+                        "tab",
+                        {
+                            name:
+                                "Transfer",
+                        },
+                    ),
+                ).toBeTruthy();
+
+                expect(
                     screen.getByText(
-                        "Your transfer route is ready.",
+                        "You're adding",
                     ),
                 ).toBeTruthy();
 
@@ -676,7 +686,7 @@ describe(
                 );
 
                 expect(
-                    screen.getByText(
+                    await screen.findByText(
                         "Expected amount",
                     ),
                 ).toBeTruthy();
