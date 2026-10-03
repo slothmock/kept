@@ -2182,10 +2182,12 @@ export function AddFundsDialog({
                             externalWallet.clearSelection();
                         }}
 
-                        onConnectExternalWallet={() => {
+                        onConnectExternalWallet={(family) => {
                             invalidateCryptoPreview();
 
-                            void externalWallet.connect();
+                            void externalWallet.connect(
+                                family,
+                            );
                         }}
 
                         onSourceAssetChange={(
@@ -2576,8 +2578,10 @@ function CryptoFundingView({
     readonly canExecute:
     boolean;
 
-    readonly onConnectExternalWallet:
-    () => void;
+    readonly onConnectExternalWallet: (
+        family:
+            "evm" | "sol",
+    ) => void;
 
     readonly onSelectExternalWallet: (
         address: string,
@@ -2754,21 +2758,43 @@ function CryptoFundingView({
                                     )}
                                 </div>
 
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="w-full"
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="w-full"
 
-                                    disabled={
-                                        executing
-                                    }
+                                        disabled={
+                                            executing
+                                        }
 
-                                    onClick={
-                                        onConnectExternalWallet
-                                    }
-                                >
-                                    Connect another wallet
-                                </Button>
+                                        onClick={() => {
+                                            onConnectExternalWallet(
+                                                "sol",
+                                            );
+                                        }}
+                                    >
+                                        Connect Solana wallet
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="w-full"
+
+                                        disabled={
+                                            executing
+                                        }
+
+                                        onClick={() => {
+                                            onConnectExternalWallet(
+                                                "evm",
+                                            );
+                                        }}
+                                    >
+                                        Connect EVM wallet
+                                    </Button>
+                                </div>
                             </>
                         ) : (
                             <>
@@ -2778,20 +2804,42 @@ function CryptoFundingView({
                                     you'd like to transfer.
                                 </p>
 
-                                <Button
-                                    type="button"
-                                    className="w-full"
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    <Button
+                                        type="button"
+                                        className="w-full"
 
-                                    disabled={
-                                        executing
-                                    }
+                                        disabled={
+                                            executing
+                                        }
 
-                                    onClick={
-                                        onConnectExternalWallet
-                                    }
-                                >
-                                    Connect wallet
-                                </Button>
+                                        onClick={() => {
+                                            onConnectExternalWallet(
+                                                "sol",
+                                            );
+                                        }}
+                                    >
+                                        Connect Solana wallet
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full"
+
+                                        disabled={
+                                            executing
+                                        }
+
+                                        onClick={() => {
+                                            onConnectExternalWallet(
+                                                "evm",
+                                            );
+                                        }}
+                                    >
+                                        Connect EVM wallet
+                                    </Button>
+                                </div>
                             </>
                         )}
                     </div>
