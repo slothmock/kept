@@ -12,7 +12,6 @@ import type {
 
 import {
     runGoalDeletion,
-    type GoalDeletionStage,
     type OnchainCommitmentStatus,
 } from "../src/features/goals/delete-goal-flow.js";
 
