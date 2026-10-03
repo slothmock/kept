@@ -91,6 +91,10 @@ export function FormatFundingChainName(
         case "optimism":
             return "Optimism";
 
+        case "solana":
+        case "sol":
+            return "Solana";
+
         default:
             return blockchain;
     }
