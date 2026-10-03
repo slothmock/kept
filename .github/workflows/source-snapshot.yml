@@ -1,0 +1,29 @@
+name: Source snapshot
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create source archive
+        run: |
+          tar             --exclude=.git             --exclude=node_modules             --exclude='*.tsbuildinfo'             -czf source-snapshot.tar.gz .
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-snapshot-${{ github.sha }}
+          path: source-snapshot.tar.gz
+          retention-days: 1
+          if-no-files-found: error
