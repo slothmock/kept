@@ -76,6 +76,10 @@ import {
 } from "@/lib/diagnostics";
 
 import {
+    fundingTransferErrorMessage,
+} from "@/features/funding/funding-transfer-error";
+
+import {
     FundingAssetPicker,
     FormatFundingChainName,
 } from "@/features/funding/FundingAssetPicker";
@@ -1643,10 +1647,11 @@ export function AddFundsDialog({
                     );
 
                     setExecutionError(
-                        error instanceof
-                            Error
-                            ? error.message
-                            : "We couldn't complete your transfer.",
+                        fundingTransferErrorMessage(
+                            error,
+                            sourceAsset,
+                            "We couldn't prepare your transfer.",
+                        ),
                     );
 
                     return false;
@@ -1974,10 +1979,11 @@ export function AddFundsDialog({
                     );
 
                     setPreviewError(
-                        error instanceof
-                            Error
-                            ? error.message
-                            : "We couldn't prepare your transfer.",
+                        fundingTransferErrorMessage(
+                            error,
+                            sourceAsset,
+                            "We couldn't complete your transfer.",
+                        ),
                     );
                 } finally {
                     setPreviewing(
