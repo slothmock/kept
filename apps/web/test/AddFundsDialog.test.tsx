@@ -233,8 +233,47 @@ beforeEach(() => {
 
     previewKeptFunding.mockResolvedValue({
         preview: {
-            estimatedDuration:
-                37,
+            execution: {
+                id:
+                    "preview-execution",
+
+                status:
+                    "CREATED",
+
+                quote: {
+                    amount:
+                        "20000000",
+
+                    amountIn:
+                        "20000000",
+
+                    amountOut:
+                        "19900000",
+
+                    minAmountOut:
+                        "19800000",
+
+                    depositAddress:
+                        "0x2222222222222222222222222222222222222222",
+
+                    depositMemo:
+                        null,
+                },
+
+                details: {
+                    intermediaryAddress:
+                        "0x3333333333333333333333333333333333333333",
+
+                    networkFee:
+                        "100000",
+
+                    estimatedTime:
+                        "2 minutes",
+                },
+
+                steps:
+                    [],
+            },
         },
     });
 
@@ -538,6 +577,137 @@ describe(
                             name:
                                 "Confirm transfer",
                         },
+                    ),
+                ).toBeTruthy();
+            },
+        );
+
+        it(
+            "keeps route mechanics behind the More info tab",
+            async () => {
+                renderDialog();
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Transfer crypto",
+                        },
+                    ),
+                );
+
+                fireEvent.change(
+                    await screen.findByLabelText(
+                        "Amount",
+                    ),
+                    {
+                        target: {
+                            value:
+                                "20",
+                        },
+                    },
+                );
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Continue",
+                        },
+                    ),
+                );
+
+                await screen.findByRole(
+                    "button",
+                    {
+                        name:
+                            "Confirm transfer",
+                    },
+                );
+
+                expect(
+                    screen.getByRole(
+                        "tab",
+                        {
+                            name:
+                                "Transfer",
+                        },
+                    ).getAttribute(
+                        "aria-selected",
+                    ),
+                ).toBe(
+                    "true",
+                );
+
+                expect(
+                    screen.getByText(
+                        "You're adding",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "19.8 USDC",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "2 minutes",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.queryByText(
+                        "Slippage tolerance",
+                    ),
+                ).toBeNull();
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "tab",
+                        {
+                            name:
+                                "More info",
+                        },
+                    ),
+                );
+
+                expect(
+                    screen.getByText(
+                        "Expected amount",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "19.9 USDC",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Provider fee",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "0.1 USDC",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Slippage tolerance",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Destination network",
                     ),
                 ).toBeTruthy();
             },
