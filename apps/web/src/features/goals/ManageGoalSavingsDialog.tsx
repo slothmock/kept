@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { GoalDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
@@ -83,19 +83,6 @@ export function ManageGoalSavingsDialog({
     (candidate) => candidate.id === destinationGoalId,
   ) ?? null;
 
-  useEffect(() => {
-    if (!goal) {
-      setAction("add");
-      setAmount("");
-      setDestinationGoalId("");
-      return;
-    }
-
-    setAction("add");
-    setAmount("");
-    setDestinationGoalId("");
-  }, [goal]);
-
   const availableLabel =
     action === "add"
       ? unallocatedAssets === null
@@ -129,7 +116,7 @@ export function ManageGoalSavingsDialog({
   async function submit() {
     if (!goal || !canSubmit) return;
 
-    let succeeded = false;
+    let succeeded: boolean;
 
     if (action === "add") {
       succeeded = await onAdd(goal, amount);
@@ -152,10 +139,20 @@ export function ManageGoalSavingsDialog({
     }
   }
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setAction("add");
+      setAmount("");
+      setDestinationGoalId("");
+    }
+
+    onOpenChange(open);
+  };
+
   return (
     <Dialog
       open={goal !== null}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
