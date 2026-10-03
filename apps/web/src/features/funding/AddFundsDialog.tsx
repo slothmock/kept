@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import {
+    formatUnits,
     parseUnits,
 } from "viem";
 
@@ -415,6 +416,29 @@ type FundingView =
     | "choose"
     | "crypto";
 
+interface FundingPreviewDetails {
+    readonly amountIn:
+    string;
+
+    readonly amountOut:
+    string;
+
+    readonly minimumAmountOut:
+    string;
+
+    readonly networkFee:
+    string | null;
+
+    readonly estimatedTime:
+    string | null;
+
+    readonly depositAddress:
+    string;
+
+    readonly intermediaryAddress:
+    string;
+}
+
 interface AddFundsDialogProps {
     readonly open:
     boolean;
@@ -533,6 +557,22 @@ export function AddFundsDialog({
     ] =
         useState<
             bigint | null
+        >(null);
+
+    const [
+        previewDetails,
+        setPreviewDetails,
+    ] =
+        useState<
+            FundingPreviewDetails | null
+        >(null);
+
+    const [
+        destinationAsset,
+        setDestinationAsset,
+    ] =
+        useState<
+            FundingAsset | null
         >(null);
 
     const [
@@ -752,6 +792,7 @@ export function AddFundsDialog({
                     try {
                         const {
                             origins,
+                            destination,
                         } =
                             await resolveKeptFundingAssets();
 
@@ -763,6 +804,10 @@ export function AddFundsDialog({
 
                         setSourceAssets(
                             origins,
+                        );
+
+                        setDestinationAsset(
+                            destination,
                         );
 
                         setSourceBlockchain(
@@ -1041,6 +1086,14 @@ export function AddFundsDialog({
                     null,
                 );
 
+                setPreviewDetails(
+                    null,
+                );
+
+                setDestinationAsset(
+                    null,
+                );
+
                 setFiatStartingBalance(
                     null,
                 );
@@ -1088,6 +1141,10 @@ export function AddFundsDialog({
         useCallback(
             () => {
                 setPreviewedCryptoAmount(
+                    null,
+                );
+
+                setPreviewDetails(
                     null,
                 );
 
@@ -1842,6 +1899,10 @@ export function AddFundsDialog({
                     null,
                 );
 
+                setPreviewDetails(
+                    null,
+                );
+
                 try {
                     const family =
                         externalWallet.family;
@@ -1924,7 +1985,10 @@ export function AddFundsDialog({
                             });
 
                     try {
-                        await previewKeptFunding({
+                        const {
+                            preview,
+                        } =
+                            await previewKeptFunding({
                                 runner,
 
                                 amount,
@@ -1937,6 +2001,31 @@ export function AddFundsDialog({
                         setPreviewedCryptoAmount(
                             amount,
                         );
+
+                        setPreviewDetails({
+                            amountIn:
+                                preview.execution.quote.amountIn,
+
+                            amountOut:
+                                preview.execution.quote.amountOut,
+
+                            minimumAmountOut:
+                                preview.execution.quote.minAmountOut,
+
+                            networkFee:
+                                preview.execution.details.networkFee ??
+                                null,
+
+                            estimatedTime:
+                                preview.execution.details.estimatedTime ??
+                                null,
+
+                            depositAddress:
+                                preview.execution.quote.depositAddress,
+
+                            intermediaryAddress:
+                                preview.execution.details.intermediaryAddress,
+                        });
 
                         setExecutionStatus(
                             null,
@@ -1975,6 +2064,10 @@ export function AddFundsDialog({
                 ) {
 
                     setPreviewedCryptoAmount(
+                        null,
+                    );
+
+                    setPreviewDetails(
                         null,
                     );
 
@@ -2122,6 +2215,14 @@ export function AddFundsDialog({
 
                         sourceAsset={
                             sourceAsset
+                        }
+
+                        destinationAsset={
+                            destinationAsset
+                        }
+
+                        previewDetails={
+                            previewDetails
                         }
 
                         sourceAssetsLoading={
@@ -2475,6 +2576,8 @@ function CryptoFundingView({
 
     sourceAssets,
     sourceAsset,
+    destinationAsset,
+    previewDetails,
     sourceAssetsLoading,
     sourceAssetsError,
     sourceAssetBalances,
@@ -2544,6 +2647,12 @@ function CryptoFundingView({
 
     readonly sourceAsset:
     FundingAsset | null;
+
+    readonly destinationAsset:
+    FundingAsset | null;
+
+    readonly previewDetails:
+    FundingPreviewDetails | null;
 
     readonly sourceAssetsLoading:
     boolean;
@@ -2622,6 +2731,17 @@ function CryptoFundingView({
         setWalletFamilyChooserOpen,
     ] =
         useState(false);
+
+    const [
+        previewTab,
+        setPreviewTab,
+    ] =
+        useState<
+            "transfer" | "more-info"
+        >(
+            "transfer",
+        );
+
 
     const connectWalletFamily = (
         family:
@@ -3090,9 +3210,13 @@ function CryptoFundingView({
                                         0
                                     }
 
-                                    onClick={
-                                        onPreviewRoute
-                                    }
+                                    onClick={() => {
+                                        setPreviewTab(
+                                            "transfer",
+                                        );
+
+                                        onPreviewRoute();
+                                    }}
                                 >
                                     {previewing
                                         ? "Checking transfer…"
@@ -3100,17 +3224,203 @@ function CryptoFundingView({
                                 </Button>
                             ) : null}
 
-                            {previewStatus ? (
-                                <div className="rounded-lg border bg-muted/20 p-3">
-                                    <p className="text-sm">
-                                        {
-                                            previewStatus
-                                        }
-                                    </p>
+                            {previewStatus &&
+                            previewDetails &&
+                            destinationAsset ? (
+                                <div className="overflow-hidden rounded-lg border bg-muted/20">
+                                    <div
+                                        className="grid grid-cols-2 border-b p-1"
+                                        role="tablist"
+                                        aria-label="Transfer preview details"
+                                    >
+                                        <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={
+                                                previewTab ===
+                                                "transfer"
+                                            }
+                                            className={
+                                                previewTab ===
+                                                "transfer"
+                                                    ? "rounded-md bg-background px-3 py-2 text-sm font-medium shadow-sm"
+                                                    : "rounded-md px-3 py-2 text-sm text-muted-foreground"
+                                            }
+                                            onClick={() => {
+                                                setPreviewTab(
+                                                    "transfer",
+                                                );
+                                            }}
+                                        >
+                                            Transfer
+                                        </button>
 
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        Review the transfer before confirming.
-                                    </p>
+                                        <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={
+                                                previewTab ===
+                                                "more-info"
+                                            }
+                                            className={
+                                                previewTab ===
+                                                "more-info"
+                                                    ? "rounded-md bg-background px-3 py-2 text-sm font-medium shadow-sm"
+                                                    : "rounded-md px-3 py-2 text-sm text-muted-foreground"
+                                            }
+                                            onClick={() => {
+                                                setPreviewTab(
+                                                    "more-info",
+                                                );
+                                            }}
+                                        >
+                                            More info
+                                        </button>
+                                    </div>
+
+                                    {previewTab ===
+                                    "transfer" ? (
+                                        <div
+                                            className="space-y-4 p-4"
+                                            role="tabpanel"
+                                        >
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    You're adding
+                                                </p>
+
+                                                <p className="mt-1 text-lg font-semibold">
+                                                    {
+                                                        amount
+                                                    }{" "}
+                                                    {
+                                                        sourceAsset.symbol
+                                                    }
+                                                </p>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        From
+                                                    </p>
+
+                                                    <p className="mt-1 text-sm font-medium">
+                                                        {
+                                                            FormatFundingChainName(
+                                                                sourceAsset.blockchain,
+                                                            )
+                                                        }
+                                                    </p>
+                                                </div>
+
+                                                <div className="text-right">
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Kept receives at least
+                                                    </p>
+
+                                                    <p className="mt-1 text-sm font-medium">
+                                                        {
+                                                            formatUnits(
+                                                                BigInt(
+                                                                    previewDetails.minimumAmountOut,
+                                                                ),
+                                                                destinationAsset.decimals,
+                                                            )
+                                                        }{" "}
+                                                        {
+                                                            destinationAsset.symbol
+                                                        }
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {previewDetails.estimatedTime ? (
+                                                <div className="flex items-center justify-between gap-4 border-t pt-3 text-sm">
+                                                    <span className="text-muted-foreground">
+                                                        Estimated time
+                                                    </span>
+
+                                                    <span className="font-medium">
+                                                        {
+                                                            previewDetails.estimatedTime
+                                                        }
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="space-y-3 p-4 text-sm"
+                                            role="tabpanel"
+                                        >
+                                            <PreviewDetailRow
+                                                label="Source asset"
+                                                value={`${sourceAsset.symbol} on ${FormatFundingChainName(
+                                                    sourceAsset.blockchain,
+                                                )}`}
+                                            />
+
+                                            <PreviewDetailRow
+                                                label="Destination"
+                                                value={`${destinationAsset.symbol} in Kept`}
+                                            />
+
+                                            <PreviewDetailRow
+                                                label="Expected amount"
+                                                value={`${formatUnits(
+                                                    BigInt(
+                                                        previewDetails.amountOut,
+                                                    ),
+                                                    destinationAsset.decimals,
+                                                )} ${destinationAsset.symbol}`}
+                                            />
+
+                                            <PreviewDetailRow
+                                                label="Minimum received"
+                                                value={`${formatUnits(
+                                                    BigInt(
+                                                        previewDetails.minimumAmountOut,
+                                                    ),
+                                                    destinationAsset.decimals,
+                                                )} ${destinationAsset.symbol}`}
+                                            />
+
+                                            {previewDetails.networkFee ? (
+                                                <PreviewDetailRow
+                                                    label="Provider fee"
+                                                    value={`${formatUnits(
+                                                        BigInt(
+                                                            previewDetails.networkFee,
+                                                        ),
+                                                        destinationAsset.decimals,
+                                                    )} ${destinationAsset.symbol}`}
+                                                />
+                                            ) : null}
+
+                                            <PreviewDetailRow
+                                                label="Slippage tolerance"
+                                                value="1%"
+                                            />
+
+                                            <PreviewDetailRow
+                                                label="Source wallet"
+                                                value={
+                                                    shortAddress ??
+                                                    "Connected wallet"
+                                                }
+                                            />
+
+                                            <PreviewDetailRow
+                                                label="Destination network"
+                                                value={
+                                                    FormatFundingChainName(
+                                                        destinationAsset.blockchain,
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             ) : null}
 
@@ -3175,6 +3485,33 @@ function CryptoFundingView({
                     ) : null}
                 </>
             ) : null}
+        </div>
+    );
+}
+
+function PreviewDetailRow({
+    label,
+    value,
+}: {
+    readonly label:
+    string;
+
+    readonly value:
+    string;
+}) {
+    return (
+        <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">
+                {
+                    label
+                }
+            </span>
+
+            <span className="max-w-[60%] break-all text-right font-medium">
+                {
+                    value
+                }
+            </span>
         </div>
     );
 }
