@@ -21,9 +21,6 @@ import {
 } from "@solana/web3.js";
 
 import {
-  useWallets as useSolanaWallets,
-} from "@privy-io/react-auth/solana";
-import {
   createKeptApi,
   readApiBaseUrl,
   type GoalDto,
@@ -152,13 +149,6 @@ function fundingRefreshError(
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
-  const {
-    wallets: solanaWallets,
-  } = useSolanaWallets();
-
-  const externalSolanaWallet =
-    solanaWallets[0] ??
-    null;
   const [depositAmount, setDepositAmount] = useState("");
 
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
@@ -283,38 +273,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             setCryptoDestinationAssetId(
               (
                 current,
-              ) => {
-                const solanaAsset =
-                  externalSolanaWallet
-                    ? assets.find(
-                      (
-                        asset,
-                      ) =>
-                        asset.blockchain ===
-                        "sol",
-                    )
-                    : null;
-
-                if (solanaAsset) {
-                  return solanaAsset.assetId;
-                }
-
-                return (
-                  current ??
-                  destination.assetId
-                );
-              },
+              ) =>
+                current ??
+                destination.assetId,
             );
-
-            if (
-              externalSolanaWallet
-            ) {
-              setCryptoRecipient(
-                (current) =>
-                  current ||
-                  externalSolanaWallet.address,
-              );
-            }
           } catch (
           error
           ) {
@@ -339,9 +301,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           true;
       };
     },
-    [
-      externalSolanaWallet,
-    ],
+    [],
   );
 
   const invalidateCryptoPreview =
