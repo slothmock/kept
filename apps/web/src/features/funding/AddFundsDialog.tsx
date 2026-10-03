@@ -1903,10 +1903,6 @@ export function AddFundsDialog({
                     null,
                 );
 
-                setPreviewTab(
-                    "transfer",
-                );
-
                 try {
                     const family =
                         externalWallet.family;
