@@ -127,7 +127,14 @@ export function useExternalFundingWallet():
     const externalSolanaWallets =
         useMemo(
             () =>
-                solanaWallets,
+                solanaWallets.filter(
+                    (
+                        wallet,
+                    ) =>
+                        wallet.standardWallet.name
+                            .toLowerCase() !==
+                        "privy",
+                ),
             [
                 solanaWallets,
             ],
