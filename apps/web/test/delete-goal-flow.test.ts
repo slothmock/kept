@@ -69,23 +69,21 @@ function dependencies(
     return {
         commitments,
         readOnchainStatus: vi.fn(
-            async (
-                _commitment: CommitmentDto,
-            ): Promise<OnchainCommitmentStatus> =>
+            async (): Promise<OnchainCommitmentStatus> =>
                 "ACTIVE",
         ),
         cancelOnchain: vi.fn(
-            async (_commitment: CommitmentDto) => { },
+            async () => { },
         ),
         persistCancellation: vi.fn(
-            async (_commitment: CommitmentDto) => { },
+            async () => { },
         ),
         archiveGoal: vi.fn(
-            async (_goal: GoalDto) => { },
+            async () => { },
         ),
         refresh: vi.fn(async () => { }),
         onStage: vi.fn(
-            (_stage: GoalDeletionStage) => { },
+            () => { },
         ),
     };
 }
