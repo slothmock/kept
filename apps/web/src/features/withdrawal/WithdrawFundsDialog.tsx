@@ -1,5 +1,4 @@
 import {
-    useEffect,
     useState,
     type ReactNode,
 } from "react";
@@ -216,19 +215,6 @@ export function WithdrawFundsDialog({
         useState<WithdrawalView>(
             "choose",
         );
-
-    useEffect(
-        () => {
-            if (!open) {
-                setView(
-                    "choose",
-                );
-            }
-        },
-        [
-            open,
-        ],
-    );
 
     const withdrawableAssets =
         position?.withdrawableAssets ??
