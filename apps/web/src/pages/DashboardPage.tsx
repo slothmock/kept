@@ -67,6 +67,13 @@ interface DashboardPageProps {
 
   readonly walletAddress: string | null;
 
+  readonly readSolanaFundingBalances: (
+    owner: string,
+  ) => Promise<{
+    readonly nativeBalance: string;
+    readonly balances: Readonly<Record<string, string>>;
+  }>;
+
   readonly positionState: PositionState;
 
   readonly goalFundingState: GoalFundingState;
@@ -370,6 +377,8 @@ export function DashboardPage(props: DashboardPageProps) {
   const {
 
     walletAddress,
+
+    readSolanaFundingBalances,
 
     positionState,
 
@@ -868,6 +877,10 @@ export function DashboardPage(props: DashboardPageProps) {
         open={addFundsOpen}
 
         walletAddress={walletAddress}
+
+        readSolanaFundingBalances={
+          readSolanaFundingBalances
+        }
 
         onOpenChange={
 

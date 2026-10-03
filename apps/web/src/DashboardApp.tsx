@@ -21,7 +21,7 @@ import {
 } from "@solana/web3.js";
 
 import {
-  useSolanaWallets,
+  useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
 import {
   createKeptApi,
@@ -157,11 +157,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   } = useSolanaWallets();
 
   const externalSolanaWallet =
-    solanaWallets.find(
-      (wallet) =>
-        wallet.walletClientType !==
-        "privy",
-    ) ?? null;
+    solanaWallets[0] ??
+    null;
   const [depositAmount, setDepositAmount] = useState("");
 
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
@@ -554,6 +551,29 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     [config],
   );
+
+  const readSolanaFundingBalances =
+    useCallback(
+      async (
+        owner: string,
+      ) => {
+        if (
+          !api
+        ) {
+          throw new Error(
+            "Kept API is unavailable.",
+          );
+        }
+
+        return api
+          .getSolanaFundingBalances(
+            owner,
+          );
+      },
+      [
+        api,
+      ],
+    );
 
   const account =
     wallet.address && isAddress(wallet.address)
@@ -1238,14 +1258,17 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   useEffect(() => {
     void refreshPosition();
+  }, [
+    refreshPosition,
+  ]);
 
+  useEffect(() => {
     void refreshProductData();
 
     void refreshSavingsPerformance();
 
     void refreshSavingsMarketStatus();
   }, [
-    refreshPosition,
     refreshProductData,
     refreshSavingsPerformance,
     refreshSavingsMarketStatus,
@@ -2043,7 +2066,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                           "transfer",
 
                         args: [
-                          recipient,
+                          getAddress(
+                            recipient,
+                          ),
                           parsedAmount.assets,
                         ],
                       }),
@@ -2219,6 +2244,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       },
       [
         account,
+        api,
         config,
         cryptoDestinationAssetId,
         cryptoDestinationAssets,
@@ -3470,6 +3496,10 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     >
       <DashboardPage
         walletAddress={wallet.address}
+
+        readSolanaFundingBalances={
+          readSolanaFundingBalances
+        }
 
         positionState={positionState}
 

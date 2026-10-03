@@ -1,6 +1,5 @@
 import {
     ArrowLeft,
-    Check,
 } from "lucide-react";
 
 import {
@@ -134,15 +133,6 @@ export function CryptoWithdrawalStep({
         networks[0] ??
         null;
 
-    const networkAssets =
-        selectedNetwork
-            ? destinationAssets.filter(
-                (asset) =>
-                    asset.blockchain ===
-                    selectedNetwork,
-            )
-            : [];
-
     const amountValid =
         amount.trim().length >
         0;
@@ -179,25 +169,6 @@ export function CryptoWithdrawalStep({
         destinationAsset !==
         null &&
         !busy;
-
-    const selectNetwork = (
-        blockchain: string,
-    ) => {
-        const firstAsset =
-            destinationAssets.find(
-                (asset) =>
-                    asset.blockchain ===
-                    blockchain,
-            );
-
-        if (!firstAsset) {
-            return;
-        }
-
-        onDestinationAssetChange(
-            firstAsset.assetId,
-        );
-    };
 
     const destinationBlockchains =
         Array.from(

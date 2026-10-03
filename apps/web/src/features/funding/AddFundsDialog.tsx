@@ -418,6 +418,14 @@ interface AddFundsDialogProps {
     readonly walletAddress:
     string | null;
 
+    readonly readSolanaFundingBalances:
+    (
+        owner: string,
+    ) => Promise<{
+        readonly nativeBalance: string;
+        readonly balances: Readonly<Record<string, string>>;
+    }>;
+
     readonly onOpenChange: (
         open: boolean,
     ) => void;
@@ -429,6 +437,7 @@ interface AddFundsDialogProps {
 export function AddFundsDialog({
     open,
     walletAddress,
+    readSolanaFundingBalances,
     onOpenChange,
     onUseAvailableCash,
 }: AddFundsDialogProps) {
@@ -940,8 +949,9 @@ export function AddFundsDialog({
                     try {
                         const balances =
                             await readFundingAssetBalances(
-                                externalAddress as `0x${string}`,
+                                externalAddress,
                                 walletCompatibleSourceAssets,
+                                readSolanaFundingBalances,
                             );
 
                         if (
@@ -999,6 +1009,7 @@ export function AddFundsDialog({
             view,
             externalWallet.address,
             walletCompatibleSourceAssets,
+            readSolanaFundingBalances,
         ],
     );
 

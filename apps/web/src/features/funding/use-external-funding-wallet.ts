@@ -1,6 +1,5 @@
 import {
     useCallback,
-    useEffect,
     useMemo,
     useState,
 } from "react";
@@ -11,7 +10,7 @@ import {
 } from "@privy-io/react-auth";
 
 import {
-    useSolanaWallets,
+    useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
 
 import {
@@ -125,13 +124,7 @@ export function useExternalFundingWallet():
     const externalSolanaWallets =
         useMemo(
             () =>
-                solanaWallets.filter(
-                    (
-                        wallet,
-                    ) =>
-                        wallet.walletClientType !==
-                        "privy",
-                ),
+                solanaWallets,
             [
                 solanaWallets,
             ],
@@ -163,7 +156,7 @@ export function useExternalFundingWallet():
                             wallet.address,
 
                         walletName:
-                            wallet.walletClientType,
+                            wallet.standardWallet.name,
 
                         family:
                             "sol",
@@ -176,31 +169,14 @@ export function useExternalFundingWallet():
             ],
         );
 
-    useEffect(
-        () => {
-            if (
-                selectedKey ||
-                availableWallets.length !== 1
-            ) {
-                return;
-            }
-
-            const onlyWallet =
-                availableWallets[0];
-
-            if (
-                onlyWallet
-            ) {
-                setSelectedKey(
-                    `${onlyWallet.family}:${onlyWallet.address}`,
-                );
-            }
-        },
-        [
-            availableWallets,
-            selectedKey,
-        ],
-    );
+    const effectiveSelectedKey =
+        selectedKey ??
+        (
+            availableWallets.length === 1 &&
+            availableWallets[0]
+                ? `${availableWallets[0].family}:${availableWallets[0].address}`
+                : null
+        );
 
     const selectedOption =
         useMemo(
@@ -210,12 +186,12 @@ export function useExternalFundingWallet():
                         wallet,
                     ) =>
                         `${wallet.family}:${wallet.address}` ===
-                        selectedKey,
+                        effectiveSelectedKey,
                 ) ??
                 null,
             [
                 availableWallets,
-                selectedKey,
+                effectiveSelectedKey,
             ],
         );
 

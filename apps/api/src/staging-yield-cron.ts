@@ -64,6 +64,7 @@ const hash = await walletClient.writeContract({
   address: strategy,
   abi: strategyAbi,
   functionName: "accrueYield",
+  chain: null,
 });
 
 const receipt = await publicClient.waitForTransactionReceipt({ hash });

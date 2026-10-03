@@ -439,6 +439,7 @@ const stagingFaucet =
                   recipient,
                   STAGING_FAUCET_AMOUNT_ASSETS,
                 ],
+                chain: null,
               });
 
           const receipt =
