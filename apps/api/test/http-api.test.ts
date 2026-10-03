@@ -286,6 +286,29 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("creates MoonPay off-ramp URLs for Base USDC", async () => {
+    const app = buildApp(buildDependencies());
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/offramp-url",
+      headers: { ...auth, "x-forwarded-for": "198.51.100.4" },
+      payload: { amount: "20.00" },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const { url } = response.json<{ url: string }>();
+    const parsed = new URL(url);
+
+    expect(parsed.searchParams.get("baseCurrencyCode")).toBe("usdc_base");
+    expect(parsed.searchParams.get("baseCurrencyAmount")).toBe("20.00");
+    expect(parsed.searchParams.get("lockAmount")).toBe("true");
+    expect(parsed.searchParams.get("apiKey")).toBe("moonpay-publishable-key");
+    expect(parsed.searchParams.get("signature")).toBeTruthy();
+
+    await app.close();
+  });
+
   it("rejects unauthenticated Solana balance requests", async () => {
     const app = buildApp(
       buildDependencies(),

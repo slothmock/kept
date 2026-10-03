@@ -1312,7 +1312,7 @@ export function buildApp(
 
           url.searchParams.set(
             "baseCurrencyCode",
-            "usdc",
+            "usdc_base",
           );
 
           url.searchParams.set(
