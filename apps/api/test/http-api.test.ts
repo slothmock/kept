@@ -152,6 +152,7 @@ function buildDependencies(
         goalId: input.goalId ?? null,
         chainId: input.chainId?.toString() ?? null,
         transactionHash: input.transactionHash ?? null,
+        externalReference: input.externalReference ?? null,
         createdAt: "2026-09-30T00:00:00.000Z",
       }),
       archiveGoal: async () => ({
