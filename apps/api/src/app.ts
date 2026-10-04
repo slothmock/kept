@@ -82,6 +82,7 @@ export interface ApiDependencies {
     | "createMoonPayOfframpOrder"
     | "getMoonPayOfframpOrder"
     | "recordMoonPayOfframpWebhook"
+    | "markMoonPayOfframpFundsSent"
   >;
 
   readonly commitmentSettlementVerifier?: CommitmentSettlementVerifier;
@@ -562,6 +563,7 @@ const CLIENT_TRANSACTION_TYPES = [
   "SAVINGS_DEPOSIT",
   "SAVINGS_WITHDRAWAL",
   "CRYPTO_WITHDRAWAL",
+  "FIAT_WITHDRAWAL",
 ] as const;
 
 type ClientTransactionType =
@@ -1374,6 +1376,26 @@ export function buildApp(
           }
 
           return order;
+        },
+      ),
+  );
+
+  app.post(
+    "/v1/moonpay/offramp-orders/:id/submitted",
+    async (request, reply) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const params = requireObject(request.params);
+          const body = requireObject(request.body);
+          const auth = asAuthenticatedRequest(request);
+
+          return dependencies.persistence.markMoonPayOfframpFundsSent({
+            userId: auth.user.id,
+            orderId: requireString(params, "id"),
+            transferReference: requireString(body, "transferReference"),
+          });
         },
       ),
   );

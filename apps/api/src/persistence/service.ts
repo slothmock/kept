@@ -93,6 +93,7 @@ export type TransactionType =
   | "savings_deposit"
   | "savings_withdrawal"
   | "crypto_withdrawal"
+  | "fiat_withdrawal"
   | "reward";
 
 export type TransactionStatus =
@@ -102,9 +103,12 @@ export type TransactionStatus =
 
 export type MoonPayOfframpOrderStatus =
   | "pending_widget"
-  | "awaiting_deposit"
+  | "awaiting_deposit_details"
+  | "ready"
+  | "funds_sent"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface MoonPayOfframpOrderDto {
   readonly id: string;
@@ -113,6 +117,8 @@ export interface MoonPayOfframpOrderDto {
   readonly moonPayTransactionId: string | null;
   readonly depositWalletAddress: string | null;
   readonly depositWalletTag: string | null;
+  readonly transferReference: string | null;
+  readonly fundsSentAt: string | null;
   readonly status: MoonPayOfframpOrderStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -375,6 +381,7 @@ type AccountTransactionRow = {
   | "SAVINGS_DEPOSIT"
   | "SAVINGS_WITHDRAWAL"
   | "CRYPTO_WITHDRAWAL"
+  | "FIAT_WITHDRAWAL"
   | "REWARD";
 
   readonly status:
@@ -424,6 +431,9 @@ function mapTransactionType(
     case "CRYPTO_WITHDRAWAL":
       return "crypto_withdrawal";
 
+    case "FIAT_WITHDRAWAL":
+      return "fiat_withdrawal";
+
     case "REWARD":
       return "reward";
   }
@@ -472,18 +482,26 @@ function mapMoonPayOfframpOrder(row: {
   moonPayTransactionId: string | null;
   depositWalletAddress: string | null;
   depositWalletTag: string | null;
+  transferReference: string | null;
+  fundsSentAt: Date | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
 }): MoonPayOfframpOrderDto {
-  const status =
+  const status: MoonPayOfframpOrderStatus =
     row.status === "PENDING_WIDGET"
       ? "pending_widget"
-      : row.status === "AWAITING_DEPOSIT"
-        ? "awaiting_deposit"
-        : row.status === "COMPLETED"
-          ? "completed"
-          : "failed";
+      : row.status === "AWAITING_DEPOSIT_DETAILS"
+        ? "awaiting_deposit_details"
+        : row.status === "READY"
+          ? "ready"
+          : row.status === "FUNDS_SENT"
+            ? "funds_sent"
+            : row.status === "COMPLETED"
+              ? "completed"
+              : row.status === "CANCELLED"
+                ? "cancelled"
+                : "failed";
 
   return {
     id: row.id,
@@ -492,6 +510,8 @@ function mapMoonPayOfframpOrder(row: {
     moonPayTransactionId: row.moonPayTransactionId,
     depositWalletAddress: row.depositWalletAddress,
     depositWalletTag: row.depositWalletTag,
+    transferReference: row.transferReference,
+    fundsSentAt: row.fundsSentAt?.toISOString() ?? null,
     status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -720,6 +740,7 @@ export class KeptPersistenceService {
     readonly baseCurrencyCode: string;
     readonly depositWalletAddress: string;
     readonly depositWalletTag?: string | null;
+    readonly status?: "ready" | "completed" | "failed" | "cancelled";
   }): Promise<MoonPayOfframpOrderDto> {
     if (requireNonBlank(input.baseCurrencyCode, "baseCurrencyCode") !== "usdc_base") {
       throw new PersistenceValidationError("MoonPay off-ramp asset must be Base USDC");
@@ -738,8 +759,29 @@ export class KeptPersistenceService {
           "depositWalletAddress",
         ),
         depositWalletTag: input.depositWalletTag?.trim() || null,
+        status: input.status ?? "ready",
         now: new Date(),
       });
+
+    if (!order) {
+      throw new NotFoundError("MoonPay off-ramp order");
+    }
+
+    return mapMoonPayOfframpOrder(order);
+  }
+
+  async markMoonPayOfframpFundsSent(input: {
+    readonly userId: string;
+    readonly orderId: string;
+    readonly transferReference: string;
+  }): Promise<MoonPayOfframpOrderDto> {
+    const repository = new KeptRepository(this.db);
+    const order = await repository.markMoonPayOfframpFundsSent({
+      userId: requireNonBlank(input.userId, "userId"),
+      id: requireNonBlank(input.orderId, "orderId"),
+      transferReference: requireNonBlank(input.transferReference, "transferReference"),
+      now: new Date(),
+    });
 
     if (!order) {
       throw new NotFoundError("MoonPay off-ramp order");

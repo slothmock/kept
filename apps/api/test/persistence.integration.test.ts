@@ -128,6 +128,7 @@ describe.sequential("PostgreSQL migrations and schema constraints", () => {
         "commitment_definitions",
         "user_commitments",
         "idempotency_records",
+        "moonpay_offramp_orders",
       ]),
     );
     expect(definitions.rows).toEqual([
@@ -201,6 +202,102 @@ describe.sequential("PostgreSQL migrations and schema constraints", () => {
       await client.query("ROLLBACK");
       client.release();
     }
+  });
+});
+
+describe.sequential("MoonPay off-ramp orders", () => {
+  it("keeps verified payout details owner-scoped and marks submission idempotently", async () => {
+    const owner = await createUser("moonpay-owner");
+    const other = await createUser("moonpay-other");
+    const created = await service.createMoonPayOfframpOrder({
+      userId: owner.id,
+      amountAtomic: "25000000",
+    });
+
+    await expect(
+      service.getMoonPayOfframpOrder(other.id, created.id),
+    ).resolves.toBeNull();
+
+    const ready = await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-sell-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "ready",
+    });
+
+    expect(ready).toMatchObject({
+      status: "ready",
+      moonPayTransactionId: "moonpay-sell-1",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+    });
+
+    await expect(
+      service.recordMoonPayOfframpWebhook({
+        orderId: created.id,
+        moonPayTransactionId: "moonpay-sell-1",
+        baseCurrencyCode: "usdc_base",
+        depositWalletAddress: "0x00000000000000000000000000000000000000B2",
+        status: "ready",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    const sent = await service.markMoonPayOfframpFundsSent({
+      userId: owner.id,
+      orderId: created.id,
+      transferReference: "aurora-execution-1",
+    });
+
+    expect(sent).toMatchObject({
+      status: "funds_sent",
+      transferReference: "aurora-execution-1",
+    });
+
+    await expect(
+      service.recordMoonPayOfframpWebhook({
+        orderId: created.id,
+        moonPayTransactionId: "moonpay-sell-1",
+        baseCurrencyCode: "usdc_base",
+        depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+        status: "ready",
+      }),
+    ).resolves.toMatchObject({ status: "funds_sent" });
+
+    await expect(
+      service.recordMoonPayOfframpWebhook({
+        orderId: created.id,
+        moonPayTransactionId: "moonpay-sell-1",
+        baseCurrencyCode: "usdc_base",
+        depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+        status: "completed",
+      }),
+    ).resolves.toMatchObject({ status: "completed" });
+
+    await expect(
+      service.recordMoonPayOfframpWebhook({
+        orderId: created.id,
+        moonPayTransactionId: "moonpay-sell-1",
+        baseCurrencyCode: "usdc_base",
+        depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+        status: "ready",
+      }),
+    ).resolves.toMatchObject({ status: "completed" });
+
+    await expect(
+      service.markMoonPayOfframpFundsSent({
+        userId: owner.id,
+        orderId: created.id,
+        transferReference: "aurora-execution-1",
+      }),
+    ).resolves.toMatchObject({ status: "funds_sent" });
+
+    await expect(
+      service.markMoonPayOfframpFundsSent({
+        userId: other.id,
+        orderId: created.id,
+        transferReference: "aurora-execution-1",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 

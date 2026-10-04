@@ -205,3 +205,23 @@ export async function resolveKeptFundingAssets():
         );
     }
 }
+export async function resolveKeptWithdrawalAsset(input: {
+    readonly blockchain: string;
+    readonly symbol: string;
+}): Promise<FundingAsset> {
+    const result = await intentsConnectApi.listSupportedTokens();
+    const token = result.out?.find(
+        (candidate) =>
+            candidate.blockchain === input.blockchain
+            && candidate.symbol === input.symbol,
+    );
+    const asset = toFundingAsset(token);
+
+    if (!asset) {
+        throw new Error(
+            `${input.symbol} on ${input.blockchain} is not currently supported for withdrawals.`,
+        );
+    }
+
+    return asset;
+}

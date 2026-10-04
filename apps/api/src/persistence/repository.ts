@@ -222,8 +222,16 @@ export class KeptRepository {
     readonly baseCurrencyCode: string;
     readonly depositWalletAddress: string;
     readonly depositWalletTag: string | null;
+    readonly status: "ready" | "completed" | "failed" | "cancelled";
     readonly now: Date;
   }) {
+    const status = {
+      ready: "READY",
+      completed: "COMPLETED",
+      failed: "FAILED",
+      cancelled: "CANCELLED",
+    }[input.status];
+
     const [order] = await this.db
       .update(moonPayOfframpOrders)
       .set({
@@ -231,13 +239,61 @@ export class KeptRepository {
         baseCurrencyCode: input.baseCurrencyCode,
         depositWalletAddress: input.depositWalletAddress,
         depositWalletTag: input.depositWalletTag,
-        status: "AWAITING_DEPOSIT",
+        status: sql`CASE
+          WHEN ${moonPayOfframpOrders.status} IN ('COMPLETED', 'FAILED', 'CANCELLED')
+            THEN ${moonPayOfframpOrders.status}
+          WHEN ${moonPayOfframpOrders.status} = 'FUNDS_SENT' AND ${status} = 'READY'
+            THEN 'FUNDS_SENT'
+          ELSE ${status}
+        END`,
         updatedAt: input.now,
       })
-      .where(eq(moonPayOfframpOrders.id, input.id))
+      .where(and(
+        eq(moonPayOfframpOrders.id, input.id),
+        sql`(${moonPayOfframpOrders.moonPayTransactionId} IS NULL OR ${moonPayOfframpOrders.moonPayTransactionId} = ${input.moonPayTransactionId})`,
+        sql`(${moonPayOfframpOrders.depositWalletAddress} IS NULL OR lower(${moonPayOfframpOrders.depositWalletAddress}) = lower(${input.depositWalletAddress}))`,
+      ))
       .returning();
 
     return order ?? null;
+  }
+
+  async markMoonPayOfframpFundsSent(input: {
+    readonly userId: string;
+    readonly id: string;
+    readonly transferReference: string;
+    readonly now: Date;
+  }) {
+    const [order] = await this.db
+      .update(moonPayOfframpOrders)
+      .set({
+        transferReference: input.transferReference,
+        fundsSentAt: input.now,
+        status: "FUNDS_SENT",
+        updatedAt: input.now,
+      })
+      .where(and(
+        eq(moonPayOfframpOrders.id, input.id),
+        eq(moonPayOfframpOrders.userId, input.userId),
+        eq(moonPayOfframpOrders.status, "READY"),
+      ))
+      .returning();
+
+    if (order) return order;
+
+    const existing = await this.findMoonPayOfframpOrderForOwner(
+      input.userId,
+      input.id,
+    );
+
+    if (
+      existing?.status === "FUNDS_SENT"
+      && existing.transferReference === input.transferReference
+    ) {
+      return existing;
+    }
+
+    return null;
   }
 
   async lockGoalsForOwner(userId: string): Promise<void> {

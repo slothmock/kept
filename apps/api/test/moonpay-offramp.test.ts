@@ -54,7 +54,33 @@ describe("MoonPay off-ramp helpers", () => {
       baseCurrencyCode: "usdc_base",
       depositWalletAddress: "0x00000000000000000000000000000000000000A1",
       depositWalletTag: null,
+      status: "ready",
     });
+  });
+
+
+  it("maps terminal MoonPay sell statuses without trusting browser data", () => {
+    expect(parseMoonPaySellWebhook({
+      type: "sell_transaction_updated",
+      data: {
+        id: "moonpay-transaction-1",
+        externalTransactionId: "order-1",
+        status: "completed",
+        baseCurrency: { code: "usdc_base" },
+        depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      },
+    })?.status).toBe("completed");
+
+    expect(parseMoonPaySellWebhook({
+      type: "sell_transaction_updated",
+      data: {
+        id: "moonpay-transaction-1",
+        externalTransactionId: "order-1",
+        status: "cancelled",
+        baseCurrency: { code: "usdc_base" },
+        depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      },
+    })?.status).toBe("cancelled");
   });
 
   it("ignores non-Base or malformed sell events", () => {

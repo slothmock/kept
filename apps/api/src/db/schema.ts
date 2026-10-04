@@ -47,6 +47,7 @@ export const accountTransactionTypeEnum = pgEnum(
     "SAVINGS_DEPOSIT",
     "SAVINGS_WITHDRAWAL",
     "CRYPTO_WITHDRAWAL",
+    "FIAT_WITHDRAWAL",
     "REWARD",
   ],
 );
@@ -265,6 +266,8 @@ export const moonPayOfframpOrders = pgTable(
     moonPayTransactionId: text("moonpay_transaction_id"),
     depositWalletAddress: text("deposit_wallet_address"),
     depositWalletTag: text("deposit_wallet_tag"),
+    transferReference: text("transfer_reference"),
+    fundsSentAt: timestamp("funds_sent_at", { withTimezone: true }),
     status: text("status").notNull().default("PENDING_WIDGET"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
@@ -278,7 +281,7 @@ export const moonPayOfframpOrders = pgTable(
     check("moonpay_offramp_orders_amount_positive", sql`${table.amountAtomic} > 0`),
     check(
       "moonpay_offramp_orders_status_valid",
-      sql`${table.status} IN ('PENDING_WIDGET', 'AWAITING_DEPOSIT', 'COMPLETED', 'FAILED')`,
+      sql`${table.status} IN ('PENDING_WIDGET', 'AWAITING_DEPOSIT_DETAILS', 'READY', 'FUNDS_SENT', 'COMPLETED', 'FAILED', 'CANCELLED')`,
     ),
   ],
 );

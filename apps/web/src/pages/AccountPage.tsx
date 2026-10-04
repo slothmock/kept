@@ -215,6 +215,9 @@ function transactionLabel(
         case "crypto_withdrawal":
             return "Crypto withdrawal";
 
+        case "fiat_withdrawal":
+            return "Bank withdrawal";
+
         case "reward":
             return "Commitment reward";
     }

@@ -15,6 +15,7 @@ export interface MoonPaySellWebhook {
   readonly baseCurrencyCode: string;
   readonly depositWalletAddress: string;
   readonly depositWalletTag: string | null;
+  readonly status: "ready" | "completed" | "failed" | "cancelled";
 }
 
 export function parseUsdcAmountToAtomic(value: string): string {
@@ -89,6 +90,18 @@ function stringValue(record: Record<string, unknown> | null, key: string): strin
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+
+function moonPayOrderStatus(data: Record<string, unknown>):
+  "ready" | "completed" | "failed" | "cancelled" {
+  const raw = stringValue(data, "status")?.toLowerCase();
+
+  if (raw === "completed") return "completed";
+  if (raw === "failed") return "failed";
+  if (raw === "cancelled" || raw === "canceled") return "cancelled";
+
+  return "ready";
+}
+
 export function parseMoonPaySellWebhook(body: unknown): MoonPaySellWebhook | null {
   const root = asRecord(body);
   if (!root) return null;
@@ -137,5 +150,6 @@ export function parseMoonPaySellWebhook(body: unknown): MoonPaySellWebhook | nul
     baseCurrencyCode: "usdc_base",
     depositWalletAddress,
     depositWalletTag,
+    status: moonPayOrderStatus(data),
   };
 }
