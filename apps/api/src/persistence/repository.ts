@@ -7,6 +7,7 @@ import {
   commitmentDefinitions,
   goalShareAllocations,
   idempotencyRecords,
+  moonPayOfframpOrders,
   savingsGoals,
   userCommitments,
   users,
@@ -186,6 +187,114 @@ export class KeptRepository {
         ),
       )
       .limit(limit);
+  }
+
+  async createMoonPayOfframpOrder(
+    input: typeof moonPayOfframpOrders.$inferInsert,
+  ) {
+    const [order] = await this.db
+      .insert(moonPayOfframpOrders)
+      .values(input)
+      .returning();
+
+    return order;
+  }
+
+  async findMoonPayOfframpOrderForOwner(
+    userId: string,
+    id: string,
+  ) {
+    const [order] = await this.db
+      .select()
+      .from(moonPayOfframpOrders)
+      .where(and(
+        eq(moonPayOfframpOrders.id, id),
+        eq(moonPayOfframpOrders.userId, userId),
+      ))
+      .limit(1);
+
+    return order ?? null;
+  }
+
+  async updateMoonPayOfframpOrderFromWebhook(input: {
+    readonly id: string;
+    readonly moonPayTransactionId: string;
+    readonly baseCurrencyCode: string;
+    readonly depositWalletAddress: string;
+    readonly depositWalletTag: string | null;
+    readonly status: "ready" | "completed" | "failed" | "cancelled";
+    readonly now: Date;
+  }) {
+    const status = {
+      ready: "READY",
+      completed: "COMPLETED",
+      failed: "FAILED",
+      cancelled: "CANCELLED",
+    }[input.status];
+
+    const [order] = await this.db
+      .update(moonPayOfframpOrders)
+      .set({
+        moonPayTransactionId: input.moonPayTransactionId,
+        baseCurrencyCode: input.baseCurrencyCode,
+        depositWalletAddress: input.depositWalletAddress,
+        depositWalletTag: input.depositWalletTag,
+        status: sql`CASE
+          WHEN ${moonPayOfframpOrders.status} IN ('COMPLETED', 'FAILED', 'CANCELLED')
+            THEN ${moonPayOfframpOrders.status}
+          WHEN ${moonPayOfframpOrders.status} = 'FUNDS_SENT' AND ${status} = 'READY'
+            THEN 'FUNDS_SENT'
+          ELSE ${status}
+        END`,
+        updatedAt: input.now,
+      })
+      .where(and(
+        eq(moonPayOfframpOrders.id, input.id),
+        sql`(${moonPayOfframpOrders.moonPayTransactionId} IS NULL OR ${moonPayOfframpOrders.moonPayTransactionId} = ${input.moonPayTransactionId})`,
+        sql`(${moonPayOfframpOrders.depositWalletAddress} IS NULL OR lower(${moonPayOfframpOrders.depositWalletAddress}) = lower(${input.depositWalletAddress}))`,
+      ))
+      .returning();
+
+    return order ?? null;
+  }
+
+  async markMoonPayOfframpFundsSent(input: {
+    readonly userId: string;
+    readonly id: string;
+    readonly transferReference: string;
+    readonly now: Date;
+  }) {
+    const [order] = await this.db
+      .update(moonPayOfframpOrders)
+      .set({
+        transferReference: input.transferReference,
+        fundsSentAt: input.now,
+        status: "FUNDS_SENT",
+        updatedAt: input.now,
+      })
+      .where(and(
+        eq(moonPayOfframpOrders.id, input.id),
+        eq(moonPayOfframpOrders.userId, input.userId),
+        eq(moonPayOfframpOrders.status, "READY"),
+      ))
+      .returning();
+
+    if (order) return order;
+
+    const existing = await this.findMoonPayOfframpOrderForOwner(
+      input.userId,
+      input.id,
+    );
+
+    if (
+      existing
+      && existing.transferReference === input.transferReference
+      && ["FUNDS_SENT", "COMPLETED", "FAILED", "CANCELLED"].includes(existing.status)
+    ) {
+      return existing;
+    }
+
+    return null;
   }
 
   async lockGoalsForOwner(userId: string): Promise<void> {

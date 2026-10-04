@@ -52,6 +52,26 @@ function buildDependencies(
 ): ApiDependencies {
   let currentCommitment: CommitmentDto = commitment;
 
+  let currentMoonPayOrder = {
+    id: "moonpay-order-1",
+    amountAtomic: "20000000",
+    baseCurrencyCode: "usdc_base",
+    moonPayTransactionId: null as string | null,
+    depositWalletAddress: null as string | null,
+    depositWalletTag: null as string | null,
+    transferReference: null as string | null,
+    fundsSentAt: null as string | null,
+    status: "pending_widget" as
+      | "pending_widget"
+      | "ready"
+      | "funds_sent"
+      | "completed"
+      | "failed"
+      | "cancelled",
+    createdAt: "2026-10-03T00:00:00.000Z",
+    updatedAt: "2026-10-03T00:00:00.000Z",
+  };
+
   return {
     chainId: 143,
 
@@ -83,6 +103,45 @@ function buildDependencies(
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],
       listTransactions: async () => [],
+      createMoonPayOfframpOrder: vi.fn(async (input) => {
+        currentMoonPayOrder = {
+          ...currentMoonPayOrder,
+          amountAtomic: input.amountAtomic,
+          moonPayTransactionId: null,
+          depositWalletAddress: null,
+          depositWalletTag: null,
+          status: "pending_widget",
+        };
+        return currentMoonPayOrder;
+      }),
+      getMoonPayOfframpOrder: vi.fn(async (_userId, id) =>
+        id === currentMoonPayOrder.id ? currentMoonPayOrder : null
+      ),
+      recordMoonPayOfframpWebhook: vi.fn(async (input) => {
+        currentMoonPayOrder = {
+          ...currentMoonPayOrder,
+          moonPayTransactionId: input.moonPayTransactionId,
+          baseCurrencyCode: input.baseCurrencyCode,
+          depositWalletAddress: input.depositWalletAddress,
+          depositWalletTag: input.depositWalletTag ?? null,
+          status: input.status ?? "ready",
+          updatedAt: "2026-10-03T00:01:00.000Z",
+        };
+        return currentMoonPayOrder;
+      }),
+      markMoonPayOfframpFundsSent: vi.fn(async (input) => {
+        if (input.orderId !== currentMoonPayOrder.id) {
+          throw new Error("unknown MoonPay order");
+        }
+        currentMoonPayOrder = {
+          ...currentMoonPayOrder,
+          transferReference: input.transferReference,
+          fundsSentAt: "2026-10-03T00:02:00.000Z",
+          status: "funds_sent",
+          updatedAt: "2026-10-03T00:02:00.000Z",
+        };
+        return currentMoonPayOrder;
+      }),
       recordTransaction: async (input) => ({
         id: "transaction-1",
         type: "savings_deposit" as const,
@@ -203,6 +262,7 @@ function buildDependencies(
       baseUrl: "https://api.moonpay.example",
       publishableKey: "moonpay-publishable-key",
       secretKey: "moonpay-secret-key",
+      webhookKey: "moonpay-webhook-key",
     },
 
     savingsPerformance: {
@@ -283,6 +343,157 @@ describe("Kept HTTP API", () => {
         .update(new URL(url).search)
         .digest("base64"),
     });
+    await app.close();
+  });
+
+  it("creates a persistent MoonPay off-ramp order and correlates the widget URL", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies, { webOrigin: "https://kept.example" });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/offramp-url",
+      headers: { ...auth, "x-forwarded-for": "198.51.100.4" },
+      payload: { amount: "20.00" },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const result = response.json<{ url: string; orderId: string }>();
+    const parsed = new URL(result.url);
+
+    expect(result.orderId).toBe("moonpay-order-1");
+    expect(dependencies.persistence.createMoonPayOfframpOrder).toHaveBeenCalledWith({
+      userId: user.id,
+      amountAtomic: "20000000",
+    });
+    expect(parsed.searchParams.get("baseCurrencyCode")).toBe("usdc_base");
+    expect(parsed.searchParams.get("baseCurrencyAmount")).toBe("20.00");
+    expect(parsed.searchParams.get("lockAmount")).toBe("true");
+    expect(parsed.searchParams.get("apiKey")).toBe("moonpay-publishable-key");
+    expect(parsed.searchParams.get("externalTransactionId")).toBe("moonpay-order-1");
+    expect(parsed.searchParams.get("redirectURL")).toBe(
+      "https://kept.example/dashboard?moonpayOrderId=moonpay-order-1",
+    );
+    expect(parsed.searchParams.get("signature")).toBeTruthy();
+
+    await app.close();
+  });
+
+  it("returns MoonPay off-ramp order state only through authenticated ownership", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/moonpay/offramp-orders/moonpay-order-1",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "moonpay-order-1",
+      status: "pending_widget",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: null,
+    });
+    expect(dependencies.persistence.getMoonPayOfframpOrder).toHaveBeenCalledWith(
+      user.id,
+      "moonpay-order-1",
+    );
+
+    await app.close();
+  });
+
+  it("stores the Base deposit address only from a valid signed MoonPay webhook", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+    const body = JSON.stringify({
+      type: "sell_transaction_created",
+      data: {
+        id: "moonpay-transaction-1",
+        externalTransactionId: "moonpay-order-1",
+        baseCurrency: { code: "usdc_base" },
+        depositWallet: {
+          walletAddress: "0x00000000000000000000000000000000000000A1",
+        },
+      },
+    });
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHmac("sha256", "moonpay-webhook-key")
+      .update(`${timestamp}.${body}`)
+      .digest("hex");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/webhook",
+      headers: {
+        "content-type": "application/json",
+        "moonpay-signature-v2": `t=${timestamp},s=${signature}`,
+      },
+      payload: body,
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(dependencies.persistence.recordMoonPayOfframpWebhook).toHaveBeenCalledWith({
+      orderId: "moonpay-order-1",
+      moonPayTransactionId: "moonpay-transaction-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      depositWalletTag: null,
+      status: "ready",
+    });
+
+    await app.close();
+  });
+
+  it("marks a verified owned MoonPay order as funds sent", async () => {
+    const dependencies = buildDependencies();
+    await dependencies.persistence.recordMoonPayOfframpWebhook({
+      orderId: "moonpay-order-1",
+      moonPayTransactionId: "moonpay-transaction-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "ready",
+    });
+
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/offramp-orders/moonpay-order-1/submitted",
+      headers: auth,
+      payload: { transferReference: "aurora-execution-1" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "moonpay-order-1",
+      status: "funds_sent",
+      transferReference: "aurora-execution-1",
+    });
+    expect(dependencies.persistence.markMoonPayOfframpFundsSent).toHaveBeenCalledWith({
+      userId: user.id,
+      orderId: "moonpay-order-1",
+      transferReference: "aurora-execution-1",
+    });
+
+    await app.close();
+  });
+
+  it("rejects MoonPay webhooks with an invalid signature", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/webhook",
+      headers: {
+        "content-type": "application/json",
+        "moonpay-signature-v2": "t=1,s=deadbeef",
+      },
+      payload: JSON.stringify({ type: "sell_transaction_created", data: {} }),
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(dependencies.persistence.recordMoonPayOfframpWebhook).not.toHaveBeenCalled();
+
     await app.close();
   });
 

@@ -93,12 +93,36 @@ export type TransactionType =
   | "savings_deposit"
   | "savings_withdrawal"
   | "crypto_withdrawal"
+  | "fiat_withdrawal"
   | "reward";
 
 export type TransactionStatus =
   | "pending"
   | "completed"
   | "failed";
+
+export type MoonPayOfframpOrderStatus =
+  | "pending_widget"
+  | "awaiting_deposit_details"
+  | "ready"
+  | "funds_sent"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface MoonPayOfframpOrderDto {
+  readonly id: string;
+  readonly amountAtomic: string;
+  readonly baseCurrencyCode: string;
+  readonly moonPayTransactionId: string | null;
+  readonly depositWalletAddress: string | null;
+  readonly depositWalletTag: string | null;
+  readonly transferReference: string | null;
+  readonly fundsSentAt: string | null;
+  readonly status: MoonPayOfframpOrderStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
 
 export interface TransactionDto {
   readonly id: string;
@@ -357,6 +381,7 @@ type AccountTransactionRow = {
   | "SAVINGS_DEPOSIT"
   | "SAVINGS_WITHDRAWAL"
   | "CRYPTO_WITHDRAWAL"
+  | "FIAT_WITHDRAWAL"
   | "REWARD";
 
   readonly status:
@@ -406,6 +431,9 @@ function mapTransactionType(
     case "CRYPTO_WITHDRAWAL":
       return "crypto_withdrawal";
 
+    case "FIAT_WITHDRAWAL":
+      return "fiat_withdrawal";
+
     case "REWARD":
       return "reward";
   }
@@ -444,6 +472,49 @@ function mapTransaction(
 
     transactionHash: row.transactionHash,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function mapMoonPayOfframpOrder(row: {
+  id: string;
+  amountAtomic: string;
+  baseCurrencyCode: string;
+  moonPayTransactionId: string | null;
+  depositWalletAddress: string | null;
+  depositWalletTag: string | null;
+  transferReference: string | null;
+  fundsSentAt: Date | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): MoonPayOfframpOrderDto {
+  const status: MoonPayOfframpOrderStatus =
+    row.status === "PENDING_WIDGET"
+      ? "pending_widget"
+      : row.status === "AWAITING_DEPOSIT_DETAILS"
+        ? "awaiting_deposit_details"
+        : row.status === "READY"
+          ? "ready"
+          : row.status === "FUNDS_SENT"
+            ? "funds_sent"
+            : row.status === "COMPLETED"
+              ? "completed"
+              : row.status === "CANCELLED"
+                ? "cancelled"
+                : "failed";
+
+  return {
+    id: row.id,
+    amountAtomic: row.amountAtomic,
+    baseCurrencyCode: row.baseCurrencyCode,
+    moonPayTransactionId: row.moonPayTransactionId,
+    depositWalletAddress: row.depositWalletAddress,
+    depositWalletTag: row.depositWalletTag,
+    transferReference: row.transferReference,
+    fundsSentAt: row.fundsSentAt?.toISOString() ?? null,
+    status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -619,6 +690,104 @@ export class KeptPersistenceService {
     }
 
     return mapWallet(created);
+  }
+
+  async createMoonPayOfframpOrder(input: {
+    readonly userId: string;
+    readonly amountAtomic: string;
+  }): Promise<MoonPayOfframpOrderDto> {
+    const amountAtomic = requireAtomicAmount(input.amountAtomic);
+    if (BigInt(amountAtomic) <= 0n) {
+      throw new PersistenceValidationError("amountAtomic must be greater than zero");
+    }
+
+    const repository = new KeptRepository(this.db);
+    if (!(await repository.findUser(input.userId))) {
+      throw new NotFoundError("User");
+    }
+
+    const now = new Date();
+    const order = await repository.createMoonPayOfframpOrder({
+      id: randomUUID(),
+      userId: input.userId,
+      amountAtomic,
+      baseCurrencyCode: "usdc_base",
+      status: "PENDING_WIDGET",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    if (!order) {
+      throw new Error("MoonPay off-ramp order insert did not return a record");
+    }
+
+    return mapMoonPayOfframpOrder(order);
+  }
+
+  async getMoonPayOfframpOrder(
+    userId: string,
+    id: string,
+  ): Promise<MoonPayOfframpOrderDto | null> {
+    const order = await new KeptRepository(this.db)
+      .findMoonPayOfframpOrderForOwner(userId, id);
+
+    return order ? mapMoonPayOfframpOrder(order) : null;
+  }
+
+  async recordMoonPayOfframpWebhook(input: {
+    readonly orderId: string;
+    readonly moonPayTransactionId: string;
+    readonly baseCurrencyCode: string;
+    readonly depositWalletAddress: string;
+    readonly depositWalletTag?: string | null;
+    readonly status?: "ready" | "completed" | "failed" | "cancelled";
+  }): Promise<MoonPayOfframpOrderDto> {
+    if (requireNonBlank(input.baseCurrencyCode, "baseCurrencyCode") !== "usdc_base") {
+      throw new PersistenceValidationError("MoonPay off-ramp asset must be Base USDC");
+    }
+
+    const order = await new KeptRepository(this.db)
+      .updateMoonPayOfframpOrderFromWebhook({
+        id: requireNonBlank(input.orderId, "orderId"),
+        moonPayTransactionId: requireNonBlank(
+          input.moonPayTransactionId,
+          "moonPayTransactionId",
+        ),
+        baseCurrencyCode: "usdc_base",
+        depositWalletAddress: requireNonBlank(
+          input.depositWalletAddress,
+          "depositWalletAddress",
+        ),
+        depositWalletTag: input.depositWalletTag?.trim() || null,
+        status: input.status ?? "ready",
+        now: new Date(),
+      });
+
+    if (!order) {
+      throw new NotFoundError("MoonPay off-ramp order");
+    }
+
+    return mapMoonPayOfframpOrder(order);
+  }
+
+  async markMoonPayOfframpFundsSent(input: {
+    readonly userId: string;
+    readonly orderId: string;
+    readonly transferReference: string;
+  }): Promise<MoonPayOfframpOrderDto> {
+    const repository = new KeptRepository(this.db);
+    const order = await repository.markMoonPayOfframpFundsSent({
+      userId: requireNonBlank(input.userId, "userId"),
+      id: requireNonBlank(input.orderId, "orderId"),
+      transferReference: requireNonBlank(input.transferReference, "transferReference"),
+      now: new Date(),
+    });
+
+    if (!order) {
+      throw new NotFoundError("MoonPay off-ramp order");
+    }
+
+    return mapMoonPayOfframpOrder(order);
   }
 
   async createGoal(input: {
