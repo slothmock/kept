@@ -746,28 +746,52 @@ export class KeptPersistenceService {
       throw new PersistenceValidationError("MoonPay off-ramp asset must be Base USDC");
     }
 
-    const order = await new KeptRepository(this.db)
-      .updateMoonPayOfframpOrderFromWebhook({
-        id: requireNonBlank(input.orderId, "orderId"),
-        moonPayTransactionId: requireNonBlank(
-          input.moonPayTransactionId,
-          "moonPayTransactionId",
-        ),
+    const orderId = requireNonBlank(input.orderId, "orderId");
+    const moonPayTransactionId = requireNonBlank(
+      input.moonPayTransactionId,
+      "moonPayTransactionId",
+    );
+    const depositWalletAddress = requireNonBlank(
+      input.depositWalletAddress,
+      "depositWalletAddress",
+    );
+    const status = input.status ?? "ready";
+    const now = new Date();
+
+    return this.db.transaction(async (transaction) => {
+      const repository = new KeptRepository(transaction);
+      const order = await repository.updateMoonPayOfframpOrderFromWebhook({
+        id: orderId,
+        moonPayTransactionId,
         baseCurrencyCode: "usdc_base",
-        depositWalletAddress: requireNonBlank(
-          input.depositWalletAddress,
-          "depositWalletAddress",
-        ),
+        depositWalletAddress,
         depositWalletTag: input.depositWalletTag?.trim() || null,
-        status: input.status ?? "ready",
-        now: new Date(),
+        status,
+        now,
       });
 
-    if (!order) {
-      throw new NotFoundError("MoonPay off-ramp order");
-    }
+      if (!order) {
+        throw new NotFoundError("MoonPay off-ramp order");
+      }
 
-    return mapMoonPayOfframpOrder(order);
+      const transactionStatus =
+        status === "completed"
+          ? "COMPLETED"
+          : status === "failed" || status === "cancelled"
+            ? "FAILED"
+            : null;
+
+      if (transactionStatus) {
+        await repository.updateMoonPayFiatWithdrawalTransactionStatus({
+          userId: order.userId,
+          externalReference: moonPayTransactionId,
+          status: transactionStatus,
+          now,
+        });
+      }
+
+      return mapMoonPayOfframpOrder(order);
+    });
   }
 
   async markMoonPayOfframpFundsSent(input: {
@@ -775,19 +799,64 @@ export class KeptPersistenceService {
     readonly orderId: string;
     readonly transferReference: string;
   }): Promise<MoonPayOfframpOrderDto> {
-    const repository = new KeptRepository(this.db);
-    const order = await repository.markMoonPayOfframpFundsSent({
-      userId: requireNonBlank(input.userId, "userId"),
-      id: requireNonBlank(input.orderId, "orderId"),
-      transferReference: requireNonBlank(input.transferReference, "transferReference"),
-      now: new Date(),
+    const userId = requireNonBlank(input.userId, "userId");
+    const orderId = requireNonBlank(input.orderId, "orderId");
+    const transferReference = requireNonBlank(
+      input.transferReference,
+      "transferReference",
+    );
+    const now = new Date();
+
+    return this.db.transaction(async (transaction) => {
+      const repository = new KeptRepository(transaction);
+      const order = await repository.markMoonPayOfframpFundsSent({
+        userId,
+        id: orderId,
+        transferReference,
+        now,
+      });
+
+      if (!order || !order.moonPayTransactionId) {
+        throw new NotFoundError("MoonPay off-ramp order");
+      }
+
+      const transactionStatus =
+        order.status === "COMPLETED"
+          ? "COMPLETED"
+          : order.status === "FAILED" || order.status === "CANCELLED"
+            ? "FAILED"
+            : "PENDING";
+
+      const fiatTransaction =
+        await repository.ensureMoonPayFiatWithdrawalTransaction({
+          id: randomUUID(),
+          userId,
+          amountAtomic: order.amountAtomic,
+          externalReference: order.moonPayTransactionId,
+          status: transactionStatus,
+          now,
+        });
+
+      if (!fiatTransaction) {
+        throw new Error(
+          "MoonPay fiat withdrawal transaction could not be persisted",
+        );
+      }
+
+      if (
+        transactionStatus !== "PENDING"
+        && fiatTransaction.status !== transactionStatus
+      ) {
+        await repository.updateMoonPayFiatWithdrawalTransactionStatus({
+          userId,
+          externalReference: order.moonPayTransactionId,
+          status: transactionStatus,
+          now,
+        });
+      }
+
+      return mapMoonPayOfframpOrder(order);
     });
-
-    if (!order) {
-      throw new NotFoundError("MoonPay off-ramp order");
-    }
-
-    return mapMoonPayOfframpOrder(order);
   }
 
   async createGoal(input: {

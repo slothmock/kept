@@ -92,14 +92,16 @@ function stringValue(record: Record<string, unknown> | null, key: string): strin
 
 
 function moonPayOrderStatus(data: Record<string, unknown>):
-  "ready" | "completed" | "failed" | "cancelled" {
+  "ready" | "completed" | "failed" | "cancelled" | null {
   const raw = stringValue(data, "status")?.toLowerCase();
 
+  if (raw === undefined) return "ready";
+  if (raw === "ready") return "ready";
   if (raw === "completed") return "completed";
   if (raw === "failed") return "failed";
   if (raw === "cancelled" || raw === "canceled") return "cancelled";
 
-  return "ready";
+  return null;
 }
 
 export function parseMoonPaySellWebhook(body: unknown): MoonPaySellWebhook | null {
@@ -128,11 +130,14 @@ export function parseMoonPaySellWebhook(body: unknown): MoonPaySellWebhook | nul
     stringValue(depositWallet, "walletAddressTag")
     ?? stringValue(data, "depositWalletTag");
 
+  const status = moonPayOrderStatus(data);
+
   if (
     !orderId
     || !moonPayTransactionId
     || baseCurrencyCode?.toLowerCase() !== "usdc_base"
     || !rawDepositAddress
+    || status === null
   ) {
     return null;
   }
@@ -150,6 +155,6 @@ export function parseMoonPaySellWebhook(body: unknown): MoonPaySellWebhook | nul
     baseCurrencyCode: "usdc_base",
     depositWalletAddress,
     depositWalletTag,
-    status: moonPayOrderStatus(data),
+    status,
   };
 }

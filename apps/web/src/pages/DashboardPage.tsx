@@ -347,6 +347,7 @@ interface DashboardPageProps {
   | "waiting"
   | "review"
   | "sending"
+  | "processing"
   | "complete"
   | "failed";
 

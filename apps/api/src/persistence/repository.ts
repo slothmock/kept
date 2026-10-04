@@ -165,6 +165,71 @@ export class KeptRepository {
     return transaction;
   }
 
+  async ensureMoonPayFiatWithdrawalTransaction(input: {
+    readonly id: string;
+    readonly userId: string;
+    readonly amountAtomic: string;
+    readonly externalReference: string;
+    readonly status: "PENDING" | "COMPLETED" | "FAILED";
+    readonly now: Date;
+  }) {
+    const [inserted] = await this.db
+      .insert(accountTransactions)
+      .values({
+        id: input.id,
+        userId: input.userId,
+        goalId: null,
+        type: "FIAT_WITHDRAWAL",
+        status: input.status,
+        amountAtomic: input.amountAtomic,
+        asset: "USDC",
+        description: "Withdrawn to bank",
+        chainId: null,
+        transactionHash: null,
+        externalReference: input.externalReference,
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (inserted) return inserted;
+
+    const [existing] = await this.db
+      .select()
+      .from(accountTransactions)
+      .where(and(
+        eq(accountTransactions.userId, input.userId),
+        eq(accountTransactions.type, "FIAT_WITHDRAWAL"),
+        eq(accountTransactions.externalReference, input.externalReference),
+      ))
+      .limit(1);
+
+    return existing ?? null;
+  }
+
+  async updateMoonPayFiatWithdrawalTransactionStatus(input: {
+    readonly userId: string;
+    readonly externalReference: string;
+    readonly status: "COMPLETED" | "FAILED";
+    readonly now: Date;
+  }) {
+    const [transaction] = await this.db
+      .update(accountTransactions)
+      .set({
+        status: input.status,
+        updatedAt: input.now,
+      })
+      .where(and(
+        eq(accountTransactions.userId, input.userId),
+        eq(accountTransactions.type, "FIAT_WITHDRAWAL"),
+        eq(accountTransactions.externalReference, input.externalReference),
+      ))
+      .returning();
+
+    return transaction ?? null;
+  }
+
   async listAccountTransactionsForOwner(
     userId: string,
     limit = 100,
@@ -268,33 +333,23 @@ export class KeptRepository {
       .update(moonPayOfframpOrders)
       .set({
         transferReference: input.transferReference,
-        fundsSentAt: input.now,
-        status: "FUNDS_SENT",
+        fundsSentAt: sql`coalesce(${moonPayOfframpOrders.fundsSentAt}, ${input.now})`,
+        status: sql`CASE
+          WHEN ${moonPayOfframpOrders.status} = 'READY'
+            THEN 'FUNDS_SENT'
+          ELSE ${moonPayOfframpOrders.status}
+        END`,
         updatedAt: input.now,
       })
       .where(and(
         eq(moonPayOfframpOrders.id, input.id),
         eq(moonPayOfframpOrders.userId, input.userId),
-        eq(moonPayOfframpOrders.status, "READY"),
+        sql`${moonPayOfframpOrders.status} IN ('READY', 'FUNDS_SENT', 'COMPLETED', 'FAILED', 'CANCELLED')`,
+        sql`(${moonPayOfframpOrders.transferReference} IS NULL OR ${moonPayOfframpOrders.transferReference} = ${input.transferReference})`,
       ))
       .returning();
 
-    if (order) return order;
-
-    const existing = await this.findMoonPayOfframpOrderForOwner(
-      input.userId,
-      input.id,
-    );
-
-    if (
-      existing
-      && existing.transferReference === input.transferReference
-      && ["FUNDS_SENT", "COMPLETED", "FAILED", "CANCELLED"].includes(existing.status)
-    ) {
-      return existing;
-    }
-
-    return null;
+    return order ?? null;
   }
 
   async lockGoalsForOwner(userId: string): Promise<void> {
