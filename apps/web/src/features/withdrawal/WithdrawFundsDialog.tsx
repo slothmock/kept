@@ -352,8 +352,9 @@ export function WithdrawFundsDialog({
                                     icon={
                                         <Landmark className="size-5" />
                                     }
-                                    title="Bank account"
+                                    title="Bank account — Coming Soon"
                                     description="Withdraw money to your bank account."
+                                    disabled
                                     onClick={() =>
                                         setView(
                                             "bank",
@@ -766,6 +767,9 @@ interface WithdrawalMethodProps {
     readonly description:
     string;
 
+    readonly disabled?:
+    boolean;
+
     readonly onClick:
     () => void;
 }
@@ -775,11 +779,15 @@ function WithdrawalMethod({
     icon,
     title,
     description,
+    disabled = false,
     onClick,
 }: WithdrawalMethodProps) {
     return (
         <button
             type="button"
+            disabled={
+                disabled
+            }
             onClick={
                 onClick
             }
@@ -789,6 +797,8 @@ function WithdrawalMethod({
                 hover:border-primary/30 hover:bg-accent/30
                 focus-visible:outline-none focus-visible:ring-2
                 focus-visible:ring-ring focus-visible:ring-offset-2
+                disabled:cursor-not-allowed disabled:opacity-50
+                disabled:hover:border-border disabled:hover:bg-background
             "
         >
             <div
