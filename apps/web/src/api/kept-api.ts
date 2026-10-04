@@ -103,6 +103,7 @@ export interface TransactionDto {
   readonly goalId: string | null;
   readonly chainId: string | null;
   readonly transactionHash: string | null;
+  readonly externalReference: string | null;
   readonly createdAt: string;
 }
 

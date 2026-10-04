@@ -285,7 +285,7 @@ export class KeptRepository {
     readonly id: string;
     readonly moonPayTransactionId: string;
     readonly baseCurrencyCode: string;
-    readonly depositWalletAddress: string;
+    readonly depositWalletAddress: string | null;
     readonly depositWalletTag: string | null;
     readonly status: "ready" | "completed" | "failed" | "cancelled";
     readonly now: Date;
@@ -297,13 +297,18 @@ export class KeptRepository {
       cancelled: "CANCELLED",
     }[input.status];
 
+    const depositAddressMatches =
+      input.depositWalletAddress === null
+        ? sql`true`
+        : sql`(${moonPayOfframpOrders.depositWalletAddress} IS NULL OR lower(${moonPayOfframpOrders.depositWalletAddress}) = lower(${input.depositWalletAddress}))`;
+
     const [order] = await this.db
       .update(moonPayOfframpOrders)
       .set({
         moonPayTransactionId: input.moonPayTransactionId,
         baseCurrencyCode: input.baseCurrencyCode,
-        depositWalletAddress: input.depositWalletAddress,
-        depositWalletTag: input.depositWalletTag,
+        depositWalletAddress: sql`coalesce(${input.depositWalletAddress}, ${moonPayOfframpOrders.depositWalletAddress})`,
+        depositWalletTag: sql`coalesce(${input.depositWalletTag}, ${moonPayOfframpOrders.depositWalletTag})`,
         status: sql`CASE
           WHEN ${moonPayOfframpOrders.status} IN ('COMPLETED', 'FAILED', 'CANCELLED')
             THEN ${moonPayOfframpOrders.status}
@@ -316,7 +321,7 @@ export class KeptRepository {
       .where(and(
         eq(moonPayOfframpOrders.id, input.id),
         sql`(${moonPayOfframpOrders.moonPayTransactionId} IS NULL OR ${moonPayOfframpOrders.moonPayTransactionId} = ${input.moonPayTransactionId})`,
-        sql`(${moonPayOfframpOrders.depositWalletAddress} IS NULL OR lower(${moonPayOfframpOrders.depositWalletAddress}) = lower(${input.depositWalletAddress}))`,
+        depositAddressMatches,
       ))
       .returning();
 

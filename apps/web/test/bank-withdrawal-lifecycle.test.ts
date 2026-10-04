@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   bankWithdrawalRefreshState,
+  createBankWithdrawalOrderStore,
   deliverBankWithdrawal,
 } from "../src/features/withdrawal/bank-withdrawal-lifecycle.js";
 
@@ -49,6 +50,43 @@ describe("bank withdrawal lifecycle", () => {
     expect(execute).toHaveBeenCalledTimes(1);
     expect(acknowledge).toHaveBeenCalledTimes(2);
     expect(pending.has("moonpay-order-1")).toBe(false);
+  });
+
+  it("persists the active order per wallet so a reload can resume polling", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        values.set(key, value);
+      },
+      removeItem: (key: string) => {
+        values.delete(key);
+      },
+    };
+
+    const firstWallet = createBankWithdrawalOrderStore(
+      storage,
+      "0xAa00000000000000000000000000000000000001",
+    );
+    const secondWallet = createBankWithdrawalOrderStore(
+      storage,
+      "0xBb00000000000000000000000000000000000002",
+    );
+
+    firstWallet.save("moonpay-order-1");
+
+    expect(firstWallet.load()).toBe("moonpay-order-1");
+    expect(secondWallet.load()).toBeNull();
+
+    const reloaded = createBankWithdrawalOrderStore(
+      storage,
+      "0xAA00000000000000000000000000000000000001",
+    );
+
+    expect(reloaded.load()).toBe("moonpay-order-1");
+
+    reloaded.clear();
+    expect(firstWallet.load()).toBeNull();
   });
 
   it("keeps funds-sent orders in processing until MoonPay reaches a terminal state", () => {

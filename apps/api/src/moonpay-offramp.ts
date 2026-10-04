@@ -13,7 +13,7 @@ export interface MoonPaySellWebhook {
   readonly orderId: string;
   readonly moonPayTransactionId: string;
   readonly baseCurrencyCode: string;
-  readonly depositWalletAddress: string;
+  readonly depositWalletAddress: string | null;
   readonly depositWalletTag: string | null;
   readonly status: "ready" | "completed" | "failed" | "cancelled";
 }
@@ -136,17 +136,20 @@ export function parseMoonPaySellWebhook(body: unknown): MoonPaySellWebhook | nul
     !orderId
     || !moonPayTransactionId
     || baseCurrencyCode?.toLowerCase() !== "usdc_base"
-    || !rawDepositAddress
     || status === null
+    || (status === "ready" && !rawDepositAddress)
   ) {
     return null;
   }
 
-  let depositWalletAddress: string;
-  try {
-    depositWalletAddress = getAddress(rawDepositAddress);
-  } catch {
-    return null;
+  let depositWalletAddress: string | null = null;
+
+  if (rawDepositAddress) {
+    try {
+      depositWalletAddress = getAddress(rawDepositAddress);
+    } catch {
+      return null;
+    }
   }
 
   return {
