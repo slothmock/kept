@@ -210,6 +210,18 @@ function canonicalizeClientIp(
 function getCustomerIp(
   request: FastifyRequest,
 ): string {
+  const cloudflareClientIp =
+    request.headers["cf-connecting-ip"];
+
+  if (
+    typeof cloudflareClientIp
+    === "string"
+  ) {
+    return canonicalizeClientIp(
+      cloudflareClientIp,
+    );
+  }
+
   const trueClientIp =
     request.headers["true-client-ip"];
 

@@ -321,7 +321,11 @@ describe("Kept HTTP API", () => {
     const allowedIp = await app.inject({
       method: "GET",
       url: "/v1/moonpay/allowed-ip",
-      headers: { ...auth, "x-forwarded-for": "198.51.100.4, 10.0.0.1" },
+      headers: {
+        ...auth,
+        "cf-connecting-ip": "198.51.100.4",
+        "x-forwarded-for": "10.0.0.8, 10.0.0.1",
+      },
     });
     expect(allowedIp.statusCode).toBe(200);
     expect(allowedIp.json()).toEqual({
@@ -350,7 +354,11 @@ describe("Kept HTTP API", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/moonpay/offramp-url",
-      headers: { ...auth, "x-forwarded-for": "198.51.100.4" },
+      headers: {
+        ...auth,
+        "cf-connecting-ip": "198.51.100.4",
+        "x-forwarded-for": "10.0.0.8",
+      },
       payload: { amount: "20.00" },
     });
 
