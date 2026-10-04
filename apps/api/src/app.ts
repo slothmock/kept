@@ -1280,27 +1280,12 @@ export function buildApp(
         request,
         reply,
         async () => {
-          const secretKey =
-            dependencies.moonPay
-              .secretKey;
-
           const clientIp =
             getCustomerIp(request);
 
-          const allowedIpAddress =
-            createHmac(
-              "sha256",
-              secretKey,
-            )
-              .update(
-                clientIp,
-              )
-              .digest(
-                "base64",
-              );
-
           return {
-            allowedIpAddress,
+            allowedIpAddress:
+              clientIp,
           };
         },
       ),
@@ -1323,16 +1308,13 @@ export function buildApp(
           });
 
           const customerIp = getCustomerIp(request);
-          const ipHash = createHmac("sha256", dependencies.moonPay.secretKey)
-            .update(customerIp)
-            .digest("base64");
 
           const url = new URL(dependencies.moonPay.baseUrl);
           url.searchParams.set("apiKey", dependencies.moonPay.publishableKey);
           url.searchParams.set("baseCurrencyCode", "usdc_base");
           url.searchParams.set("baseCurrencyAmount", amount);
           url.searchParams.set("lockAmount", "true");
-          url.searchParams.set("allowedIpAddress", ipHash);
+          url.searchParams.set("allowedIpAddress", customerIp);
           url.searchParams.set("externalTransactionId", order.id);
 
           const primaryOrigin = allowedWebOrigins(webOrigin)[0];

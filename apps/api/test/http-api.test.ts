@@ -325,9 +325,7 @@ describe("Kept HTTP API", () => {
     });
     expect(allowedIp.statusCode).toBe(200);
     expect(allowedIp.json()).toEqual({
-      allowedIpAddress: createHmac("sha256", "moonpay-secret-key")
-        .update("198.51.100.4")
-        .digest("base64"),
+      allowedIpAddress: "198.51.100.4",
     });
 
     const url = "https://widget.moonpay.example/?apiKey=key&currencyCode=usd";
@@ -374,7 +372,18 @@ describe("Kept HTTP API", () => {
     expect(parsed.searchParams.get("redirectURL")).toBe(
       "https://kept.example/dashboard?moonpayOrderId=moonpay-order-1",
     );
-    expect(parsed.searchParams.get("signature")).toBeTruthy();
+    expect(parsed.searchParams.get("allowedIpAddress")).toBe(
+      "198.51.100.4",
+    );
+
+    const unsignedUrl = new URL(parsed);
+    unsignedUrl.searchParams.delete("signature");
+
+    expect(parsed.searchParams.get("signature")).toBe(
+      createHmac("sha256", "moonpay-secret-key")
+        .update(unsignedUrl.search)
+        .digest("base64"),
+    );
 
     await app.close();
   });
