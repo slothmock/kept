@@ -80,6 +80,9 @@ interface WithdrawFundsDialogProps {
     readonly bankAvailable?:
     boolean;
 
+    readonly bankEnabled?:
+    boolean;
+
     readonly onOpenChange: (
         open: boolean,
     ) => void;
@@ -212,6 +215,7 @@ export function WithdrawFundsDialog({
     cryptoEstimatedReceive = null,
 
     bankAvailable = false,
+    bankEnabled = false,
     bankAmount,
     bankSubmitting,
     bankStatus,
@@ -352,9 +356,15 @@ export function WithdrawFundsDialog({
                                     icon={
                                         <Landmark className="size-5" />
                                     }
-                                    title="Bank account — Coming Soon"
+                                    title={
+                                        bankEnabled
+                                            ? "Bank account"
+                                            : "Bank account — Coming Soon"
+                                    }
                                     description="Withdraw money to your bank account."
-                                    disabled
+                                    disabled={
+                                        !bankEnabled
+                                    }
                                     onClick={() =>
                                         setView(
                                             "bank",
