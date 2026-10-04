@@ -297,6 +297,11 @@ export class KeptRepository {
       cancelled: "CANCELLED",
     }[input.status];
 
+    const depositAddressMatches =
+      input.depositWalletAddress === null
+        ? sql`true`
+        : sql`(${moonPayOfframpOrders.depositWalletAddress} IS NULL OR lower(${moonPayOfframpOrders.depositWalletAddress}) = lower(${input.depositWalletAddress}))`;
+
     const [order] = await this.db
       .update(moonPayOfframpOrders)
       .set({
@@ -316,7 +321,7 @@ export class KeptRepository {
       .where(and(
         eq(moonPayOfframpOrders.id, input.id),
         sql`(${moonPayOfframpOrders.moonPayTransactionId} IS NULL OR ${moonPayOfframpOrders.moonPayTransactionId} = ${input.moonPayTransactionId})`,
-        sql`(${input.depositWalletAddress} IS NULL OR ${moonPayOfframpOrders.depositWalletAddress} IS NULL OR lower(${moonPayOfframpOrders.depositWalletAddress}) = lower(${input.depositWalletAddress}))`,
+        depositAddressMatches,
       ))
       .returning();
 
