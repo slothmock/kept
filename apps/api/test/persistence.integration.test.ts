@@ -381,6 +381,50 @@ describe.sequential("MoonPay fiat withdrawal accounting", () => {
     });
   });
 
+  it("settles an existing withdrawal from a terminal webhook that omits the deposit address", async () => {
+    const owner = await createUser("moonpay-terminal-no-address");
+    const created = await service.createMoonPayOfframpOrder({
+      userId: owner.id,
+      amountAtomic: "22000000",
+    });
+
+    await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-terminal-no-address-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "ready",
+    });
+
+    await service.markMoonPayOfframpFundsSent({
+      userId: owner.id,
+      orderId: created.id,
+      transferReference: "aurora-terminal-no-address-1",
+    });
+
+    const completed = await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-terminal-no-address-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: null,
+      status: "completed",
+    });
+
+    expect(completed).toMatchObject({
+      status: "completed",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+    });
+
+    await expect(
+      connection.pool.query(
+        "SELECT status FROM account_transactions WHERE user_id = $1 AND external_reference = $2",
+        [owner.id, "moonpay-terminal-no-address-1"],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ status: "COMPLETED" }],
+    });
+  });
+
   it("preserves a terminal MoonPay result when it arrives before the transfer acknowledgement", async () => {
     const owner = await createUser("moonpay-terminal-race");
     const created = await service.createMoonPayOfframpOrder({
