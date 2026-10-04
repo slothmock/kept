@@ -10,6 +10,8 @@ export { KeptPersistenceService } from "./service.js";
 export type {
   CommitmentDto,
   GoalDto,
+  MoonPayOfframpOrderDto,
+  MoonPayOfframpOrderStatus,
   TransactionDto,
   TransactionStatus,
   TransactionType,

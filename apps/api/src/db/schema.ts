@@ -47,6 +47,7 @@ export const accountTransactionTypeEnum = pgEnum(
     "SAVINGS_DEPOSIT",
     "SAVINGS_WITHDRAWAL",
     "CRYPTO_WITHDRAWAL",
+    "FIAT_WITHDRAWAL",
     "REWARD",
   ],
 );
@@ -252,6 +253,39 @@ export const accountTransactions = pgTable(
   ],
 );
 
+
+export const moonPayOfframpOrders = pgTable(
+  "moonpay_offramp_orders",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    amountAtomic: numeric("amount_atomic", { precision: 78, scale: 0 }).notNull(),
+    baseCurrencyCode: text("base_currency_code").notNull().default("usdc_base"),
+    moonPayTransactionId: text("moonpay_transaction_id"),
+    depositWalletAddress: text("deposit_wallet_address"),
+    depositWalletTag: text("deposit_wallet_tag"),
+    transferReference: text("transfer_reference"),
+    fundsSentAt: timestamp("funds_sent_at", { withTimezone: true }),
+    status: text("status").notNull().default("PENDING_WIDGET"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("moonpay_offramp_orders_user_created_idx")
+      .on(table.userId, table.createdAt),
+    uniqueIndex("moonpay_offramp_orders_transaction_unique")
+      .on(table.moonPayTransactionId)
+      .where(sql`${table.moonPayTransactionId} IS NOT NULL`),
+    check("moonpay_offramp_orders_amount_positive", sql`${table.amountAtomic} > 0`),
+    check(
+      "moonpay_offramp_orders_status_valid",
+      sql`${table.status} IN ('PENDING_WIDGET', 'AWAITING_DEPOSIT_DETAILS', 'READY', 'FUNDS_SENT', 'COMPLETED', 'FAILED', 'CANCELLED')`,
+    ),
+  ],
+);
+
 export const vaultActivityEvents = pgTable(
   "vault_activity_events",
   {
@@ -412,6 +446,7 @@ export const schema = {
   savingsGoals,
   goalShareAllocations,
   accountTransactions,
+  moonPayOfframpOrders,
   vaultActivityEvents,
   vaultActivityCursors,
   commitmentDefinitions,

@@ -581,6 +581,30 @@ describe(
                 ).toBeTruthy();
 
                 expect(
+                    screen.getByText(
+                        "Review transfer",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "You'll receive at least",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.queryByLabelText(
+                        "Amount",
+                    ),
+                ).toBeNull();
+
+                expect(
+                    screen.queryByText(
+                        "Source wallet",
+                    ),
+                ).toBeNull();
+
+                expect(
                     screen.getByRole(
                         "button",
                         {
@@ -724,7 +748,7 @@ describe(
         );
 
         it(
-            "invalidates the preview when the amount changes",
+            "returns from review to edit the transfer",
             async () => {
                 renderDialog();
 
@@ -738,13 +762,10 @@ describe(
                     ),
                 );
 
-                const amountInput =
+                fireEvent.change(
                     await screen.findByLabelText(
                         "Amount",
-                    );
-
-                fireEvent.change(
-                    amountInput,
+                    ),
                     {
                         target: {
                             value:
@@ -763,43 +784,40 @@ describe(
                     ),
                 );
 
-                await waitFor(
-                    () => {
-                        expect(
-                            screen.getByRole(
-                                "button",
-                                {
-                                    name:
-                                        "Confirm transfer",
-                                },
-                            ),
-                        ).toBeTruthy();
-                    },
-                );
-
-                fireEvent.change(
-                    amountInput,
-                    {
-                        target: {
-                            value:
-                                "25",
-                        },
-                    },
+                await screen.findByText(
+                    "Review transfer",
                 );
 
                 expect(
-                    screen.queryByRole(
-                        "button",
-                        {
-                            name:
-                                "Confirm transfer",
-                        },
+                    screen.queryByLabelText(
+                        "Amount",
                     ),
                 ).toBeNull();
 
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Back",
+                        },
+                    ),
+                );
+
+                const amountInput =
+                    await screen.findByLabelText(
+                        "Amount",
+                    );
+
+                expect(
+                    (amountInput as HTMLInputElement).value,
+                ).toBe(
+                    "20",
+                );
+
                 expect(
                     screen.queryByText(
-                        "Your transfer route is ready.",
+                        "Review transfer",
                     ),
                 ).toBeNull();
 

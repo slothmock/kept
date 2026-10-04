@@ -157,11 +157,32 @@ interface WithdrawFundsDialogProps {
     readonly bankError:
     string | null;
 
+    readonly bankPhase:
+    | "setup"
+    | "moonpay"
+    | "waiting"
+    | "review"
+    | "sending"
+    | "complete"
+    | "failed";
+
+    readonly bankReviewAmount:
+    string | null;
+
+    readonly bankMinimumReceive:
+    string | null;
+
     readonly onBankAmountChange: (
         value: string,
     ) => void;
 
     readonly onStartBankWithdrawal:
+    () => void;
+
+    readonly onRefreshBankWithdrawal:
+    () => void;
+
+    readonly onConfirmBankWithdrawal:
     () => void;
 }
 
@@ -194,6 +215,9 @@ export function WithdrawFundsDialog({
     bankSubmitting,
     bankStatus,
     bankError,
+    bankPhase,
+    bankReviewAmount,
+    bankMinimumReceive,
 
     onOpenChange,
     onAmountChange,
@@ -207,6 +231,8 @@ export function WithdrawFundsDialog({
 
     onBankAmountChange,
     onStartBankWithdrawal,
+    onRefreshBankWithdrawal,
+    onConfirmBankWithdrawal,
 }: WithdrawFundsDialogProps) {
     const [
         view,
@@ -215,6 +241,11 @@ export function WithdrawFundsDialog({
         useState<WithdrawalView>(
             "choose",
         );
+
+    const activeView: WithdrawalView =
+        bankPhase !== "setup"
+            ? "bank"
+            : view;
 
     const withdrawableAssets =
         position?.withdrawableAssets ??
@@ -262,7 +293,7 @@ export function WithdrawFundsDialog({
             }
         >
             <DialogContent className="sm:max-w-lg">
-                {view ===
+                {activeView ===
                     "choose" ? (
                     <>
                         <DialogHeader>
@@ -331,7 +362,7 @@ export function WithdrawFundsDialog({
                             )}
                         </div>
                     </>
-                ) : view ===
+                ) : activeView ===
                     "available-cash" ? (
                     <>
                         <DialogHeader>
@@ -474,7 +505,7 @@ export function WithdrawFundsDialog({
                             </Button>
                         </div>
                     </>
-                ) : view ===
+                ) : activeView ===
                     "crypto" ? (
                     <CryptoWithdrawalStep
                         availableAssets={
@@ -548,11 +579,10 @@ export function WithdrawFundsDialog({
                                     className="-ml-2"
                                     disabled={
                                         bankSubmitting
+                                        || bankPhase === "sending"
                                     }
                                     onClick={() =>
-                                        setView(
-                                            "choose",
-                                        )
+                                        setView("choose")
                                     }
                                 >
                                     <ArrowLeft className="size-4" />
@@ -565,79 +595,90 @@ export function WithdrawFundsDialog({
                             </DialogTitle>
 
                             <DialogDescription>
-                                Choose how much you'd like to withdraw.
-                                Bank details and identity checks are
-                                handled securely by our payment partner.
+                                {bankPhase === "setup"
+                                    ? "Choose how much you'd like to withdraw. Bank details and identity checks are handled securely by our payment partner."
+                                    : bankPhase === "review"
+                                      ? "Review the verified withdrawal details before money leaves Kept."
+                                      : "We'll keep this withdrawal secure while the payout is prepared."}
                             </DialogDescription>
                         </DialogHeader>
 
                         <div className="space-y-5">
-                            <div className="space-y-2">
-                                <label
-                                    htmlFor="withdraw-bank-amount"
-                                    className="text-sm font-medium"
-                                >
-                                    Amount
-                                </label>
-
-                                <div className="relative">
-                                    <Input
-                                        id="withdraw-bank-amount"
-                                        inputMode="decimal"
-                                        autoComplete="off"
-                                        value={
-                                            bankAmount
-                                        }
-                                        disabled={
-                                            bankSubmitting
-                                        }
-                                        placeholder="0.00"
-                                        className="pr-16"
-                                        onChange={
-                                            (
-                                                event,
-                                            ) =>
-                                                onBankAmountChange(
-                                                    event
-                                                        .target
-                                                        .value,
-                                                )
-                                        }
-                                    />
-
-                                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                                        USDC
-                                    </span>
-                                </div>
-
-                                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                                    <span>
-                                        Available to withdraw
-                                    </span>
-
-                                    <button
-                                        type="button"
-                                        disabled={
-                                            bankSubmitting ||
-                                            totalAvailableAssets ===
-                                            0n
-                                        }
-                                        className="font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50"
-                                        onClick={() =>
-                                            onBankAmountChange(
-                                                formatUsdc(
-                                                    totalAvailableAssets,
-                                                ),
-                                            )
-                                        }
+                            {bankPhase === "setup" ? (
+                                <div className="space-y-2">
+                                    <label
+                                        htmlFor="withdraw-bank-amount"
+                                        className="text-sm font-medium"
                                     >
-                                        {formatUsdc(
-                                            totalAvailableAssets,
-                                        )}{" "}
-                                        USDC
-                                    </button>
+                                        Amount
+                                    </label>
+
+                                    <div className="relative">
+                                        <Input
+                                            id="withdraw-bank-amount"
+                                            inputMode="decimal"
+                                            autoComplete="off"
+                                            value={bankAmount}
+                                            disabled={bankSubmitting}
+                                            placeholder="0.00"
+                                            className="pr-16"
+                                            onChange={(event) =>
+                                                onBankAmountChange(event.target.value)
+                                            }
+                                        />
+
+                                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            USDC
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                                        <span>Available to withdraw</span>
+
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                bankSubmitting
+                                                || totalAvailableAssets === 0n
+                                            }
+                                            className="font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50"
+                                            onClick={() =>
+                                                onBankAmountChange(
+                                                    formatUsdc(totalAvailableAssets),
+                                                )
+                                            }
+                                        >
+                                            {formatUsdc(totalAvailableAssets)} USDC
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : bankPhase === "review" ? (
+                                <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <span className="text-sm text-muted-foreground">
+                                            Withdrawal amount
+                                        </span>
+                                        <span className="text-sm font-medium tabular-nums">
+                                            {bankReviewAmount ?? "—"} USDC
+                                        </span>
+                                    </div>
+
+                                    {bankMinimumReceive && (
+                                        <div className="flex items-center justify-between gap-4">
+                                            <span className="text-sm text-muted-foreground">
+                                                Kept transfer minimum
+                                            </span>
+                                            <span className="text-sm font-medium tabular-nums">
+                                                {bankMinimumReceive} USDC
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <p className="border-t pt-3 text-xs leading-5 text-muted-foreground">
+                                        Your final bank payout and any MoonPay fees were shown during payout setup. Kept will only send funds using the verified withdrawal details received from MoonPay.
+                                    </p>
+                                </div>
+                            ) : null}
 
                             {bankError && (
                                 <p
@@ -657,26 +698,54 @@ export function WithdrawFundsDialog({
                                 </p>
                             )}
 
-                            <Button
-                                type="button"
-                                className="w-full"
-                                disabled={
-                                    bankSubmitting ||
-                                    bankAmount
-                                        .trim()
-                                        .length ===
-                                    0 ||
-                                    totalAvailableAssets ===
-                                    0n
-                                }
-                                onClick={
-                                    onStartBankWithdrawal
-                                }
-                            >
-                                {bankSubmitting
-                                    ? "Preparing…"
-                                    : "Continue"}
-                            </Button>
+                            {bankPhase === "setup" && (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    disabled={
+                                        bankSubmitting
+                                        || bankAmount.trim().length === 0
+                                        || totalAvailableAssets === 0n
+                                    }
+                                    onClick={onStartBankWithdrawal}
+                                >
+                                    {bankSubmitting ? "Preparing…" : "Continue"}
+                                </Button>
+                            )}
+
+                            {bankPhase === "waiting" && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    disabled={bankSubmitting}
+                                    onClick={onRefreshBankWithdrawal}
+                                >
+                                    Check again
+                                </Button>
+                            )}
+
+                            {bankPhase === "review" && (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    disabled={bankSubmitting}
+                                    onClick={onConfirmBankWithdrawal}
+                                >
+                                    Confirm bank withdrawal
+                                </Button>
+                            )}
+
+                            {bankPhase === "failed" && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => setView("choose")}
+                                >
+                                    Choose another withdrawal method
+                                </Button>
+                            )}
                         </div>
                     </>
                 )}

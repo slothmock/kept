@@ -338,6 +338,24 @@ interface DashboardPageProps {
 
   string | null;
 
+  readonly bankOrderId:
+  string | null;
+
+  readonly bankPhase:
+  | "setup"
+  | "moonpay"
+  | "waiting"
+  | "review"
+  | "sending"
+  | "complete"
+  | "failed";
+
+  readonly bankReviewAmount:
+  string | null;
+
+  readonly bankMinimumReceive:
+  string | null;
+
   readonly onBankAmountChange: (
 
     value: string,
@@ -346,6 +364,12 @@ interface DashboardPageProps {
 
   readonly onStartBankWithdrawal:
 
+  () => void;
+
+  readonly onRefreshBankWithdrawal:
+  () => void;
+
+  readonly onConfirmBankWithdrawal:
   () => void;
 
 }
@@ -528,9 +552,21 @@ export function DashboardPage(props: DashboardPageProps) {
 
     bankError,
 
+    bankOrderId,
+
+    bankPhase,
+
+    bankReviewAmount,
+
+    bankMinimumReceive,
+
     onBankAmountChange,
 
     onStartBankWithdrawal,
+
+    onRefreshBankWithdrawal,
+
+    onConfirmBankWithdrawal,
 
   } = props;
 
@@ -540,6 +576,9 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
+  const [dismissedBankOrderId, setDismissedBankOrderId] =
+    useState<string | null>(null);
+
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
 
   const [commitmentGoal, setCommitmentGoal] = useState<GoalDto | null>(null);
@@ -547,6 +586,14 @@ export function DashboardPage(props: DashboardPageProps) {
   const [savingsGoal, setSavingsGoal] = useState<GoalDto | null>(null);
 
   const [detailGoal, setDetailGoal] = useState<GoalDto | null>(null);
+
+  const bankFlowNeedsAttention =
+    bankPhase !== "setup"
+    && bankOrderId !== null
+    && dismissedBankOrderId !== bankOrderId;
+
+  const withdrawDialogOpen =
+    withdrawOpen || bankFlowNeedsAttention;
 
   const goals = productState.goals;
 
@@ -949,7 +996,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
       <WithdrawFundsDialog
 
-        open={withdrawOpen}
+        open={withdrawDialogOpen}
 
         position={
 
@@ -1055,19 +1102,17 @@ export function DashboardPage(props: DashboardPageProps) {
 
         }
 
-        onOpenChange={(open) =>
+        onOpenChange={(open) => {
+          if (!open && bankFlowNeedsAttention) {
+            setDismissedBankOrderId(bankOrderId);
+          }
 
           updateDialogOpenState(
-
             open,
-
             setWithdrawOpen,
-
             onDismissWithdrawal,
-
-          )
-
-        }
+          );
+        }}
 
         onAmountChange={
 
@@ -1145,6 +1190,18 @@ export function DashboardPage(props: DashboardPageProps) {
 
         }
 
+        bankPhase={
+          bankPhase
+        }
+
+        bankReviewAmount={
+          bankReviewAmount
+        }
+
+        bankMinimumReceive={
+          bankMinimumReceive
+        }
+
         onBankAmountChange={
 
           onBankAmountChange
@@ -1155,6 +1212,14 @@ export function DashboardPage(props: DashboardPageProps) {
 
           onStartBankWithdrawal
 
+        }
+
+        onRefreshBankWithdrawal={
+          onRefreshBankWithdrawal
+        }
+
+        onConfirmBankWithdrawal={
+          onConfirmBankWithdrawal
         }
 
       />

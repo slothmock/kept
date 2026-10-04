@@ -25,6 +25,7 @@ import {
   readApiBaseUrl,
   type GoalDto,
   type CommitmentDto,
+  type MoonPayOfframpOrderDto,
 } from "@/api/kept-api";
 import { type Session } from "@/auth/session";
 import { useKeptEvmWallet } from "@/chain/evm-wallet";
@@ -76,6 +77,7 @@ import {
 import type { PositionState } from "@/features/savings/BalanceCard";
 
 import type { SavingsMarketStatusState } from "@/features/savings/SavingsMarketStatus";
+import { formatUsdc } from "@/features/savings/format";
 
 import {
   allocationInputError,
@@ -122,6 +124,7 @@ import {
 
 import {
   resolveKeptFundingAssets,
+  resolveKeptWithdrawalAsset,
   type FundingAsset,
 } from "@/features/funding/intents/supported-tokens";
 
@@ -133,7 +136,17 @@ import {
   previewCryptoWithdrawal,
 } from "@/features/withdrawal/preview-crypto-withdrawal";
 import { executeCryptoWithdrawal } from "./features/withdrawal/execute-withdrawal";
+import { consumeMoonPayReturnUrl } from "./features/withdrawal/moonpay-return";
 
+
+type BankWithdrawalPhase =
+  | "setup"
+  | "moonpay"
+  | "waiting"
+  | "review"
+  | "sending"
+  | "complete"
+  | "failed";
 
 function fundingRefreshError(
   current: GoalFundingState,
@@ -458,6 +471,21 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     null,
   );
 
+  const [bankWithdrawPhase, setBankWithdrawPhase] =
+    useState<BankWithdrawalPhase>("setup");
+
+  const [bankWithdrawOrderId, setBankWithdrawOrderId] =
+    useState<string | null>(null);
+
+  const [bankWithdrawOrder, setBankWithdrawOrder] =
+    useState<MoonPayOfframpOrderDto | null>(null);
+
+  const [bankWithdrawDestinationAsset, setBankWithdrawDestinationAsset] =
+    useState<FundingAsset | null>(null);
+
+  const [bankWithdrawMinimumReceive, setBankWithdrawMinimumReceive] =
+    useState<string | null>(null);
+
   const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
 
   const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
@@ -539,6 +567,28 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     wallet.address && isAddress(wallet.address)
       ? getAddress(wallet.address)
       : null;
+
+  useEffect(() => {
+    if (!api) return;
+
+    const moonPayReturn = consumeMoonPayReturnUrl(globalThis.location.href);
+    if (!moonPayReturn) return;
+
+    const { orderId, cleanedPath } = moonPayReturn;
+    globalThis.history.replaceState(
+      globalThis.history.state,
+      "",
+      cleanedPath,
+    );
+
+    setBankWithdrawOrderId(orderId);
+    setBankWithdrawOrder(null);
+    setBankWithdrawDestinationAsset(null);
+    setBankWithdrawMinimumReceive(null);
+    setBankWithdrawError(null);
+    setBankWithdrawStatus("Preparing your bank withdrawal…");
+    setBankWithdrawPhase("waiting");
+  }, [api]);
 
   useEffect(() => {
     if (!account) {
@@ -785,6 +835,149 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       });
     }
   }, [config, getCurrentWalletChainId, publicClient]);
+
+  const refreshBankWithdrawalOrder = useCallback(
+    async (orderId: string): Promise<boolean> => {
+      if (!api) return false;
+
+      try {
+        const order = await api.getMoonPayOfframpOrder(orderId);
+        setBankWithdrawOrder(order);
+
+        if (order.status === "completed") {
+          setBankWithdrawStatus("Your bank withdrawal has been completed.");
+          setBankWithdrawError(null);
+          setBankWithdrawPhase("complete");
+          return true;
+        }
+
+        if (order.status === "failed" || order.status === "cancelled") {
+          setBankWithdrawStatus(null);
+          setBankWithdrawError(
+            order.status === "cancelled"
+              ? "This bank withdrawal was cancelled."
+              : "This bank withdrawal could not be completed.",
+          );
+          setBankWithdrawPhase("failed");
+          return true;
+        }
+
+        if (order.status === "funds_sent") {
+          setBankWithdrawStatus(
+            "Your withdrawal has been sent for bank payout processing.",
+          );
+          setBankWithdrawError(null);
+          setBankWithdrawPhase("complete");
+          return true;
+        }
+
+        if (
+          order.status !== "ready"
+          || !order.depositWalletAddress
+          || !order.moonPayTransactionId
+        ) {
+          setBankWithdrawStatus("Preparing your bank withdrawal…");
+          setBankWithdrawError(null);
+          setBankWithdrawPhase("waiting");
+          return false;
+        }
+
+        if (!account) {
+          setBankWithdrawStatus("Getting your Kept account ready…");
+          setBankWithdrawPhase("waiting");
+          return false;
+        }
+
+        const destinationAsset = await resolveKeptWithdrawalAsset({
+          blockchain: "base",
+          symbol: "USDC",
+        });
+
+        await ensureTransactionNetwork();
+
+        const provider = await wallet.getProvider();
+        if (!provider) {
+          throw new Error("Wallet provider is unavailable.");
+        }
+
+        const runner = createKeptIntentsRunner({
+          sourceAddress: account,
+          family: "evm",
+          provider,
+        });
+
+        try {
+          const { preview } = await previewCryptoWithdrawal({
+            runner,
+            amount: BigInt(order.amountAtomic),
+            recipient: getAddress(order.depositWalletAddress),
+            destinationAsset,
+          });
+
+          setBankWithdrawMinimumReceive(
+            formatUsdc(BigInt(preview.execution.quote.minAmountOut)),
+          );
+        } finally {
+          runner.dispose?.();
+        }
+
+        setBankWithdrawDestinationAsset(destinationAsset);
+        setBankWithdrawStatus(null);
+        setBankWithdrawError(null);
+        setBankWithdrawPhase("review");
+        return true;
+      } catch (error) {
+        diagnostics.warn("withdrawal.bank_order_refresh_failed", error);
+        setBankWithdrawStatus(null);
+        setBankWithdrawError(
+          consumerErrorMessage(
+            error,
+            "We couldn't prepare your bank withdrawal. Try again.",
+          ),
+        );
+        setBankWithdrawPhase("failed");
+        return true;
+      }
+    },
+    [account, api, ensureTransactionNetwork, wallet],
+  );
+
+  useEffect(() => {
+    if (
+      bankWithdrawPhase !== "waiting"
+      || !bankWithdrawOrderId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      for (let attempt = 0; attempt < 10 && !cancelled; attempt += 1) {
+        const settled = await refreshBankWithdrawalOrder(bankWithdrawOrderId);
+        if (settled || cancelled) return;
+
+        await new Promise<void>((resolve) => {
+          globalThis.setTimeout(resolve, 2_000);
+        });
+      }
+
+      if (!cancelled) {
+        setBankWithdrawStatus(null);
+        setBankWithdrawError(
+          "MoonPay is still preparing this withdrawal. Check again in a moment.",
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bankWithdrawOrderId,
+    bankWithdrawPhase,
+    refreshBankWithdrawalOrder,
+  ]);
 
   const refreshPosition = useCallback(async () => {
     const requestId = positionRequestGate.begin();
@@ -2225,141 +2418,58 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const startBankWithdrawal =
     useCallback(
       async () => {
-        if (
-          positionState.kind !==
-          "ready"
-        ) {
+        if (!api || positionState.kind !== "ready") {
           setBankWithdrawError(
             "Your Kept account is not ready yet.",
           );
-
           return;
         }
 
-        const parsed =
-          parseUsdcDepositAmount(
-            bankWithdrawAmount,
-          );
-
-        if (
-          "error" in parsed ||
-          parsed.assets <= 0n
-        ) {
-          setBankWithdrawError(
-            "Enter a valid amount.",
-          );
-
+        const parsed = parseUsdcDepositAmount(bankWithdrawAmount);
+        if ("error" in parsed || parsed.assets <= 0n) {
+          setBankWithdrawError("Enter a valid amount.");
           return;
         }
 
         const available =
-          positionState.position.usdcBalance +
-          positionState.position.withdrawableAssets;
+          positionState.position.usdcBalance
+          + positionState.position.withdrawableAssets;
 
-        if (
-          parsed.assets >
-          available
-        ) {
+        if (parsed.assets > available) {
           setBankWithdrawError(
             "Enter an amount no greater than your available balance.",
           );
-
           return;
         }
 
-        const moonPayWindow =
-          window.open(
-            "about:blank",
-            "_blank",
-          );
-
+        const moonPayWindow = window.open("about:blank", "_blank");
         if (!moonPayWindow) {
           setBankWithdrawError(
             "Your browser blocked the MoonPay window. Allow popups and try again.",
           );
-
           return;
         }
 
-        moonPayWindow.opener =
-          null;
-
-        setBankWithdrawSubmitting(
-          true,
-        );
-
-        setBankWithdrawError(
-          null,
-        );
-
-        setBankWithdrawStatus(
-          "Preparing bank withdrawal…",
-        );
+        moonPayWindow.opener = null;
+        setBankWithdrawSubmitting(true);
+        setBankWithdrawError(null);
+        setBankWithdrawStatus("Preparing secure bank withdrawal setup…");
 
         try {
-          const accessToken =
-            await session.getAccessToken();
+          const result = await api.createMoonPayOfframpUrl(bankWithdrawAmount);
 
-          const response =
-            await fetch(
-              `${apiBaseUrl}/v1/moonpay/offramp-url`,
-              {
-                method:
-                  "POST",
-
-                headers: {
-                  "content-type":
-                    "application/json",
-
-                  authorization:
-                    `Bearer ${accessToken}`,
-
-                  "ngrok-skip-browser-warning":
-                    "true",
-                },
-
-                body:
-                  JSON.stringify({
-                    amount:
-                      bankWithdrawAmount,
-                  }),
-              },
-            );
-
-          if (!response.ok) {
-            const errorText =
-              await response.text();
-
-            throw new Error(
-              `Could not prepare MoonPay: ${response.status} ${errorText}`,
-            );
-          }
-
-          const result =
-            await response.json() as {
-              readonly url:
-              string;
-            };
-
-          moonPayWindow.location.replace(
-            result.url,
-          );
-
+          setBankWithdrawOrderId(result.orderId);
+          setBankWithdrawPhase("moonpay");
           setBankWithdrawStatus(
-            null,
+            "Finish your bank payout setup in the MoonPay window.",
           );
+
+          moonPayWindow.location.replace(result.url);
         } catch (error) {
           moonPayWindow.close();
-
-          diagnostics.error(
-            "withdrawal.moonpay_prepare_failed",
-            error,
-          );
-
-          setBankWithdrawStatus(
-            null,
-          );
-
+          diagnostics.error("withdrawal.moonpay_prepare_failed", error);
+          setBankWithdrawStatus(null);
+          setBankWithdrawPhase("setup");
           setBankWithdrawError(
             consumerErrorMessage(
               error,
@@ -2367,16 +2477,213 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             ),
           );
         } finally {
-          setBankWithdrawSubmitting(
-            false,
+          setBankWithdrawSubmitting(false);
+        }
+      },
+      [api, bankWithdrawAmount, positionState],
+    );
+
+  const confirmBankWithdrawal =
+    useCallback(
+      async () => {
+        if (
+          !api
+          || !config
+          || !publicClient
+          || !account
+          || !bankWithdrawOrderId
+          || !bankWithdrawDestinationAsset
+          || positionState.kind !== "ready"
+        ) {
+          setBankWithdrawError("Your Kept account is not ready yet.");
+          return;
+        }
+
+        setBankWithdrawSubmitting(true);
+        setBankWithdrawError(null);
+        setBankWithdrawStatus("Checking your withdrawal details…");
+        setBankWithdrawPhase("sending");
+
+        let savingsWithdrawn = false;
+
+        try {
+          const order = await api.getMoonPayOfframpOrder(bankWithdrawOrderId);
+
+          if (
+            order.status !== "ready"
+            || !order.depositWalletAddress
+            || !order.moonPayTransactionId
+          ) {
+            throw new Error(
+              "This bank withdrawal is no longer ready to send.",
+            );
+          }
+
+          const amount = BigInt(order.amountAtomic);
+          const recipient = getAddress(order.depositWalletAddress);
+          const availableCash = positionState.position.usdcBalance;
+          const withdrawableSavings = positionState.position.withdrawableAssets;
+          const availableToSend = availableCash + withdrawableSavings;
+
+          if (amount > availableToSend) {
+            throw new Error(
+              "There is not enough available balance for this withdrawal.",
+            );
+          }
+
+          const requiredFromSavings =
+            amount > availableCash ? amount - availableCash : 0n;
+
+          await transactionCoordinator.run(
+            "withdraw",
+            async () => {
+              if (requiredFromSavings > 0n) {
+                if (requiredFromSavings > withdrawableSavings) {
+                  throw new Error(
+                    "There is not enough available savings for this withdrawal.",
+                  );
+                }
+
+                const withdrawal = buildVaultWithdrawTransaction({
+                  vault: config.vault,
+                  receiver: account,
+                  owner: account,
+                  assets: requiredFromSavings,
+                  chainId: config.chainId,
+                });
+
+                setBankWithdrawStatus("Preparing your money…");
+
+                const savingsWithdrawalResult = await submitVaultWithdrawal({
+                  withdrawal,
+                  beforeSend: async () => ensureTransactionNetwork(),
+                  sender,
+                  receipts: {
+                    waitForTransactionReceipt: async ({ hash }) => {
+                      const receipt = await publicClient.waitForTransactionReceipt({
+                        hash,
+                      });
+
+                      return {
+                        status: receipt.status === "success" ? "success" : "reverted",
+                      };
+                    },
+                  },
+                });
+
+                await api.recordTransaction(
+                  {
+                    type: "SAVINGS_WITHDRAWAL",
+                    amountAtomic: requiredFromSavings.toString(),
+                    asset: "USDC",
+                    description: "Moved to available cash for bank withdrawal",
+                    chainId: config.chainId.toString(),
+                    transactionHash: savingsWithdrawalResult.withdrawalHash,
+                    externalReference: savingsWithdrawalResult.withdrawalHash,
+                  },
+                  savingsWithdrawalResult.withdrawalHash,
+                );
+
+                savingsWithdrawn = true;
+              }
+
+              await ensureTransactionNetwork();
+              const provider = await wallet.getProvider();
+              if (!provider) {
+                throw new Error("Wallet provider is unavailable.");
+              }
+
+              const runner = createKeptIntentsRunner({
+                sourceAddress: account,
+                family: "evm",
+                provider,
+              });
+
+              try {
+                setBankWithdrawStatus("Sending your withdrawal securely…");
+
+                const execution = await executeCryptoWithdrawal({
+                  runner,
+                  amount,
+                  recipient,
+                  destinationAsset: bankWithdrawDestinationAsset,
+                });
+
+                await api.recordTransaction(
+                  {
+                    type: "FIAT_WITHDRAWAL",
+                    amountAtomic: amount.toString(),
+                    asset: "USDC",
+                    description: "Withdrawn to bank",
+                    chainId: null,
+                    transactionHash: null,
+                    externalReference: order.moonPayTransactionId,
+                  },
+                  execution.id,
+                );
+
+                await api.markMoonPayOfframpFundsSent(order.id, execution.id);
+              } finally {
+                runner.dispose?.();
+              }
+            },
           );
+
+          setBankWithdrawOrder(order);
+          setBankWithdrawStatus(
+            "Your withdrawal has been sent for bank payout processing.",
+          );
+          setBankWithdrawError(null);
+          setBankWithdrawPhase("complete");
+          setBankWithdrawAmount("");
+
+          await Promise.all([
+            refreshPosition(),
+            refreshProductData(),
+          ]);
+        } catch (error) {
+          diagnostics.warn("withdrawal.bank_execution_failed", error);
+          setBankWithdrawStatus(null);
+
+          if (savingsWithdrawn) {
+            setBankWithdrawError(
+              "The bank transfer couldn't be completed. Your money was withdrawn from savings successfully and is now available in Kept.",
+            );
+          } else {
+            setBankWithdrawError(
+              consumerErrorMessage(
+                error,
+                "We could not complete this bank withdrawal. Try again.",
+              ),
+            );
+          }
+
+          setBankWithdrawPhase("failed");
+
+          if (savingsWithdrawn) {
+            await Promise.all([
+              refreshPosition(),
+              refreshProductData(),
+            ]);
+          }
+        } finally {
+          setBankWithdrawSubmitting(false);
         }
       },
       [
-        apiBaseUrl,
-        bankWithdrawAmount,
+        account,
+        api,
+        bankWithdrawDestinationAsset,
+        bankWithdrawOrderId,
+        config,
+        ensureTransactionNetwork,
         positionState,
-        session,
+        publicClient,
+        refreshPosition,
+        refreshProductData,
+        sender,
+        transactionCoordinator,
+        wallet,
       ],
     );
 
@@ -3649,12 +3956,50 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           bankWithdrawError
         }
 
-        onBankAmountChange={
-          setBankWithdrawAmount
+        bankOrderId={
+          bankWithdrawOrderId
         }
+
+        bankPhase={
+          bankWithdrawPhase
+        }
+
+        bankReviewAmount={
+          bankWithdrawOrder
+            ? formatUsdc(BigInt(bankWithdrawOrder.amountAtomic))
+            : null
+        }
+
+        bankMinimumReceive={
+          bankWithdrawMinimumReceive
+        }
+
+        onBankAmountChange={(value) => {
+          setBankWithdrawAmount(value);
+          setBankWithdrawError(null);
+          setBankWithdrawStatus(null);
+          setBankWithdrawPhase("setup");
+          setBankWithdrawOrderId(null);
+          setBankWithdrawOrder(null);
+          setBankWithdrawDestinationAsset(null);
+          setBankWithdrawMinimumReceive(null);
+        }}
 
         onStartBankWithdrawal={() =>
           void startBankWithdrawal()
+        }
+
+        onRefreshBankWithdrawal={() => {
+          if (bankWithdrawOrderId) {
+            setBankWithdrawError(null);
+            setBankWithdrawStatus("Checking your bank withdrawal…");
+            setBankWithdrawPhase("waiting");
+            void refreshBankWithdrawalOrder(bankWithdrawOrderId);
+          }
+        }}
+
+        onConfirmBankWithdrawal={() =>
+          void confirmBankWithdrawal()
         }
       />
     </AppShell>

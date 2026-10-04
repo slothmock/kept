@@ -36,6 +36,20 @@
       "when": 1790973000000,
       "tag": "0004_vault_activity_index",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791063000000,
+      "tag": "0005_moonpay_offramp_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791070200000,
+      "tag": "0006_moonpay_offramp_lifecycle",
+      "breakpoints": true
     }
   ]
 }

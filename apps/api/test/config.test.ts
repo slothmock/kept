@@ -19,6 +19,7 @@ const requiredEnvironment = {
   MOONPAY_WIDGET_BASE_URL: "https://widget.moonpay.example",
   MOONPAY_PUBLISHABLE_KEY: "moonpay-publishable-key",
   MOONPAY_SECRET_KEY: "moonpay-secret-key",
+  MOONPAY_WEBHOOK_KEY: "moonpay-webhook-key",
 } satisfies NodeJS.ProcessEnv;
 
 describe("API configuration", () => {
@@ -80,6 +81,12 @@ describe("API configuration", () => {
 
       moonPaySecretKey:
         "moonpay-secret-key",
+
+      moonPayWebhookKey:
+        "moonpay-webhook-key",
+
+      commitmentWindowOverrideSeconds:
+        undefined,
     });
   });
 

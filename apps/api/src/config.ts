@@ -18,6 +18,7 @@ export interface ApiConfig {
   readonly auroraIntentsApiKey: string;
   readonly moonPayPublishableKey: string;
   readonly moonPaySecretKey: string;
+  readonly moonPayWebhookKey: string;
   readonly moonPayBaseUrl: string;
 }
 
@@ -233,6 +234,12 @@ export function loadApiConfig(
       "MOONPAY_SECRET_KEY",
     );
 
+  const moonPayWebhookKey =
+    requireValue(
+      environment,
+      "MOONPAY_WEBHOOK_KEY",
+    );
+
   return {
     databaseUrl,
     privyAppId,
@@ -252,5 +259,6 @@ export function loadApiConfig(
     moonPayBaseUrl,
     moonPayPublishableKey,
     moonPaySecretKey,
+    moonPayWebhookKey,
   };
 }

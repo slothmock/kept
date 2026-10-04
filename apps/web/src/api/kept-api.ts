@@ -85,6 +85,7 @@ export type TransactionType =
   | "savings_deposit"
   | "savings_withdrawal"
   | "crypto_withdrawal"
+  | "fiat_withdrawal"
   | "reward";
 
 export type TransactionStatus =
@@ -109,7 +110,8 @@ export interface RecordTransactionInput {
   readonly type:
   | "SAVINGS_DEPOSIT"
   | "SAVINGS_WITHDRAWAL"
-  | "CRYPTO_WITHDRAWAL";
+  | "CRYPTO_WITHDRAWAL"
+  | "FIAT_WITHDRAWAL";
 
   readonly amountAtomic: string;
   readonly asset: string;
@@ -120,13 +122,32 @@ export interface RecordTransactionInput {
   readonly externalReference?: string | null;
 }
 
-export interface MoonPayOfframpSessionDto {
-  readonly withdrawalId: string;
-  readonly widgetUrl: string;
+export type MoonPayOfframpOrderStatus =
+  | "pending_widget"
+  | "awaiting_deposit_details"
+  | "ready"
+  | "funds_sent"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface MoonPayOfframpOrderDto {
+  readonly id: string;
+  readonly amountAtomic: string;
+  readonly baseCurrencyCode: string;
+  readonly moonPayTransactionId: string | null;
+  readonly depositWalletAddress: string | null;
+  readonly depositWalletTag: string | null;
+  readonly transferReference: string | null;
+  readonly fundsSentAt: string | null;
+  readonly status: MoonPayOfframpOrderStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 export interface MoonPayOfframpUrlDto {
   readonly url: string;
+  readonly orderId: string;
 }
 
 export interface StagingFaucetDto {
@@ -152,9 +173,11 @@ export interface KeptApi {
     idempotencyKey?: string,
   ): Promise<TransactionDto>;
   readonly createMoonPayOfframpUrl:
-  (amount: string,
-  ) =>
-    Promise<MoonPayOfframpUrlDto>;
+  (amount: string) => Promise<MoonPayOfframpUrlDto>;
+  readonly getMoonPayOfframpOrder:
+  (orderId: string) => Promise<MoonPayOfframpOrderDto>;
+  readonly markMoonPayOfframpFundsSent:
+  (orderId: string, transferReference: string) => Promise<MoonPayOfframpOrderDto>;
   listGoals(): Promise<readonly GoalDto[]>;
   createGoal(input: {
     readonly name: string;
@@ -514,16 +537,20 @@ export function createKeptApi(input: {
         requestIdempotencyKey,
       ),
     listGoals: () => request<readonly GoalDto[]>("/v1/goals"),
-    createMoonPayOfframpUrl:
-      (
-        amount,
-      ) =>
-        post<MoonPayOfframpUrlDto>(
-          "/v1/moonpay/offramp-url",
-          {
-            amount,
-          },
-        ),
+    createMoonPayOfframpUrl: (amount) =>
+      post<MoonPayOfframpUrlDto>(
+        "/v1/moonpay/offramp-url",
+        { amount },
+      ),
+    getMoonPayOfframpOrder: (orderId) =>
+      request<MoonPayOfframpOrderDto>(
+        `/v1/moonpay/offramp-orders/${encodeURIComponent(orderId)}`,
+      ),
+    markMoonPayOfframpFundsSent: (orderId, transferReference) =>
+      post<MoonPayOfframpOrderDto>(
+        `/v1/moonpay/offramp-orders/${encodeURIComponent(orderId)}/submitted`,
+        { transferReference },
+      ),
     createGoal: (goal) => post<GoalDto>("/v1/goals", goal),
     archiveGoal: (
       goalId,

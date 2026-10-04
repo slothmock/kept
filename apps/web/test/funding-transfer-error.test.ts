@@ -95,6 +95,46 @@ describe(
         );
 
         it(
+            "translates an unavailable quote into consumer-facing copy",
+            () => {
+                expect(
+                    fundingTransferErrorMessage(
+                        new Error(
+                            "Quote is unavailable",
+                        ),
+                        asset(
+                            "SOL",
+                            9,
+                        ),
+                        "fallback",
+                    ),
+                ).toBe(
+                    "This transfer route isn't available right now. Try again shortly or choose another asset.",
+                );
+            },
+        );
+
+        it(
+            "translates a no-quote response into consumer-facing copy",
+            () => {
+                expect(
+                    fundingTransferErrorMessage(
+                        new Error(
+                            "No quote found",
+                        ),
+                        asset(
+                            "USDC",
+                            6,
+                        ),
+                        "fallback",
+                    ),
+                ).toBe(
+                    "This transfer route isn't available right now. Try again shortly or choose another asset.",
+                );
+            },
+        );
+
+        it(
             "preserves other error messages",
             () => {
                 expect(
