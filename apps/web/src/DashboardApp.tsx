@@ -2667,6 +2667,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             return;
           }
 
+          const depositWalletAddress =
+            order.depositWalletAddress;
+
           const acknowledgedOrder =
             await deliverBankWithdrawal({
               orderId: order.id,
@@ -2694,7 +2697,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
                 const recipient =
                   getAddress(
-                    order.depositWalletAddress,
+                    depositWalletAddress,
                   );
 
                 const availableCash =
