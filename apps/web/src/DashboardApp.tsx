@@ -139,6 +139,7 @@ import { executeCryptoWithdrawal } from "./features/withdrawal/execute-withdrawa
 import { consumeMoonPayReturnUrl } from "./features/withdrawal/moonpay-return";
 import {
   bankWithdrawalRefreshState,
+  createBankWithdrawalOrderStore,
   createBankWithdrawalTransferStore,
   deliverBankWithdrawal,
   type BankWithdrawalPhase,
@@ -573,6 +574,18 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       ? getAddress(wallet.address)
       : null;
 
+  const bankWithdrawalOrderStore =
+    useMemo(
+      () =>
+        account
+          ? createBankWithdrawalOrderStore(
+            globalThis.localStorage,
+            account,
+          )
+          : null,
+      [account],
+    );
+
   useEffect(() => {
     if (!api) return;
 
@@ -587,13 +600,56 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     );
 
     setBankWithdrawOrderId(orderId);
+    bankWithdrawalOrderStore?.save(orderId);
     setBankWithdrawOrder(null);
     setBankWithdrawDestinationAsset(null);
     setBankWithdrawMinimumReceive(null);
     setBankWithdrawError(null);
     setBankWithdrawStatus("Preparing your bank withdrawal…");
     setBankWithdrawPhase("waiting");
-  }, [api]);
+  }, [
+    api,
+    bankWithdrawalOrderStore,
+  ]);
+
+  useEffect(() => {
+    if (
+      !api
+      || !bankWithdrawalOrderStore
+    ) {
+      return;
+    }
+
+    if (bankWithdrawOrderId) {
+      bankWithdrawalOrderStore.save(
+        bankWithdrawOrderId,
+      );
+      return;
+    }
+
+    const recoveredOrderId =
+      bankWithdrawalOrderStore.load();
+
+    if (!recoveredOrderId) {
+      return;
+    }
+
+    setBankWithdrawOrderId(
+      recoveredOrderId,
+    );
+    setBankWithdrawOrder(null);
+    setBankWithdrawDestinationAsset(null);
+    setBankWithdrawMinimumReceive(null);
+    setBankWithdrawError(null);
+    setBankWithdrawStatus(
+      "Checking your bank withdrawal…",
+    );
+    setBankWithdrawPhase("waiting");
+  }, [
+    api,
+    bankWithdrawOrderId,
+    bankWithdrawalOrderStore,
+  ]);
 
   useEffect(() => {
     if (!account) {
@@ -898,6 +954,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         if (order.status === "completed") {
           bankWithdrawalTransferStore
             .clear(orderId);
+          bankWithdrawalOrderStore
+            ?.clear();
           setBankWithdrawStatus(
             "Your bank withdrawal has been completed.",
           );
@@ -914,6 +972,8 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         ) {
           bankWithdrawalTransferStore
             .clear(orderId);
+          bankWithdrawalOrderStore
+            ?.clear();
           setBankWithdrawStatus(null);
           setBankWithdrawError(
             order.status === "cancelled"
@@ -1056,6 +1116,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     [
       account,
       api,
+      bankWithdrawalOrderStore,
       bankWithdrawalTransferStore,
       ensureTransactionNetwork,
       wallet,
@@ -2604,6 +2665,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           const result = await api.createMoonPayOfframpUrl(bankWithdrawAmount);
 
           setBankWithdrawOrderId(result.orderId);
+          bankWithdrawalOrderStore?.save(
+            result.orderId,
+          );
           setBankWithdrawPhase("moonpay");
           setBankWithdrawStatus(
             "Finish your bank payout setup in the MoonPay window.",
@@ -2625,7 +2689,12 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           setBankWithdrawSubmitting(false);
         }
       },
-      [api, bankWithdrawAmount, positionState],
+      [
+        api,
+        bankWithdrawAmount,
+        bankWithdrawalOrderStore,
+        positionState,
+      ],
     );
 
   const confirmBankWithdrawal =

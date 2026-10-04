@@ -595,6 +595,7 @@ describe("Kept HTTP API", () => {
       goalId: goal.id,
       chainId: "143",
       transactionHash: "0xdeposit",
+      externalReference: "0xdeposit",
       createdAt: "2026-09-30T00:00:00.000Z",
     };
     const dependencies = buildDependencies();

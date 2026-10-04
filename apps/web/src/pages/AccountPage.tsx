@@ -58,6 +58,9 @@ import {
     type SavingsTransparency,
 } from "@/features/account/savings-transparency";
 import {
+    transactionSupportReference,
+} from "@/features/account/transaction-reference";
+import {
     consumerErrorMessage,
 } from "@/lib/consumer-error";
 import {
@@ -1054,6 +1057,29 @@ export function AccountPage({
                                                             .createdAt,
                                                     )}
                                                 </p>
+
+                                                {transactionSupportReference(
+                                                    transaction,
+                                                ) ? (
+                                                    <p
+                                                        className="
+                      mt-1
+                      truncate
+                      text-xs
+                      text-muted-foreground
+                    "
+                                                        title={
+                                                            transactionSupportReference(
+                                                                transaction,
+                                                            )
+                                                                ?? undefined
+                                                        }
+                                                    >
+                                                        {transactionSupportReference(
+                                                            transaction,
+                                                        )}
+                                                    </p>
+                                                ) : null}
                                             </div>
                                         </div>
                                     ),

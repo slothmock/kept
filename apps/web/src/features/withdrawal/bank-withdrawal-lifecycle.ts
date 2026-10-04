@@ -33,6 +33,55 @@ interface BrowserStorage {
   removeItem(key: string): void;
 }
 
+export interface BankWithdrawalOrderStore {
+  readonly load: () => string | null;
+  readonly save: (orderId: string) => void;
+  readonly clear: () => void;
+}
+
+const ACTIVE_ORDER_STORAGE_PREFIX =
+  "kept:bank-withdrawal:active:";
+
+export function createBankWithdrawalOrderStore(
+  storage: BrowserStorage | undefined,
+  account: string,
+): BankWithdrawalOrderStore {
+  const key =
+    `${ACTIVE_ORDER_STORAGE_PREFIX}${account.toLowerCase()}`;
+
+  return {
+    load() {
+      if (!storage) return null;
+
+      try {
+        return storage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+
+    save(orderId) {
+      if (!storage) return;
+
+      try {
+        storage.setItem(key, orderId);
+      } catch {
+        // Reload recovery is best effort.
+      }
+    },
+
+    clear() {
+      if (!storage) return;
+
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Nothing else to do.
+      }
+    },
+  };
+}
+
 const STORAGE_PREFIX =
   "kept:bank-withdrawal:transfer:";
 

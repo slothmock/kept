@@ -137,6 +137,10 @@ export interface TransactionDto {
   | string
   | null;
 
+  readonly externalReference:
+  | string
+  | null;
+
   readonly createdAt: string;
 }
 
@@ -471,6 +475,7 @@ function mapTransaction(
     chainId: row.chainId?.toString() ?? null,
 
     transactionHash: row.transactionHash,
+    externalReference: row.externalReference,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -738,7 +743,7 @@ export class KeptPersistenceService {
     readonly orderId: string;
     readonly moonPayTransactionId: string;
     readonly baseCurrencyCode: string;
-    readonly depositWalletAddress: string;
+    readonly depositWalletAddress: string | null;
     readonly depositWalletTag?: string | null;
     readonly status?: "ready" | "completed" | "failed" | "cancelled";
   }): Promise<MoonPayOfframpOrderDto> {
@@ -751,11 +756,19 @@ export class KeptPersistenceService {
       input.moonPayTransactionId,
       "moonPayTransactionId",
     );
-    const depositWalletAddress = requireNonBlank(
-      input.depositWalletAddress,
-      "depositWalletAddress",
-    );
     const status = input.status ?? "ready";
+    const depositWalletAddress =
+      input.depositWalletAddress?.trim() || null;
+
+    if (
+      status === "ready"
+      && !depositWalletAddress
+    ) {
+      throw new PersistenceValidationError(
+        "depositWalletAddress must not be blank for a ready MoonPay order",
+      );
+    }
+
     const now = new Date();
 
     return this.db.transaction(async (transaction) => {
