@@ -287,8 +287,9 @@ export class KeptRepository {
     );
 
     if (
-      existing?.status === "FUNDS_SENT"
+      existing
       && existing.transferReference === input.transferReference
+      && ["FUNDS_SENT", "COMPLETED", "FAILED", "CANCELLED"].includes(existing.status)
     ) {
       return existing;
     }
