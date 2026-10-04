@@ -61,6 +61,8 @@ import type { RewardState } from "@/commitments/reward-claim";
 
 import { formatUsdc } from "@/features/savings/format";
 
+import { readFiatEnabled } from "@/config/feature-flags";
+
 import type { FundingAsset } from "@/features/funding/intents/supported-tokens";
 
 interface DashboardPageProps {
@@ -398,6 +400,11 @@ function currentCommitment(
 }
 
 export function DashboardPage(props: DashboardPageProps) {
+
+  const fiatEnabled =
+    readFiatEnabled(
+      import.meta.env,
+    );
 
   const {
 
@@ -926,6 +933,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
         walletAddress={walletAddress}
 
+        fiatEnabled={fiatEnabled}
+
         readSolanaFundingBalances={
           readSolanaFundingBalances
         }
@@ -1166,6 +1175,8 @@ export function DashboardPage(props: DashboardPageProps) {
         }
 
         bankAvailable={true}
+
+        bankEnabled={fiatEnabled}
 
         bankAmount={
 

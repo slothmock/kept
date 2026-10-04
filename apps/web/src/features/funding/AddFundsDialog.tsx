@@ -446,6 +446,9 @@ interface AddFundsDialogProps {
     readonly walletAddress:
     string | null;
 
+    readonly fiatEnabled:
+    boolean;
+
     readonly readSolanaFundingBalances:
     (
         owner: string,
@@ -465,6 +468,7 @@ interface AddFundsDialogProps {
 export function AddFundsDialog({
     open,
     walletAddress,
+    fiatEnabled,
     readSolanaFundingBalances,
     onOpenChange,
     onUseAvailableCash,
@@ -2111,6 +2115,10 @@ export function AddFundsDialog({
                             walletAddress
                         }
 
+                        fiatEnabled={
+                            fiatEnabled
+                        }
+
                         fiatStatus={
                             fiatStatus
                         }
@@ -2352,6 +2360,7 @@ export function AddFundsDialog({
 
 function FundingChoiceView({
     walletAddress,
+    fiatEnabled,
     fiatStatus,
     fiatError,
     executionStatus,
@@ -2366,6 +2375,9 @@ function FundingChoiceView({
 }: {
     readonly walletAddress:
     string | null;
+
+    readonly fiatEnabled:
+    boolean;
 
     readonly fiatStatus:
     string | null;
@@ -2419,11 +2431,22 @@ function FundingChoiceView({
                     <Landmark className="size-5" />
                 }
 
-                title="Buy USDC"
+                title={
+                    fiatEnabled
+                        ? "Buy USDC"
+                        : "Buy USDC — Coming Soon"
+                }
 
                 description="Add new money using card or another supported payment method."
             >
-                {walletAddress ? (
+                {!fiatEnabled ? (
+                    <Button
+                        className="w-full"
+                        disabled
+                    >
+                        Coming Soon
+                    </Button>
+                ) : walletAddress ? (
                     <PrivyFundingButton
                         address={
                             walletAddress
