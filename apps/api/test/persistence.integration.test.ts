@@ -301,6 +301,135 @@ describe.sequential("MoonPay off-ramp orders", () => {
   });
 });
 
+describe.sequential("MoonPay fiat withdrawal accounting", () => {
+  it("creates one pending fiat withdrawal when funds are sent and completes it from the webhook", async () => {
+    const owner = await createUser("moonpay-accounting");
+    const created = await service.createMoonPayOfframpOrder({
+      userId: owner.id,
+      amountAtomic: "25000000",
+    });
+
+    await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-accounting-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "ready",
+    });
+
+    await service.markMoonPayOfframpFundsSent({
+      userId: owner.id,
+      orderId: created.id,
+      transferReference: "aurora-accounting-1",
+    });
+
+    let transactions = await connection.pool.query<{
+      type: string;
+      status: string;
+      amount_atomic: string;
+      external_reference: string | null;
+    }>(
+      "SELECT type, status, amount_atomic, external_reference FROM account_transactions WHERE user_id = $1",
+      [owner.id],
+    );
+
+    expect(transactions.rows).toEqual([{
+      type: "FIAT_WITHDRAWAL",
+      status: "PENDING",
+      amount_atomic: "25000000",
+      external_reference: "moonpay-accounting-1",
+    }]);
+
+    await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-accounting-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "completed",
+    });
+
+    transactions = await connection.pool.query<{
+      type: string;
+      status: string;
+      amount_atomic: string;
+      external_reference: string | null;
+    }>(
+      "SELECT type, status, amount_atomic, external_reference FROM account_transactions WHERE user_id = $1",
+      [owner.id],
+    );
+
+    expect(transactions.rows).toEqual([{
+      type: "FIAT_WITHDRAWAL",
+      status: "COMPLETED",
+      amount_atomic: "25000000",
+      external_reference: "moonpay-accounting-1",
+    }]);
+
+    await service.markMoonPayOfframpFundsSent({
+      userId: owner.id,
+      orderId: created.id,
+      transferReference: "aurora-accounting-1",
+    });
+
+    await expect(
+      connection.pool.query(
+        "SELECT count(*)::int AS count FROM account_transactions WHERE user_id = $1 AND type = 'FIAT_WITHDRAWAL'",
+        [owner.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ count: 1 }],
+    });
+  });
+
+  it("preserves a terminal MoonPay result when it arrives before the transfer acknowledgement", async () => {
+    const owner = await createUser("moonpay-terminal-race");
+    const created = await service.createMoonPayOfframpOrder({
+      userId: owner.id,
+      amountAtomic: "15000000",
+    });
+
+    await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-terminal-race-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "ready",
+    });
+
+    await service.recordMoonPayOfframpWebhook({
+      orderId: created.id,
+      moonPayTransactionId: "moonpay-terminal-race-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "failed",
+    });
+
+    await expect(
+      service.markMoonPayOfframpFundsSent({
+        userId: owner.id,
+        orderId: created.id,
+        transferReference: "aurora-terminal-race-1",
+      }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      transferReference: "aurora-terminal-race-1",
+    });
+
+    await expect(
+      connection.pool.query(
+        "SELECT type, status, external_reference FROM account_transactions WHERE user_id = $1",
+        [owner.id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{
+        type: "FIAT_WITHDRAWAL",
+        status: "FAILED",
+        external_reference: "moonpay-terminal-race-1",
+      }],
+    });
+  });
+});
+
 describe.sequential("private users, wallet references, and goals", () => {
   it("creates and retrieves a user by internal identity", async () => {
     const created = await createUser("Jordan");

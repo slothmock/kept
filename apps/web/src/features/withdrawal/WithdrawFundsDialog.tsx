@@ -163,6 +163,7 @@ interface WithdrawFundsDialogProps {
     | "waiting"
     | "review"
     | "sending"
+    | "processing"
     | "complete"
     | "failed";
 
