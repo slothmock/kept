@@ -80,7 +80,6 @@ import {
   allocationInputError,
   deallocationInputError,
   previewAllocationShares,
-  readGoalFunding,
 } from "@/features/goals/funding";
 
 import { runGoalDeletion } from "@/features/goals/delete-goal-flow";
@@ -617,14 +616,17 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       cleanedPath,
     );
 
-    setBankWithdrawOrderId(orderId);
     bankWithdrawalOrderStore?.save(orderId);
-    setBankWithdrawOrder(null);
-    setBankWithdrawDestinationAsset(null);
-    setBankWithdrawMinimumReceive(null);
-    setBankWithdrawError(null);
-    setBankWithdrawStatus("Preparing your bank withdrawal…");
-    setBankWithdrawPhase("waiting");
+
+    queueMicrotask(() => {
+      setBankWithdrawOrderId(orderId);
+      setBankWithdrawOrder(null);
+      setBankWithdrawDestinationAsset(null);
+      setBankWithdrawMinimumReceive(null);
+      setBankWithdrawError(null);
+      setBankWithdrawStatus("Preparing your bank withdrawal…");
+      setBankWithdrawPhase("waiting");
+    });
   }, [
     api,
     bankWithdrawalOrderStore,
@@ -655,17 +657,19 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       return;
     }
 
-    setBankWithdrawOrderId(
-      recoveredOrderId,
-    );
-    setBankWithdrawOrder(null);
-    setBankWithdrawDestinationAsset(null);
-    setBankWithdrawMinimumReceive(null);
-    setBankWithdrawError(null);
-    setBankWithdrawStatus(
-      "Checking your bank withdrawal…",
-    );
-    setBankWithdrawPhase("waiting");
+    queueMicrotask(() => {
+      setBankWithdrawOrderId(
+        recoveredOrderId,
+      );
+      setBankWithdrawOrder(null);
+      setBankWithdrawDestinationAsset(null);
+      setBankWithdrawMinimumReceive(null);
+      setBankWithdrawError(null);
+      setBankWithdrawStatus(
+        "Checking your bank withdrawal…",
+      );
+      setBankWithdrawPhase("waiting");
+    });
   }, [
     api,
     bankWithdrawOrderId,
@@ -1371,6 +1375,31 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     refreshPosition,
   ]);
 
+  type RewardState =
+    | { readonly kind: "loading" }
+    | {
+      readonly kind: "ready";
+
+      readonly reward: CommitmentRewardState;
+    }
+    | {
+      readonly kind: "error";
+
+      readonly message: string;
+    };
+
+  const [rewardStates, setRewardStates] = useState<
+    Readonly<Record<string, RewardState>>
+  >({});
+
+  const [claimingRewardId, setClaimingRewardId] = useState<string | null>(null);
+
+  const [rewardClaimError, setRewardClaimError] = useState<{
+    readonly commitmentId: string;
+
+    readonly message: string;
+  } | null>(null);
+
   const refreshRewardStates = useCallback(
     async (commitments: readonly CommitmentDto[]) => {
       if (!commitmentManagerConfig || !publicClient) {
@@ -1466,12 +1495,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       !publicClient ||
       positionState.kind !== "ready"
     ) {
-      setStoredDepositQuote({ kind: "idle" });
+      queueMicrotask(() => {
+        setStoredDepositQuote({ kind: "idle" });
+      });
 
       return;
     }
 
-    setStoredDepositQuote({ kind: "loading" });
+    queueMicrotask(() => {
+      setStoredDepositQuote({ kind: "loading" });
+    });
 
     void readVaultDepositQuote({
       assets: parsedAmount.assets,
@@ -1513,17 +1546,21 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   ]);
 
   useEffect(() => {
-    void refreshPosition();
+    queueMicrotask(() => {
+      void refreshPosition();
+    });
   }, [
     refreshPosition,
   ]);
 
   useEffect(() => {
-    void refreshProductData();
+    queueMicrotask(() => {
+      void refreshProductData();
 
-    void refreshSavingsPerformance();
+      void refreshSavingsPerformance();
 
-    void refreshSavingsMarketStatus();
+      void refreshSavingsMarketStatus();
+    });
   }, [
     refreshProductData,
     refreshSavingsPerformance,
@@ -1535,7 +1572,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       return;
     }
 
-    void refreshRewardStates(productState.commitments);
+    queueMicrotask(() => {
+      void refreshRewardStates(productState.commitments);
+    });
   }, [productState, refreshRewardStates]);
 
   const submitDeposit = useCallback(async (): Promise<boolean> => {
@@ -3853,31 +3892,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     setAllocationStatus(null);
   }, []);
-
-  type RewardState =
-    | { readonly kind: "loading" }
-    | {
-      readonly kind: "ready";
-
-      readonly reward: CommitmentRewardState;
-    }
-    | {
-      readonly kind: "error";
-
-      readonly message: string;
-    };
-
-  const [rewardStates, setRewardStates] = useState<
-    Readonly<Record<string, RewardState>>
-  >({});
-
-  const [claimingRewardId, setClaimingRewardId] = useState<string | null>(null);
-
-  const [rewardClaimError, setRewardClaimError] = useState<{
-    readonly commitmentId: string;
-
-    readonly message: string;
-  } | null>(null);
 
   const claimReward = useCallback(
     async (commitment: CommitmentDto): Promise<boolean> => {
