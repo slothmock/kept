@@ -1482,8 +1482,7 @@ export function buildApp(
             const signature =
               createHmac(
                 "sha256",
-                dependencies.moonPay
-                  .secretKey,
+                moonPay.secretKey,
               )
                 .update(
                   parsed.search,
