@@ -16,6 +16,7 @@ const requiredEnvironment = {
   KEPT_SAVINGS_VAULT_ADDRESS: "0x0000000000000000000000000000000000000002",
   AURORA_INTENTS_BASE_URL: "https://intents-connect-alpha-api.aurora.dev",
   AURORA_INTENTS_API_KEY: "test-aurora-key",
+  VITE_FIAT_ENABLED: "true",
   MOONPAY_WIDGET_BASE_URL: "https://widget.moonpay.example",
   MOONPAY_PUBLISHABLE_KEY: "moonpay-publishable-key",
   MOONPAY_SECRET_KEY: "moonpay-secret-key",
@@ -73,21 +74,51 @@ describe("API configuration", () => {
       auroraIntentsApiKey:
         "test-aurora-key",
 
-      moonPayBaseUrl:
-        "https://widget.moonpay.example",
+      fiatEnabled:
+        true,
 
-      moonPayPublishableKey:
-        "moonpay-publishable-key",
-
-      moonPaySecretKey:
-        "moonpay-secret-key",
-
-      moonPayWebhookKey:
-        "moonpay-webhook-key",
+      moonPay: {
+        baseUrl:
+          "https://widget.moonpay.example",
+        publishableKey:
+          "moonpay-publishable-key",
+        secretKey:
+          "moonpay-secret-key",
+        webhookKey:
+          "moonpay-webhook-key",
+      },
 
       commitmentWindowOverrideSeconds:
         undefined,
     });
+  });
+
+  it("does not require MoonPay configuration when fiat is disabled", () => {
+    const {
+      MOONPAY_WIDGET_BASE_URL: _baseUrl,
+      MOONPAY_PUBLISHABLE_KEY: _publishableKey,
+      MOONPAY_SECRET_KEY: _secretKey,
+      MOONPAY_WEBHOOK_KEY: _webhookKey,
+      ...withoutMoonPay
+    } = requiredEnvironment;
+
+    const config =
+      loadApiConfig({
+        ...withoutMoonPay,
+        VITE_FIAT_ENABLED: "false",
+      });
+
+    expect(config.fiatEnabled).toBe(false);
+    expect(config.moonPay).toBeUndefined();
+  });
+
+  it("requires MoonPay configuration when fiat is enabled", () => {
+    expect(() =>
+      loadApiConfig({
+        ...requiredEnvironment,
+        MOONPAY_SECRET_KEY: "",
+      }),
+    ).toThrow("MOONPAY_SECRET_KEY is required");
   });
 
   it("rejects missing required configuration and invalid ports", () => {

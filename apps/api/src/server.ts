@@ -510,13 +510,11 @@ const app = buildApp(
     commitmentSettlementVerifier:
       settlementVerifier,
 
-    moonPay: {
-      publishableKey: config.moonPayPublishableKey,
-
-      secretKey: config.moonPaySecretKey,
-      webhookKey: config.moonPayWebhookKey,
-      baseUrl: config.moonPayBaseUrl,
-    },
+    ...(config.moonPay
+      ? {
+        moonPay: config.moonPay,
+      }
+      : {}),
   },
   {
     solanaRpc: {

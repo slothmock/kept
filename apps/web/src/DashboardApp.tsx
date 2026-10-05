@@ -96,6 +96,8 @@ import {
 
 import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
 
+import { readFiatEnabled } from "@/config/feature-flags";
+
 import { diagnostics } from "@/lib/diagnostics";
 
 import { createLatestRequestGate } from "@/lib/latest-request";
@@ -158,6 +160,11 @@ function fundingRefreshError(
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
+
+  const fiatEnabled =
+    readFiatEnabled(
+      import.meta.env,
+    );
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -587,10 +594,26 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     );
 
   useEffect(() => {
-    if (!api) return;
+    const moonPayReturn =
+      consumeMoonPayReturnUrl(
+        globalThis.location.href,
+      );
 
-    const moonPayReturn = consumeMoonPayReturnUrl(globalThis.location.href);
-    if (!moonPayReturn) return;
+    if (!fiatEnabled) {
+      bankWithdrawalOrderStore?.clear();
+
+      if (moonPayReturn) {
+        globalThis.history.replaceState(
+          globalThis.history.state,
+          "",
+          moonPayReturn.cleanedPath,
+        );
+      }
+
+      return;
+    }
+
+    if (!api || !moonPayReturn) return;
 
     const { orderId, cleanedPath } = moonPayReturn;
     globalThis.history.replaceState(
@@ -610,13 +633,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   }, [
     api,
     bankWithdrawalOrderStore,
+    fiatEnabled,
   ]);
 
   useEffect(() => {
     if (
-      !api
+      !fiatEnabled
+      || !api
       || !bankWithdrawalOrderStore
     ) {
+      bankWithdrawalOrderStore?.clear();
       return;
     }
 
@@ -649,6 +675,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     api,
     bankWithdrawOrderId,
     bankWithdrawalOrderStore,
+    fiatEnabled,
   ]);
 
   useEffect(() => {
@@ -899,7 +926,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const refreshBankWithdrawalOrder = useCallback(
     async (orderId: string): Promise<boolean> => {
-      if (!api) return false;
+      if (!fiatEnabled || !api) return false;
 
       try {
         let order =
@@ -1118,6 +1145,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       api,
       bankWithdrawalOrderStore,
       bankWithdrawalTransferStore,
+      fiatEnabled,
       ensureTransactionNetwork,
       wallet,
     ],
@@ -2624,6 +2652,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const startBankWithdrawal =
     useCallback(
       async () => {
+        if (!fiatEnabled) {
+          setBankWithdrawError(
+            "Bank withdrawals are coming soon.",
+          );
+          return;
+        }
+
         if (!api || positionState.kind !== "ready") {
           setBankWithdrawError(
             "Your Kept account is not ready yet.",
@@ -2693,6 +2728,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         api,
         bankWithdrawAmount,
         bankWithdrawalOrderStore,
+        fiatEnabled,
         positionState,
       ],
     );
@@ -2700,6 +2736,14 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const confirmBankWithdrawal =
     useCallback(
       async () => {
+        if (!fiatEnabled) {
+          setBankWithdrawError(
+            "Bank withdrawals are coming soon.",
+          );
+          setBankWithdrawPhase("setup");
+          return;
+        }
+
         if (
           !api
           || !bankWithdrawOrderId
@@ -3040,6 +3084,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         bankWithdrawOrderId,
         bankWithdrawalTransferStore,
         config,
+        fiatEnabled,
         ensureTransactionNetwork,
         positionState,
         publicClient,
