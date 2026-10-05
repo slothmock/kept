@@ -496,6 +496,27 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("does not expose MoonPay routes when fiat is disabled", async () => {
+    const {
+      moonPay: _moonPay,
+      ...dependencies
+    } = buildDependencies();
+
+    const app =
+      buildApp(dependencies);
+
+    const response =
+      await app.inject({
+        method: "GET",
+        url: "/v1/moonpay/allowed-ip",
+        headers: auth,
+      });
+
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
   it("rejects MoonPay webhooks with an invalid signature", async () => {
     const dependencies = buildDependencies();
     const app = buildApp(dependencies);

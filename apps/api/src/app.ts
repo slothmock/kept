@@ -126,7 +126,7 @@ export interface ApiDependencies {
     }>;
   };
 
-  readonly moonPay: {
+  readonly moonPay?: {
     readonly baseUrl: string;
     readonly publishableKey: string;
     readonly secretKey: string;
@@ -678,7 +678,10 @@ export function buildApp(
   });
 
   app.addHook("preParsing", async (request, _reply, payload) => {
-    if (!request.url.startsWith("/v1/moonpay/webhook")) {
+    if (
+      !dependencies.moonPay
+      || !request.url.startsWith("/v1/moonpay/webhook")
+    ) {
       return payload;
     }
 
@@ -764,8 +767,11 @@ export function buildApp(
       request.url.startsWith(
         "/api/intents-connect",
       ) ||
-      request.url.startsWith(
-        "/v1/moonpay/webhook",
+      (
+        dependencies.moonPay
+        && request.url.startsWith(
+          "/v1/moonpay/webhook",
+        )
       )
     ) {
       return;
@@ -1284,210 +1290,216 @@ export function buildApp(
     },
   );
 
-  app.get(
-    "/v1/moonpay/allowed-ip",
-    async (
-      request,
-      reply,
-    ) =>
-      handle(
+  const moonPay =
+    dependencies.moonPay;
+
+  if (moonPay) {
+    app.get(
+      "/v1/moonpay/allowed-ip",
+      async (
         request,
         reply,
-        async () => {
-          const clientIp =
-            getCustomerIp(request);
-
-          return {
-            allowedIpAddress:
-              clientIp,
-          };
-        },
-      ),
-  );
-
-  app.post(
-    "/v1/moonpay/offramp-url",
-    async (request, reply) =>
-      handle(
-        request,
-        reply,
-        async () => {
-          const body = requireObject(request.body);
-          const amount = requireString(body, "amount");
-          const auth = asAuthenticatedRequest(request);
-
-          const order = await dependencies.persistence.createMoonPayOfframpOrder({
-            userId: auth.user.id,
-            amountAtomic: parseUsdcAmountToAtomic(amount),
+      ) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const clientIp =
+              getCustomerIp(request);
+  
+            return {
+              allowedIpAddress:
+                clientIp,
+            };
+          },
+        ),
+    );
+  
+    app.post(
+      "/v1/moonpay/offramp-url",
+      async (request, reply) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const body = requireObject(request.body);
+            const amount = requireString(body, "amount");
+            const auth = asAuthenticatedRequest(request);
+  
+            const order = await dependencies.persistence.createMoonPayOfframpOrder({
+              userId: auth.user.id,
+              amountAtomic: parseUsdcAmountToAtomic(amount),
+            });
+  
+            const customerIp = getCustomerIp(request);
+  
+            const url = new URL(moonPay.baseUrl);
+            url.searchParams.set("apiKey", moonPay.publishableKey);
+            url.searchParams.set("baseCurrencyCode", "usdc_base");
+            url.searchParams.set("baseCurrencyAmount", amount);
+            url.searchParams.set("lockAmount", "true");
+            url.searchParams.set("allowedIpAddress", customerIp);
+            url.searchParams.set("externalTransactionId", order.id);
+  
+            const primaryOrigin = allowedWebOrigins(webOrigin)[0];
+            if (primaryOrigin) {
+              const redirectUrl = new URL("/dashboard", primaryOrigin);
+              redirectUrl.searchParams.set("moonpayOrderId", order.id);
+              url.searchParams.set("redirectURL", redirectUrl.toString());
+            }
+  
+            const signature = createHmac("sha256", moonPay.secretKey)
+              .update(url.search)
+              .digest("base64");
+  
+            url.searchParams.set("signature", signature);
+  
+            return {
+              url: url.toString(),
+              orderId: order.id,
+            };
+          },
+        ),
+    );
+  
+    app.get(
+      "/v1/moonpay/offramp-orders/:id",
+      async (request, reply) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const params = requireObject(request.params);
+            const id = requireString(params, "id");
+            const auth = asAuthenticatedRequest(request);
+            const order = await dependencies.persistence.getMoonPayOfframpOrder(
+              auth.user.id,
+              id,
+            );
+  
+            if (!order) {
+              throw new NotFoundError("MoonPay off-ramp order");
+            }
+  
+            return order;
+          },
+        ),
+    );
+  
+    app.post(
+      "/v1/moonpay/offramp-orders/:id/submitted",
+      async (request, reply) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const params = requireObject(request.params);
+            const body = requireObject(request.body);
+            const auth = asAuthenticatedRequest(request);
+  
+            return dependencies.persistence.markMoonPayOfframpFundsSent({
+              userId: auth.user.id,
+              orderId: requireString(params, "id"),
+              transferReference: requireString(body, "transferReference"),
+            });
+          },
+        ),
+    );
+  
+    app.post(
+      "/v1/moonpay/webhook",
+      async (request, reply) => {
+        const rawBody = (request as RawBodyRequest).rawBody;
+        const signatureHeader = request.headers["moonpay-signature-v2"];
+        const signature = Array.isArray(signatureHeader)
+          ? signatureHeader[0]
+          : signatureHeader;
+  
+        if (
+          !rawBody
+          || !verifyMoonPayWebhookSignature({
+            rawBody,
+            signatureHeader: signature,
+            webhookKey: moonPay.webhookKey,
+          })
+        ) {
+          return reply.code(401).send({
+            error: { code: "INVALID_WEBHOOK_SIGNATURE" },
           });
-
-          const customerIp = getCustomerIp(request);
-
-          const url = new URL(dependencies.moonPay.baseUrl);
-          url.searchParams.set("apiKey", dependencies.moonPay.publishableKey);
-          url.searchParams.set("baseCurrencyCode", "usdc_base");
-          url.searchParams.set("baseCurrencyAmount", amount);
-          url.searchParams.set("lockAmount", "true");
-          url.searchParams.set("allowedIpAddress", customerIp);
-          url.searchParams.set("externalTransactionId", order.id);
-
-          const primaryOrigin = allowedWebOrigins(webOrigin)[0];
-          if (primaryOrigin) {
-            const redirectUrl = new URL("/dashboard", primaryOrigin);
-            redirectUrl.searchParams.set("moonpayOrderId", order.id);
-            url.searchParams.set("redirectURL", redirectUrl.toString());
-          }
-
-          const signature = createHmac("sha256", dependencies.moonPay.secretKey)
-            .update(url.search)
-            .digest("base64");
-
-          url.searchParams.set("signature", signature);
-
-          return {
-            url: url.toString(),
-            orderId: order.id,
-          };
-        },
-      ),
-  );
-
-  app.get(
-    "/v1/moonpay/offramp-orders/:id",
-    async (request, reply) =>
-      handle(
-        request,
-        reply,
-        async () => {
-          const params = requireObject(request.params);
-          const id = requireString(params, "id");
-          const auth = asAuthenticatedRequest(request);
-          const order = await dependencies.persistence.getMoonPayOfframpOrder(
-            auth.user.id,
-            id,
-          );
-
-          if (!order) {
-            throw new NotFoundError("MoonPay off-ramp order");
-          }
-
-          return order;
-        },
-      ),
-  );
-
-  app.post(
-    "/v1/moonpay/offramp-orders/:id/submitted",
-    async (request, reply) =>
-      handle(
-        request,
-        reply,
-        async () => {
-          const params = requireObject(request.params);
-          const body = requireObject(request.body);
-          const auth = asAuthenticatedRequest(request);
-
-          return dependencies.persistence.markMoonPayOfframpFundsSent({
-            userId: auth.user.id,
-            orderId: requireString(params, "id"),
-            transferReference: requireString(body, "transferReference"),
-          });
-        },
-      ),
-  );
-
-  app.post(
-    "/v1/moonpay/webhook",
-    async (request, reply) => {
-      const rawBody = (request as RawBodyRequest).rawBody;
-      const signatureHeader = request.headers["moonpay-signature-v2"];
-      const signature = Array.isArray(signatureHeader)
-        ? signatureHeader[0]
-        : signatureHeader;
-
-      if (
-        !rawBody
-        || !verifyMoonPayWebhookSignature({
-          rawBody,
-          signatureHeader: signature,
-          webhookKey: dependencies.moonPay.webhookKey,
-        })
-      ) {
-        return reply.code(401).send({
-          error: { code: "INVALID_WEBHOOK_SIGNATURE" },
-        });
-      }
-
-      const event = parseMoonPaySellWebhook(request.body);
-
-      if (!event) {
-        return reply.code(204).send();
-      }
-
-      try {
-        await dependencies.persistence.recordMoonPayOfframpWebhook(event);
-      } catch (error) {
-        if (error instanceof NotFoundError) {
-          request.log.warn(
-            { moonPayTransactionId: event.moonPayTransactionId },
-            "MoonPay webhook did not match a Kept off-ramp order",
-          );
-
+        }
+  
+        const event = parseMoonPaySellWebhook(request.body);
+  
+        if (!event) {
           return reply.code(204).send();
         }
-
-        throw error;
-      }
-
-      return reply.code(204).send();
-    },
-  );
-
-  app.post(
-    "/v1/moonpay/sign",
-    async (
-      request,
-      reply,
-    ) =>
-      handle(
+  
+        try {
+          await dependencies.persistence.recordMoonPayOfframpWebhook(event);
+        } catch (error) {
+          if (error instanceof NotFoundError) {
+            request.log.warn(
+              { moonPayTransactionId: event.moonPayTransactionId },
+              "MoonPay webhook did not match a Kept off-ramp order",
+            );
+  
+            return reply.code(204).send();
+          }
+  
+          throw error;
+        }
+  
+        return reply.code(204).send();
+      },
+    );
+  
+    app.post(
+      "/v1/moonpay/sign",
+      async (
         request,
         reply,
-        async () => {
-          const body =
-            requireObject(
-              request.body,
-            );
-
-          const url =
-            requireString(
-              body,
-              "url",
-            );
-
-          const parsed =
-            new URL(
-              url,
-            );
-
-          const signature =
-            createHmac(
-              "sha256",
-              dependencies.moonPay
-                .secretKey,
-            )
-              .update(
-                parsed.search,
-              )
-              .digest(
-                "base64",
+      ) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const body =
+              requireObject(
+                request.body,
               );
-
-          return {
-            signature,
-          };
-        },
-      ),
-  );
+  
+            const url =
+              requireString(
+                body,
+                "url",
+              );
+  
+            const parsed =
+              new URL(
+                url,
+              );
+  
+            const signature =
+              createHmac(
+                "sha256",
+                dependencies.moonPay
+                  .secretKey,
+              )
+                .update(
+                  parsed.search,
+                )
+                .digest(
+                  "base64",
+                );
+  
+            return {
+              signature,
+            };
+          },
+        ),
+    );
+  
+  }
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 

@@ -16,10 +16,13 @@ export interface ApiConfig {
   readonly commitmentWindowOverrideSeconds?: number | undefined;
   readonly auroraIntentsBaseUrl: string;
   readonly auroraIntentsApiKey: string;
-  readonly moonPayPublishableKey: string;
-  readonly moonPaySecretKey: string;
-  readonly moonPayWebhookKey: string;
-  readonly moonPayBaseUrl: string;
+  readonly fiatEnabled: boolean;
+  readonly moonPay?: {
+    readonly publishableKey: string;
+    readonly secretKey: string;
+    readonly webhookKey: string;
+    readonly baseUrl: string;
+  };
 }
 
 function parseCommitmentWindowOverride(
@@ -216,29 +219,34 @@ export function loadApiConfig(
       "AURORA_INTENTS_API_KEY",
     );
 
-  const moonPayBaseUrl =
-    requireValue(
-      environment,
-      "MOONPAY_WIDGET_BASE_URL",
-    );
+  const fiatEnabled =
+    environment.VITE_FIAT_ENABLED?.trim() === "true";
 
-  const moonPayPublishableKey =
-    requireValue(
-      environment,
-      "MOONPAY_PUBLISHABLE_KEY",
-    );
-
-  const moonPaySecretKey =
-    requireValue(
-      environment,
-      "MOONPAY_SECRET_KEY",
-    );
-
-  const moonPayWebhookKey =
-    requireValue(
-      environment,
-      "MOONPAY_WEBHOOK_KEY",
-    );
+  const moonPay =
+    fiatEnabled
+      ? {
+        baseUrl:
+          requireValue(
+            environment,
+            "MOONPAY_WIDGET_BASE_URL",
+          ),
+        publishableKey:
+          requireValue(
+            environment,
+            "MOONPAY_PUBLISHABLE_KEY",
+          ),
+        secretKey:
+          requireValue(
+            environment,
+            "MOONPAY_SECRET_KEY",
+          ),
+        webhookKey:
+          requireValue(
+            environment,
+            "MOONPAY_WEBHOOK_KEY",
+          ),
+      }
+      : undefined;
 
   return {
     databaseUrl,
@@ -256,9 +264,7 @@ export function loadApiConfig(
     commitmentWindowOverrideSeconds,
     auroraIntentsBaseUrl,
     auroraIntentsApiKey,
-    moonPayBaseUrl,
-    moonPayPublishableKey,
-    moonPaySecretKey,
-    moonPayWebhookKey,
+    fiatEnabled,
+    ...(moonPay ? { moonPay } : {}),
   };
 }

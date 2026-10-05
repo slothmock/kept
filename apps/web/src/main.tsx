@@ -15,6 +15,7 @@ import { monad } from "viem/chains";
 import { KeptApp } from "@/KeptApp";
 import { createLocalAnvilChain } from "@/chain/local-anvil-chain";
 import { createMonadTestnetChain } from "@/chain/monad-testnet-chain";
+import { readFiatEnabled } from "@/config/feature-flags";
 import { diagnostics } from "@/lib/diagnostics";
 import { readVaultConfig } from "@/vault/config";
 
@@ -46,6 +47,11 @@ window.addEventListener(
 const privyAppId =
   import.meta.env
     .VITE_PRIVY_APP_ID;
+
+const fiatEnabled =
+  readFiatEnabled(
+    import.meta.env,
+  );
 
 const moonPayPublishableKey =
   import.meta.env
@@ -95,10 +101,19 @@ if (!root) {
 if (!privyAppId) {
   root.textContent =
     "VITE_PRIVY_APP_ID is required to start Kept.";
-} else if (!moonPayPublishableKey) {
+} else if (
+  fiatEnabled
+  && !moonPayPublishableKey
+) {
   root.textContent =
-    "VITE_MOONPAY_PUBLISHABLE_KEY is required to start Kept.";
+    "VITE_MOONPAY_PUBLISHABLE_KEY is required when fiat is enabled.";
 } else {
+  const app = (
+    <BrowserRouter>
+      <KeptApp />
+    </BrowserRouter>
+  );
+
   createRoot(root).render(
     <PrivyProvider
       appId={
@@ -131,11 +146,14 @@ if (!privyAppId) {
         },
       }}
     >
-      <MoonPayProvider apiKey={moonPayPublishableKey} debug={import.meta.env.DEV}>
-        <BrowserRouter>
-          <KeptApp />
-        </BrowserRouter>
-      </MoonPayProvider>
+      {fiatEnabled && moonPayPublishableKey ? (
+        <MoonPayProvider
+          apiKey={moonPayPublishableKey}
+          debug={import.meta.env.DEV}
+        >
+          {app}
+        </MoonPayProvider>
+      ) : app}
     </PrivyProvider>,
   );
 }
