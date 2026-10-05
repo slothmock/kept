@@ -1,5 +1,9 @@
 import { erc20Abi, type Address } from "viem";
 
+import type {
+  ContractReader,
+} from "@/application/ports/blockchain";
+
 const vaultPositionAbi = [
   {
     type: "function",
@@ -23,10 +27,6 @@ const vaultPositionAbi = [
     outputs: [{ name: "assets", type: "uint256" }],
   },
 ] as const;
-
-interface ContractReader {
-  readContract(input: unknown): Promise<bigint>;
-}
 
 export interface VaultPosition {
   readonly usdcBalance: bigint;
