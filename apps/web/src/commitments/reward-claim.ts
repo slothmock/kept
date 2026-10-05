@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 
-import type { KeptTransactionSender } from "../chain/transaction-sender.js";
+import type { TransactionSender } from "@/application/ports/blockchain";
 import {
     buildClaimRewardTransaction,
     readCommitmentRewardState,
@@ -26,7 +26,7 @@ export interface RewardClaimDependencies {
     readonly manager: Address;
     readonly chainId: number;
     readonly commitmentId: string;
-    readonly sender: KeptTransactionSender;
+    readonly sender: TransactionSender;
     readonly readContract: Parameters<
         typeof readCommitmentRewardState
     >[0]["readContract"];
