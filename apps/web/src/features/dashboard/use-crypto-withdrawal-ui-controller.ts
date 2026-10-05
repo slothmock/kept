@@ -314,7 +314,7 @@ export function useCryptoWithdrawalUiController():
           false,
         );
         setPreviewStatus(
-          "Preparing transfer route…",
+          null,
         );
         setPreviewError(
           null,

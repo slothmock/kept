@@ -122,11 +122,6 @@ import {
 } from "@/vault/transactions";
 
 import {
-  resolveKeptFundingAssets,
-  type FundingAsset,
-} from "@/features/funding/intents/supported-tokens";
-
-import {
   createKeptIntentsRunner,
 } from "@/features/funding/intents/runner";
 
@@ -142,6 +137,10 @@ import {
 import {
   useBankWithdrawalOrderController,
 } from "@/features/dashboard/use-bank-withdrawal-order-controller";
+
+import {
+  useCryptoWithdrawalUiController,
+} from "@/features/dashboard/use-crypto-withdrawal-ui-controller";
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
@@ -167,218 +166,30 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
 
-  const [
-    cryptoWithdrawAmount,
-    setCryptoWithdrawAmount,
-  ] = useState("");
-
-  const [
-    cryptoRecipient,
-    setCryptoRecipient,
-  ] = useState("");
-
-  const [
-    cryptoDestinationAssets,
-    setCryptoDestinationAssets,
-  ] = useState<
-    readonly FundingAsset[]
-  >([]);
-
-  const [
-    cryptoDestinationAssetId,
-    setCryptoDestinationAssetId,
-  ] = useState<
-    string | null
-  >(null);
-
-  const [
-    cryptoPreviewing,
-    setCryptoPreviewing,
-  ] = useState(false);
-
-  const [
-    cryptoPreviewReady,
-    setCryptoPreviewReady,
-  ] = useState(false);
-
-  const [
-    cryptoPreviewStatus,
-    setCryptoPreviewStatus,
-  ] = useState<
-    string | null
-  >(null);
-
-  const [
-    cryptoPreviewError,
-    setCryptoPreviewError,
-  ] = useState<
-    string | null
-  >(null);
-
-  const [
-    cryptoExecuting,
-    setCryptoExecuting,
-  ] = useState(false);
-
-  const [
-    cryptoExecutionStatus,
-    setCryptoExecutionStatus,
-  ] = useState<
-    string | null
-  >(null);
-
-  const [
-    cryptoExecutionError,
-    setCryptoExecutionError,
-  ] = useState<
-    string | null
-  >(null);
-
-  useEffect(
-    () => {
-      let cancelled =
-        false;
-
-      void (
-        async () => {
-          try {
-            const {
-              origins,
-              destination,
-            } =
-              await resolveKeptFundingAssets();
-
-            const assets =
-              [
-                destination,
-                ...origins,
-              ].filter(
-                (
-                  asset,
-                  index,
-                  all,
-                ) =>
-                  all.findIndex(
-                    (
-                      candidate,
-                    ) =>
-                      candidate.assetId ===
-                      asset.assetId,
-                  ) ===
-                  index,
-              );
-
-            setCryptoDestinationAssets(
-              assets,
-            );
-
-            setCryptoDestinationAssetId(
-              (
-                current,
-              ) =>
-                current ??
-                destination.assetId,
-            );
-          } catch (
-          error
-          ) {
-            diagnostics.error(
-              "withdrawal.assets_load_failed",
-              error,
-            );
-
-            if (
-              !cancelled
-            ) {
-              setCryptoPreviewError(
-                "Withdrawal routes are currently unavailable.",
-              );
-            }
-          }
-        }
-      )();
-
-      return () => {
-        cancelled =
-          true;
-      };
-    },
-    [],
-  );
-
-  const invalidateCryptoPreview =
-    useCallback(
-      () => {
-        setCryptoPreviewReady(
-          false,
-        );
-
-        setCryptoPreviewStatus(
-          null,
-        );
-
-        setCryptoPreviewError(
-          null,
-        );
-
-        setCryptoExecutionStatus(
-          null,
-        );
-
-        setCryptoExecutionError(
-          null,
-        );
-      },
-      [],
-    );
-
-  const handleCryptoWithdrawAmountChange =
-    useCallback(
-      (
-        value: string,
-      ) => {
-        setCryptoWithdrawAmount(
-          value,
-        );
-
-        invalidateCryptoPreview();
-      },
-      [
-        invalidateCryptoPreview,
-      ],
-    );
-
-  const handleCryptoRecipientChange =
-    useCallback(
-      (
-        value: string,
-      ) => {
-        setCryptoRecipient(
-          value,
-        );
-
-        invalidateCryptoPreview();
-      },
-      [
-        invalidateCryptoPreview,
-      ],
-    );
-
-  const handleCryptoDestinationAssetChange =
-    useCallback(
-      (
-        assetId: string,
-      ) => {
-        setCryptoDestinationAssetId(
-          assetId,
-        );
-
-        invalidateCryptoPreview();
-      },
-      [
-        invalidateCryptoPreview,
-      ],
-    );
+  const {
+    amount: cryptoWithdrawAmount,
+    recipient: cryptoRecipient,
+    destinationAssets: cryptoDestinationAssets,
+    destinationAssetId: cryptoDestinationAssetId,
+    previewing: cryptoPreviewing,
+    previewReady: cryptoPreviewReady,
+    previewStatus: cryptoPreviewStatus,
+    previewError: cryptoPreviewError,
+    executing: cryptoExecuting,
+    executionStatus: cryptoExecutionStatus,
+    executionError: cryptoExecutionError,
+    setAmount: handleCryptoWithdrawAmountChange,
+    setRecipient: handleCryptoRecipientChange,
+    setDestinationAssetId: handleCryptoDestinationAssetChange,
+    startPreview: startCryptoPreview,
+    completePreview: completeCryptoPreview,
+    failPreview: failCryptoPreview,
+    startExecution: startCryptoExecution,
+    setExecutionStatus: setCryptoExecutionStatus,
+    completeExecution: completeCryptoExecution,
+    failExecution: failCryptoExecution,
+    clearAfterExecution: clearCryptoAfterExecution,
+  } = useCryptoWithdrawalUiController();
 
   const [storedPositionState, setStoredPositionState] =
     useState<BoundPositionState>({ kind: "unavailable" });
@@ -1384,7 +1195,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           positionState.kind !==
           "ready"
         ) {
-          setCryptoPreviewError(
+          failCryptoPreview(
             "Your Kept account is not ready yet.",
           );
 
@@ -1400,7 +1211,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           "error" in
           parsedAmount
         ) {
-          setCryptoPreviewError(
+          failCryptoPreview(
             parsedAmount.error,
           );
 
@@ -1412,7 +1223,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           positionState.position
             .withdrawableAssets
         ) {
-          setCryptoPreviewError(
+          failCryptoPreview(
             "Enter an amount no greater than your available savings.",
           );
 
@@ -1431,28 +1242,14 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         if (
           !destinationAsset
         ) {
-          setCryptoPreviewError(
+          failCryptoPreview(
             "Choose a withdrawal network.",
           );
 
           return;
         }
 
-        setCryptoPreviewing(
-          true,
-        );
-
-        setCryptoPreviewReady(
-          false,
-        );
-
-        setCryptoPreviewStatus(
-          null,
-        );
-
-        setCryptoPreviewError(
-          null,
-        );
+        startCryptoPreview();
 
         try {
           const directMonadTransfer =
@@ -1462,11 +1259,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           if (
             directMonadTransfer
           ) {
-            setCryptoPreviewReady(
-              true,
-            );
-
-            setCryptoPreviewStatus(
+            completeCryptoPreview(
               "Transfer ready.",
             );
 
@@ -1507,11 +1300,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               destinationAsset,
             });
 
-            setCryptoPreviewReady(
-              true,
-            );
-
-            setCryptoPreviewStatus(
+            completeCryptoPreview(
               "Transfer route ready.",
             );
           } finally {
@@ -1525,15 +1314,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             error,
           );
 
-          setCryptoPreviewError(
+          failCryptoPreview(
             consumerErrorMessage(
               error,
               "We could not prepare this transfer. Try again.",
             ),
-          );
-        } finally {
-          setCryptoPreviewing(
-            false,
           );
         }
       },
@@ -1560,7 +1345,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           positionState.kind !==
           "ready"
         ) {
-          setCryptoExecutionError(
+          failCryptoExecution(
             "Your Kept account is not ready yet.",
           );
 
@@ -1576,7 +1361,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           "error" in
           parsedAmount
         ) {
-          setCryptoExecutionError(
+          failCryptoExecution(
             parsedAmount.error,
           );
 
@@ -1599,7 +1384,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           parsedAmount.assets >
           availableToSend
         ) {
-          setCryptoPreviewError(
+          failCryptoPreview(
             "Enter an amount no greater than your available balance.",
           );
 
@@ -1618,7 +1403,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         if (
           !destinationAsset
         ) {
-          setCryptoExecutionError(
+          failCryptoExecution(
             "Choose a withdrawal network.",
           );
 
@@ -1628,7 +1413,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         if (
           !cryptoPreviewReady
         ) {
-          setCryptoExecutionError(
+          failCryptoExecution(
             "Review the transfer before confirming it.",
           );
 
@@ -1648,7 +1433,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                 cryptoRecipient,
               ).toBase58();
           } catch {
-            setCryptoExecutionError(
+            failCryptoExecution(
               "Enter a valid Solana wallet address.",
             );
 
@@ -1660,7 +1445,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               cryptoRecipient,
             )
           ) {
-            setCryptoExecutionError(
+            failCryptoExecution(
               "Enter a valid wallet address.",
             );
 
@@ -1680,15 +1465,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             availableCash
             : 0n;
 
-        setCryptoExecuting(
-          true,
-        );
-
-        setCryptoExecutionError(
-          null,
-        );
-
-        setCryptoExecutionStatus(
+        startCryptoExecution(
           requiredFromSavings > 0n
             ? "Preparing your money…"
             : "Preparing transfer…",
@@ -1964,21 +1741,11 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             },
           );
 
-          setCryptoExecutionStatus(
+          completeCryptoExecution(
             "Transfer complete.",
           );
 
-          setCryptoWithdrawAmount(
-            "",
-          );
-
-          setCryptoPreviewReady(
-            false,
-          );
-
-          setCryptoPreviewStatus(
-            null,
-          );
+          clearCryptoAfterExecution();
 
           await Promise.all([
             refreshPosition(),
@@ -1992,10 +1759,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
             error,
           );
 
-          setCryptoExecutionStatus(
-            null,
-          );
-
           /*
            * This distinction is important.
            *
@@ -2007,7 +1770,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           if (
             savingsWithdrawn
           ) {
-            setCryptoExecutionError(
+            failCryptoExecution(
               "The transfer couldn't be completed. Your money was withdrawn from savings successfully and is now available in Kept.",
             );
 
@@ -2016,17 +1779,13 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               refreshProductData(),
             ]);
           } else {
-            setCryptoExecutionError(
+            failCryptoExecution(
               consumerErrorMessage(
                 error,
                 "We could not complete this transfer. Try again.",
               ),
             );
           }
-        } finally {
-          setCryptoExecuting(
-            false,
-          );
         }
       },
       [
