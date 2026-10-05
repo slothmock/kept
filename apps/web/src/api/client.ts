@@ -6,14 +6,11 @@ import {
 
 import type {
   CommitmentDto,
-  CreateCommitmentRequest,
   GoalAllocationDto,
   GoalDto,
   KeptApi,
   MoonPayOfframpOrderDto,
   MoonPayOfframpUrlDto,
-  ReallocateGoalSharesInput,
-  RecordTransactionInput,
   SavingsMarketStatusDto,
   SavingsPerformanceDto,
   SolanaFundingBalancesDto,
@@ -99,7 +96,7 @@ export function createKeptApi(input: {
   const { request, post } =
     client;
 
-rn {
+  return {
     getSavingsPerformance: () =>
       request<SavingsPerformanceDto>("/v1/savings/performance"),
     getSavingsMarketStatus: () =>
