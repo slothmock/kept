@@ -1,17 +1,12 @@
 import type { Hex } from "viem";
 
+import type {
+  TransactionReceiptReader,
+  TransactionSender,
+} from "@/application/ports/blockchain";
+
 import { ConsumerError } from "../lib/consumer-error.js";
 import type { UnsignedVaultTransaction } from "./transactions.js";
-
-interface TransactionSender {
-  sendTransaction(transaction: UnsignedVaultTransaction): Promise<Hex>;
-}
-
-interface TransactionReceipts {
-  waitForTransactionReceipt(input: { readonly hash: Hex }): Promise<{
-    readonly status: "success" | "reverted";
-  }>;
-}
 
 export interface SubmitVaultDepositInput {
   readonly allowance: bigint;
@@ -20,7 +15,7 @@ export interface SubmitVaultDepositInput {
   readonly deposit: UnsignedVaultTransaction;
   readonly beforeSend: (transaction: UnsignedVaultTransaction) => Promise<void>;
   readonly sender: TransactionSender;
-  readonly receipts: TransactionReceipts;
+  readonly receipts: TransactionReceiptReader;
 }
 
 export interface SubmittedVaultDeposit {
@@ -32,7 +27,7 @@ export interface SubmitVaultWithdrawalInput {
   readonly withdrawal: UnsignedVaultTransaction;
   readonly beforeSend: (transaction: UnsignedVaultTransaction) => Promise<void>;
   readonly sender: TransactionSender;
-  readonly receipts: TransactionReceipts;
+  readonly receipts: TransactionReceiptReader;
 }
 
 export interface SubmittedVaultWithdrawal {
@@ -43,7 +38,7 @@ async function sendAndConfirm(
   transaction: UnsignedVaultTransaction,
   beforeSend: (transaction: UnsignedVaultTransaction) => Promise<void>,
   sender: TransactionSender,
-  receipts: TransactionReceipts,
+  receipts: TransactionReceiptReader,
 ): Promise<Hex> {
   await beforeSend(transaction);
   const hash = await sender.sendTransaction(transaction);
