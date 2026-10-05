@@ -2202,6 +2202,9 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                   );
                 }
 
+                const destinationAsset =
+                  bankWithdrawal.destinationAsset;
+
                 const amount =
                   BigInt(
                     order.amountAtomic,
@@ -2369,8 +2372,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
                               runner,
                               amount,
                               recipient,
-                              destinationAsset:
-                                bankWithdrawal.destinationAsset,
+                              destinationAsset,
                             });
 
                           executionId =
