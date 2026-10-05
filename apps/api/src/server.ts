@@ -167,15 +167,20 @@ const savingsPerformance = createSavingsPerformanceReader({
 });
 
 const savingsCurrentAssets = {
-  async read(account: string): Promise<bigint> {
+  async read(
+    account: string,
+    blockNumber?: bigint,
+  ): Promise<bigint> {
     const shares =
       await vaultShares.readShares(
         account,
+        blockNumber,
       );
 
     return vaultShares
       .convertToAssets(
         shares,
+        blockNumber,
       );
   },
 };

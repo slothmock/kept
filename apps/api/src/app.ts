@@ -92,6 +92,7 @@ export interface ApiDependencies {
   readonly savingsCurrentAssets?: {
     readonly read: (
       account: string,
+      blockNumber?: bigint,
     ) => Promise<bigint>;
   };
 
@@ -106,6 +107,7 @@ export interface ApiDependencies {
     };
     readonly readAccountActivity: (
       account: string,
+      throughBlock?: bigint,
     ) => Promise<{
       readonly depositedAssets: bigint;
       readonly withdrawnAssets: bigint;
@@ -1577,6 +1579,25 @@ export function buildApp(
                   });
                 }
 
+                const snapshotStatus =
+                  dependencies
+                    .savingsActivityIndex!
+                    .status();
+
+                const snapshotBlock =
+                  snapshotStatus.currentBlock;
+
+                if (snapshotBlock === null) {
+                  throw new SavingsHistorySynchronizingError({
+                    progressPercent:
+                      snapshotStatus.progressPercent,
+                    currentBlock:
+                      snapshotStatus.currentBlock,
+                    targetBlock:
+                      snapshotStatus.targetBlock,
+                  });
+                }
+
                 const [
                   activity,
                   currentAssets,
@@ -1585,12 +1606,14 @@ export function buildApp(
                     .savingsActivityIndex!
                     .readAccountActivity(
                       auth.identity.wallet!,
+                      snapshotBlock,
                     ),
 
                   dependencies
                     .savingsCurrentAssets!
                     .read(
                       auth.identity.wallet!,
+                      snapshotBlock,
                     ),
                 ]);
 
