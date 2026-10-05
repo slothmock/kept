@@ -9,6 +9,7 @@ on:
     branches:
       - staging
       - main
+      - refactor/separation-of-concerns
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
