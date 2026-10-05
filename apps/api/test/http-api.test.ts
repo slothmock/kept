@@ -1067,4 +1067,88 @@ describe("Kept HTTP API", () => {
     ]);
     await app.close();
   });
+  it("calculates indexed savings earnings from one confirmed block snapshot", async () => {
+    const wallet =
+      "0x0000000000000000000000000000000000000001";
+
+    const snapshotBlock = 120n;
+
+    const readAccountActivity = vi.fn(
+      async (
+        _account: string,
+        throughBlock?: bigint,
+      ) =>
+        throughBlock === snapshotBlock
+          ? {
+            depositedAssets: 100_000_000n,
+            withdrawnAssets: 50_000_000n,
+            netAssets: 50_000_000n,
+          }
+          : {
+            depositedAssets: 100_000_000n,
+            withdrawnAssets: 0n,
+            netAssets: 100_000_000n,
+          },
+    );
+
+    const readCurrentAssets = vi.fn(
+      async (
+        _account: string,
+        atBlock?: bigint,
+      ) =>
+        atBlock === snapshotBlock
+          ? 60_000_000n
+          : 10_000_000n,
+    );
+
+    const app = buildApp(
+      buildDependencies({
+        chainId: 10_143,
+        savingsCurrentAssets: {
+          read: readCurrentAssets,
+        },
+        savingsActivityIndex: {
+          isReady: () => true,
+          status: () => ({
+            ready: true,
+            startBlock: 1n,
+            currentBlock: snapshotBlock,
+            targetBlock: 122n,
+            progressPercent: 100,
+          }),
+          readAccountActivity,
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/savings/performance",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      depositedAssetsAtomic: "100000000",
+      withdrawnAssetsAtomic: "50000000",
+      netContributionsAtomic: "50000000",
+      currentAssetsAtomic: "60000000",
+      earningsAssetsAtomic: "10000000",
+    });
+
+    expect(readAccountActivity)
+      .toHaveBeenCalledWith(
+        wallet,
+        snapshotBlock,
+      );
+
+    expect(readCurrentAssets)
+      .toHaveBeenCalledWith(
+        wallet,
+        snapshotBlock,
+      );
+
+    await app.close();
+  });
+
 });

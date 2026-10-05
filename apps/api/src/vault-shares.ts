@@ -43,10 +43,12 @@ const vaultBalanceAbi = [
 export interface VaultShareBalanceReader {
   readShares(
     account: string,
+    blockNumber?: bigint,
   ): Promise<bigint>;
 
   convertToAssets(
     shares: bigint,
+    blockNumber?: bigint,
   ): Promise<bigint>;
 }
 
@@ -86,6 +88,7 @@ export function createVaultShareBalanceReader(
   return {
     async readShares(
       account: string,
+      blockNumber?: bigint,
     ): Promise<bigint> {
       await assertChain();
 
@@ -98,11 +101,15 @@ export function createVaultShareBalanceReader(
           args: [
             getAddress(account),
           ],
+          ...(blockNumber !== undefined
+            ? { blockNumber }
+            : {}),
         });
     },
 
     async convertToAssets(
       shares: bigint,
+      blockNumber?: bigint,
     ): Promise<bigint> {
       if (shares < 0n) {
         throw new Error(
@@ -119,6 +126,9 @@ export function createVaultShareBalanceReader(
           functionName:
             "convertToAssets",
           args: [shares],
+          ...(blockNumber !== undefined
+            ? { blockNumber }
+            : {}),
         });
     },
   };
