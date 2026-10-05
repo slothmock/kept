@@ -1,32 +1,40 @@
-import type { CommitmentDto, GoalDto } from "@/api/kept-api";
+import type {
+  CommitmentDto,
+  GoalDto,
+} from "@/api/kept-api";
 
-interface ProductData {
-  readonly goals: readonly GoalDto[];
-  readonly commitments: readonly CommitmentDto[];
-}
+import {
+  beginProductRefresh as beginDomainProductRefresh,
+  failProductRefresh as failDomainProductRefresh,
+  initialProductDataState as initialDomainProductDataState,
+  type ProductDataState as DomainProductDataState,
+} from "@/domain/product-data-state";
 
 export type ProductDataState =
-  | ({ readonly kind: "loading" } & ProductData)
-  | ({ readonly kind: "ready" } & ProductData)
-  | ({ readonly kind: "error"; readonly message: string } & ProductData);
+  DomainProductDataState<
+    GoalDto,
+    CommitmentDto
+  >;
 
-export function initialProductDataState(): ProductDataState {
-  return { kind: "loading", goals: [], commitments: [] };
+export function initialProductDataState():
+  ProductDataState {
+  return initialDomainProductDataState();
 }
 
-export function beginProductRefresh(state: ProductDataState): ProductDataState {
-  return {
-    kind: "loading",
-    goals: state.goals,
-    commitments: state.commitments,
-  };
+export function beginProductRefresh(
+  state: ProductDataState,
+): ProductDataState {
+  return beginDomainProductRefresh(
+    state,
+  );
 }
 
-export function failProductRefresh(state: ProductDataState, message: string): ProductDataState {
-  return {
-    kind: "error",
+export function failProductRefresh(
+  state: ProductDataState,
+  message: string,
+): ProductDataState {
+  return failDomainProductRefresh(
+    state,
     message,
-    goals: state.goals,
-    commitments: state.commitments,
-  };
+  );
 }
