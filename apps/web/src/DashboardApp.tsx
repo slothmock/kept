@@ -63,11 +63,8 @@ import { AppShell } from "@/components/AppShell";
 import type { CreateCommitmentInput } from "@/features/commitments/CreateCommitmentDialog";
 
 import {
-  beginProductRefresh,
-  failProductRefresh,
-  initialProductDataState,
-  type ProductDataState,
-} from "@/features/dashboard/product-data-state";
+  useProductDataController,
+} from "@/features/dashboard/use-product-data-controller";
 
 import {
   currentPositionState,
@@ -84,7 +81,6 @@ import {
   deallocationInputError,
   previewAllocationShares,
   readGoalFunding,
-  type GoalFundingState,
 } from "@/features/goals/funding";
 
 import { runGoalDeletion } from "@/features/goals/delete-goal-flow";
@@ -146,17 +142,6 @@ import {
   deliverBankWithdrawal,
   type BankWithdrawalPhase,
 } from "./features/withdrawal/bank-withdrawal-lifecycle";
-
-function fundingRefreshError(
-  current: GoalFundingState,
-  message: string,
-): GoalFundingState {
-  const funding = current.kind === "loading" ? undefined : current.funding;
-
-  return funding
-    ? { kind: "error", message, funding }
-    : { kind: "error", message };
-}
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
@@ -398,10 +383,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [storedPositionState, setStoredPositionState] =
     useState<BoundPositionState>({ kind: "unavailable" });
 
-  const [productState, setProductState] = useState<ProductDataState>(
-    initialProductDataState,
-  );
-
   const [creatingGoal, setCreatingGoal] = useState(false);
 
   const [deletingGoal, setDeletingGoal] = useState(false);
@@ -417,10 +398,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [commitmentStatus, setCommitmentStatus] = useState<string | null>(null);
 
   const [commitmentError, setCommitmentError] = useState<string | null>(null);
-
-  const [goalFundingState, setGoalFundingState] = useState<GoalFundingState>({
-    kind: "loading",
-  });
 
   const [allocatingGoal, setAllocatingGoal] = useState(false);
 
@@ -503,8 +480,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
   const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
 
-  const productRequestGate = useMemo(() => createLatestRequestGate(), []);
-
   const config = useMemo(() => {
     const result = readVaultConfig(import.meta.env);
 
@@ -580,6 +555,26 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     wallet.address && isAddress(wallet.address)
       ? getAddress(wallet.address)
       : null;
+
+  const {
+    productState,
+    goalFundingState,
+    refreshProductData,
+  } = useProductDataController({
+    api,
+    account,
+    vault:
+      config?.vault ?? null,
+    publicClient:
+      publicClient
+        ? {
+            readContract: (input) =>
+              publicClient.readContract(
+                input as never,
+              ) as Promise<bigint>,
+          }
+        : null,
+  });
 
   const bankWithdrawalOrderStore =
     useMemo(
@@ -1375,132 +1370,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     config,
     refreshPosition,
   ]);
-
-  const refreshProductData = useCallback(async () => {
-    const requestId = productRequestGate.begin();
-
-    setProductState(beginProductRefresh);
-
-    setGoalFundingState((current) =>
-      current.kind === "ready" ? current : { kind: "loading" },
-    );
-
-    if (!api) {
-      if (productRequestGate.isCurrent(requestId)) {
-        setProductState((current) =>
-          failProductRefresh(current, "Kept's service is not configured."),
-        );
-
-        setGoalFundingState({
-          kind: "error",
-          message:
-            "Goal balances are unavailable because Kept is not configured.",
-        });
-      }
-
-      return;
-    }
-
-    try {
-      const [goals, commitments] = await Promise.all([
-        api.listGoals(),
-
-        api.listCommitments(),
-      ]);
-
-      if (productRequestGate.isCurrent(requestId)) {
-        setProductState({ kind: "ready", goals, commitments });
-      }
-
-      if (!config || !publicClient) {
-        if (productRequestGate.isCurrent(requestId)) {
-          setGoalFundingState({
-            kind: "error",
-
-            message:
-              "Goal balances are unavailable because Kept is not configured.",
-          });
-        }
-
-        return;
-      }
-
-      try {
-        if (!account) {
-          if (productRequestGate.isCurrent(requestId)) {
-            setGoalFundingState({
-              kind: "error",
-
-              message: "Your Kept account is not ready yet.",
-            });
-          }
-
-          return;
-        }
-
-        const allocations = [];
-
-        for (const goal of goals) {
-          allocations.push(
-            await api.getGoalAllocation(goal.id),
-          );
-        }
-
-        const funding = await readGoalFunding({
-          allocations,
-
-          publicClient: {
-            readContract: (input) =>
-              publicClient.readContract(input as never) as Promise<bigint>,
-          },
-
-          vault: config.vault,
-        });
-
-        if (productRequestGate.isCurrent(requestId)) {
-          setGoalFundingState({ kind: "ready", funding });
-        }
-      } catch (error) {
-        if (productRequestGate.isCurrent(requestId)) {
-          diagnostics.warn("api.goal_funding_refresh_failed", error);
-
-          setGoalFundingState((current) =>
-            fundingRefreshError(
-              current,
-
-              consumerErrorMessage(
-                error,
-                "We could not reconcile your goal balances. Refresh before assigning more savings.",
-              ),
-            ),
-          );
-        }
-      }
-    } catch (error) {
-      if (productRequestGate.isCurrent(requestId)) {
-        diagnostics.error("api.product_refresh_failed", error);
-
-        setProductState((current) =>
-          failProductRefresh(
-            current,
-
-            consumerErrorMessage(
-              error,
-              "We could not refresh your goals and commitments. Try again.",
-            ),
-          ),
-        );
-
-        setGoalFundingState((current) =>
-          fundingRefreshError(
-            current,
-
-            "We could not refresh your goal balances. Try again.",
-          ),
-        );
-      }
-    }
-  }, [account, api, config, productRequestGate, publicClient]);
 
   const refreshRewardStates = useCallback(
     async (commitments: readonly CommitmentDto[]) => {
