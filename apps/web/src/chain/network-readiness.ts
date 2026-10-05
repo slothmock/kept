@@ -1,10 +1,8 @@
+import type { ChainIdReader } from "@/application/ports/blockchain";
+
 export type NetworkReadiness =
   | { readonly ready: true }
   | { readonly ready: false; readonly message: string; readonly diagnostic: unknown };
-
-interface ChainIdReader {
-  getChainId(): Promise<number>;
-}
 
 export function parseEvmChainId(value: string | undefined): number | null {
   const match = /^eip155:(\d+)$/.exec(value ?? "");
