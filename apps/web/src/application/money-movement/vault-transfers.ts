@@ -5,8 +5,8 @@ import type {
   TransactionSender,
 } from "@/application/ports/blockchain";
 
-import { ConsumerError } from "../lib/consumer-error.js";
-import type { UnsignedVaultTransaction } from "./transactions.js";
+import { ConsumerError } from "@/lib/consumer-error";
+import type { UnsignedVaultTransaction } from "@/vault/transactions";
 
 export interface SubmitVaultDepositInput {
   readonly allowance: bigint;
