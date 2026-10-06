@@ -40,20 +40,11 @@ import {
 } from "@/features/funding/base-usdc";
 
 import {
-    executeKeptFunding,
-} from "@/features/funding/execute-funding";
-
-import {
     BASE_USDC,
 } from "@/features/funding/intents/kept-funding-recipe";
 
-import {
-    createKeptIntentsRunner,
-} from "@/features/funding/intents/runner";
-
-import {
-    resolveKeptFundingAssets,
-    type FundingAsset,
+import type {
+    FundingAsset,
 } from "@/features/funding/intents/supported-tokens";
 
 import {
@@ -67,10 +58,6 @@ import {
 import {
     diagnostics,
 } from "@/lib/diagnostics";
-
-import {
-    fundingTransferErrorMessage,
-} from "@/features/funding/funding-transfer-error";
 
 import {
     FundingAssetPicker,
@@ -91,17 +78,15 @@ import {
     type FundingPreviewDetails,
 } from "@/features/funding/use-funding-preview-controller";
 
+import {
+    useFundingExecutionController,
+} from "@/features/funding/use-funding-execution-controller";
+
 const BASE_CHAIN =
     "eip155:8453" as const;
 
 const MIN_FIAT_ONRAMP =
     20;
-
-import {
-    readChainId,
-    restoreChain,
-    switchToFundingChain,
-} from "@/features/funding/evm-funding-network";
 
 type FundingView =
     | "choose"
@@ -173,34 +158,22 @@ export function AddFundsDialog({
             string | null
         >(null);
 
-    const [
-        executing,
-        setExecuting,
-    ] =
-        useState(false);
-
-    const [
-        executionStatus,
-        setExecutionStatus,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-    const [
-        executionError,
-        setExecutionError,
-    ] =
-        useState<
-            string | null
-        >(null);
-
     const wallet =
         useKeptEvmWallet();
 
     const externalWallet =
         useExternalFundingWallet();
 
+
+    const {
+        executing,
+        executionStatus,
+        executionError,
+        executeEmbeddedFunding,
+        executeExternalFunding,
+        clearExecutionFeedback,
+        resetExecution,
+    } = useFundingExecutionController();
 
     const {
         amount: cryptoAmount,
@@ -218,16 +191,7 @@ export function AddFundsDialog({
             previewFundingRoute,
         resetPreview,
     } = useFundingPreviewController({
-        clearExecutionFeedback:
-            () => {
-                setExecutionStatus(
-                    null,
-                );
-
-                setExecutionError(
-                    null,
-                );
-            },
+        clearExecutionFeedback,
     });
 
     const {
@@ -285,21 +249,12 @@ export function AddFundsDialog({
                     null,
                 );
 
-                setExecuting(
-                    false,
-                );
-
-                setExecutionStatus(
-                    null,
-                );
-
-                setExecutionError(
-                    null,
-                );
+                resetExecution();
 
                 resetSource();
             },
             [
+                resetExecution,
                 resetPreview,
                 resetSource,
             ],
@@ -412,354 +367,6 @@ export function AddFundsDialog({
             [],
         );
 
-    const executeEmbeddedFunding =
-        useCallback(
-            async (
-                amount: bigint,
-            ): Promise<boolean> => {
-                if (
-                    !walletAddress ||
-                    !wallet.address ||
-                    executing
-                ) {
-                    return false;
-                }
-
-                setExecuting(
-                    true,
-                );
-
-                setExecutionStatus(
-                    "Moving your money into Kept…",
-                );
-
-                setExecutionError(
-                    null,
-                );
-
-                try {
-                    const {
-                        origins,
-                    } =
-                        await resolveKeptFundingAssets();
-
-                    const fiatSourceAsset =
-                        origins.find(
-                            (
-                                asset,
-                            ) =>
-                                asset.blockchain ===
-                                "base" &&
-                                asset.symbol ===
-                                "USDC",
-                        );
-
-                    if (
-                        !fiatSourceAsset
-                    ) {
-                        throw new Error(
-                            "Base USDC is not currently supported by Aurora Intents.",
-                        );
-                    }
-
-                    const provider =
-                        await wallet
-                            .getProvider();
-
-                    if (
-                        !provider
-                    ) {
-                        throw new Error(
-                            "Wallet provider is unavailable.",
-                        );
-                    }
-
-                    const previousChainId =
-                        await readChainId(
-                            provider,
-                        );
-
-                    await switchToFundingChain(
-                        provider,
-                        "base",
-                    );
-
-                    const runner =
-                        createKeptIntentsRunner({
-                            sourceAddress:
-                                wallet.address,
-
-                            family:
-                                "evm",
-
-                            provider,
-                        });
-
-                    try {
-                        await executeKeptFunding({
-                            runner,
-
-                            amount,
-
-                            walletAddress,
-
-                            sourceAsset:
-                                fiatSourceAsset,
-                        });
-
-                        setExecutionStatus(
-                            "Your money has been added to Kept.",
-                        );
-
-                        diagnostics.info(
-                            "funding.intents_user_complete",
-                            {
-                                amount:
-                                    amount.toString(),
-                            },
-                        );
-
-                        return true;
-                    } finally {
-                        runner.dispose();
-
-                        try {
-                            await restoreChain(
-                                provider,
-                                previousChainId,
-                            );
-                        } catch (restoreError) {
-                            diagnostics.warn(
-                                "funding.wallet_network_restore_failed",
-                                restoreError,
-                            );
-                        }
-                    }
-                } catch (
-                error
-                ) {
-                    diagnostics.error(
-                        "funding.intents_user_failed",
-                        error,
-                    );
-
-                    setExecutionStatus(
-                        null,
-                    );
-
-                    setExecutionError(
-                        error instanceof
-                            Error
-                            ? error.message
-                            : "We couldn't finish adding your money.",
-                    );
-
-                    return false;
-                } finally {
-                    setExecuting(
-                        false,
-                    );
-                }
-            },
-            [
-                executing,
-                wallet,
-                walletAddress,
-            ],
-        );
-
-    const executeExternalFunding =
-        useCallback(
-            async (
-                amount: bigint,
-            ): Promise<boolean> => {
-                if (
-                    !walletAddress ||
-                    !externalWallet.address ||
-                    !sourceAsset ||
-                    executing
-                ) {
-                    return false;
-                }
-
-                setExecuting(
-                    true,
-                );
-
-                setExecutionStatus(
-                    "Waiting for your wallet…",
-                );
-
-                setExecutionError(
-                    null,
-                );
-
-                try {
-                    const family =
-                        externalWallet.family;
-
-                    if (
-                        !family
-                    ) {
-                        throw new Error(
-                            "Connect a wallet to continue.",
-                        );
-                    }
-
-                    const evmProvider =
-                        family === "evm"
-                            ? await externalWallet
-                                .getEvmProvider()
-                            : null;
-
-                    const solanaProvider =
-                        family === "sol"
-                            ? await externalWallet
-                                .getSolanaProvider()
-                            : null;
-
-                    if (
-                        family === "evm" &&
-                        !evmProvider
-                    ) {
-                        throw new Error(
-                            "Connected wallet provider is unavailable.",
-                        );
-                    }
-
-                    if (
-                        family === "sol" &&
-                        !solanaProvider
-                    ) {
-                        throw new Error(
-                            "Connected Solana wallet provider is unavailable.",
-                        );
-                    }
-
-                    const previousChainId =
-                        evmProvider
-                            ? await readChainId(
-                                evmProvider,
-                            )
-                            : null;
-
-                    if (
-                        evmProvider
-                    ) {
-                        await switchToFundingChain(
-                            evmProvider,
-                            sourceAsset.blockchain,
-                        );
-                    }
-
-                    const runner =
-                        family === "sol"
-                            ? createKeptIntentsRunner({
-                                sourceAddress:
-                                    externalWallet.address,
-
-                                family:
-                                    "sol",
-
-                                provider:
-                                    solanaProvider!,
-                            })
-                            : createKeptIntentsRunner({
-                                sourceAddress:
-                                    externalWallet.address,
-
-                                family:
-                                    "evm",
-
-                                provider:
-                                    evmProvider!,
-                            });
-
-                    try {
-                        await executeKeptFunding({
-                            runner,
-
-                            amount,
-
-                            walletAddress,
-
-                            sourceAsset,
-                        });
-
-                        setExecutionStatus(
-                            "Your money has been added to Kept.",
-                        );
-
-                        diagnostics.info(
-                            "funding.external_intents_complete",
-                            {
-                                amount:
-                                    amount.toString(),
-
-                                sourceAsset:
-                                    sourceAsset.symbol,
-
-                                sourceChain:
-                                    sourceAsset.blockchain,
-                            },
-                        );
-
-                        return true;
-                    } finally {
-                        runner.dispose();
-
-                        if (
-                            evmProvider &&
-                            previousChainId !== null
-                        ) {
-                            try {
-                                await restoreChain(
-                                    evmProvider,
-                                    previousChainId,
-                                );
-                            } catch (restoreError) {
-                                diagnostics.warn(
-                                    "funding.external_wallet_network_restore_failed",
-                                    restoreError,
-                                );
-                            }
-                        }
-                    }
-                } catch (
-                error
-                ) {
-                    diagnostics.error(
-                        "funding.external_intents_failed",
-                        error,
-                    );
-
-                    setExecutionStatus(
-                        null,
-                    );
-
-                    setExecutionError(
-                        fundingTransferErrorMessage(
-                            error,
-                            sourceAsset,
-                            "We couldn't prepare your transfer.",
-                        ),
-                    );
-
-                    return false;
-                } finally {
-                    setExecuting(
-                        false,
-                    );
-                }
-            },
-            [
-                executing,
-                externalWallet,
-                sourceAsset,
-                walletAddress,
-            ],
-        );
-
     const handleFiatConfirmed =
         useCallback(
             async () => {
@@ -819,9 +426,12 @@ export function AddFundsDialog({
                     );
 
                     const succeeded =
-                        await executeEmbeddedFunding(
-                            received,
-                        );
+                        await executeEmbeddedFunding({
+                            amount:
+                                received,
+                            walletAddress,
+                            wallet,
+                        });
 
                     setFiatStatus(
                         null,
@@ -1113,9 +723,13 @@ export function AddFundsDialog({
                                 return;
                             }
 
-                            void executeExternalFunding(
-                                previewedCryptoAmount,
-                            );
+                            void executeExternalFunding({
+                                amount:
+                                    previewedCryptoAmount,
+                                walletAddress,
+                                externalWallet,
+                                sourceAsset,
+                            });
                         }}
                     />
                 )}
