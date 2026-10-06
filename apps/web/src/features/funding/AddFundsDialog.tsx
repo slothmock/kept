@@ -85,13 +85,13 @@ import {
 } from "@/features/funding/FundingAssetPicker";
 
 import {
-    readFundingAssetBalances,
-} from "@/features/funding/intents/funding-asset-balances";
-
-import {
     useExternalFundingWallet,
     type ExternalFundingWalletOption,
 } from "@/features/funding/use-external-funding-wallet";
+
+import {
+    useFundingSourceController,
+} from "@/features/funding/use-funding-source-controller";
 
 const BASE_CHAIN =
     "eip155:8453" as const;
@@ -104,15 +104,6 @@ import {
     restoreChain,
     switchToFundingChain,
 } from "@/features/funding/evm-funding-network";
-
-import {
-    filterFundingAssetsByBlockchain,
-    filterFundingAssetsForWallet,
-    findFundingSourceAsset,
-    listFundingSourceBlockchains,
-    selectFundingSourceAssetId,
-    selectFundingSourceBlockchain,
-} from "@/features/funding/funding-source-selection";
 
 type FundingView =
     | "choose"
@@ -273,423 +264,12 @@ export function AddFundsDialog({
             FundingPreviewDetails | null
         >(null);
 
-    const [
-        destinationAsset,
-        setDestinationAsset,
-    ] =
-        useState<
-            FundingAsset | null
-        >(null);
-
-    const [
-        sourceBlockchain,
-        setSourceBlockchain,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-    const [
-        switchingSourceNetwork,
-        setSwitchingSourceNetwork,
-    ] =
-        useState(false);
-
-    const [
-        sourceNetworkError,
-        setSourceNetworkError,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-    const [
-        sourceAssets,
-        setSourceAssets,
-    ] =
-        useState<
-            readonly FundingAsset[]
-        >([]);
-
-    const [
-        sourceAssetId,
-        setSourceAssetId,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-    const [
-        sourceAssetBalances,
-        setSourceAssetBalances,
-    ] =
-        useState<
-            ReadonlyMap<
-                string,
-                bigint | null
-            >
-        >(
-            new Map(),
-        );
-
-    const [
-        sourceAssetBalancesLoading,
-        setSourceAssetBalancesLoading,
-    ] =
-        useState(
-            false,
-        );
-
-    const [
-        sourceAssetsLoading,
-        setSourceAssetsLoading,
-    ] =
-        useState(false);
-
-    const [
-        sourceAssetsError,
-        setSourceAssetsError,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-
-
     const wallet =
         useKeptEvmWallet();
 
     const externalWallet =
         useExternalFundingWallet();
 
-    const sourceAsset =
-        useMemo(
-            () =>
-                findFundingSourceAsset(
-                    sourceAssets,
-                    sourceAssetId,
-                ),
-            [
-                sourceAssetId,
-                sourceAssets,
-            ],
-        );
-
-    const walletCompatibleSourceAssets =
-        useMemo(
-            () =>
-                filterFundingAssetsForWallet(
-                    sourceAssets,
-                    externalWallet.family,
-                ),
-            [
-                externalWallet.family,
-                sourceAssets,
-            ],
-        );
-
-    const availableSourceBlockchains =
-        useMemo(
-            () =>
-                listFundingSourceBlockchains(
-                    walletCompatibleSourceAssets,
-                ),
-            [
-                walletCompatibleSourceAssets,
-            ],
-        );
-
-    const filteredSourceAssets =
-        useMemo(
-            () =>
-                filterFundingAssetsByBlockchain(
-                    walletCompatibleSourceAssets,
-                    sourceBlockchain,
-                ),
-            [
-                sourceBlockchain,
-                walletCompatibleSourceAssets,
-            ],
-        );
-
-    useEffect(
-        () => {
-            if (
-                !open ||
-                view !==
-                "crypto"
-            ) {
-                return;
-            }
-
-            let cancelled =
-                false;
-
-            void (
-                async () => {
-                    setSourceAssetsLoading(
-                        true,
-                    );
-
-                    setSourceAssetsError(
-                        null,
-                    );
-
-                    try {
-                        const {
-                            origins,
-                            destination,
-                        } =
-                            await resolveKeptFundingAssets();
-
-                        if (
-                            cancelled
-                        ) {
-                            return;
-                        }
-
-                        setSourceAssets(
-                            origins,
-                        );
-
-                        setDestinationAsset(
-                            destination,
-                        );
-
-                        setSourceBlockchain(
-                            (
-                                current,
-                            ) =>
-                                selectFundingSourceBlockchain(
-                                    origins,
-                                    externalWallet.family,
-                                    current,
-                                ),
-                        );
-
-                        setSourceAssetId(
-                            (
-                                current,
-                            ) =>
-                                selectFundingSourceAssetId(
-                                    origins,
-                                    externalWallet.family,
-                                    current,
-                                ),
-                        );
-                    } catch (
-                    error
-                    ) {
-                        if (
-                            cancelled
-                        ) {
-                            return;
-                        }
-
-                        setSourceAssets(
-                            [],
-                        );
-
-                        setSourceAssetId(
-                            null,
-                        );
-
-                        setSourceAssetsError(
-                            error instanceof
-                                Error
-                                ? error.message
-                                : "We couldn't load supported funding options.",
-                        );
-                    } finally {
-                        if (
-                            !cancelled
-                        ) {
-                            setSourceAssetsLoading(
-                                false,
-                            );
-                        }
-                    }
-                }
-            )();
-
-            return () => {
-                cancelled =
-                    true;
-            };
-        },
-        [
-            externalWallet.family,
-            open,
-            view,
-        ],
-    );
-
-    useEffect(
-        () => {
-            if (
-                !open ||
-                view !==
-                "crypto" ||
-                !externalWallet.address ||
-                walletCompatibleSourceAssets.length ===
-                0
-            ) {
-                return;
-            }
-
-            let cancelled =
-                false;
-
-            const externalAddress =
-                externalWallet.address;
-
-            void (
-                async () => {
-                    setSourceAssetBalancesLoading(
-                        true,
-                    );
-
-                    try {
-                        const balances =
-                            await readFundingAssetBalances(
-                                externalAddress,
-                                walletCompatibleSourceAssets,
-                                readSolanaFundingBalances,
-                            );
-
-                        if (
-                            cancelled
-                        ) {
-                            return;
-                        }
-
-                        setSourceAssetBalances(
-                            new Map(
-                                balances.map(
-                                    (
-                                        result,
-                                    ) => [
-                                            result.assetId,
-                                            result.balance,
-                                        ],
-                                ),
-                            ),
-                        );
-                    } catch (
-                    error
-                    ) {
-                        diagnostics.warn(
-                            "funding.asset_balances_failed",
-                            error,
-                        );
-
-                        if (
-                            !cancelled
-                        ) {
-                            setSourceAssetBalances(
-                                new Map(),
-                            );
-                        }
-                    } finally {
-                        if (
-                            !cancelled
-                        ) {
-                            setSourceAssetBalancesLoading(
-                                false,
-                            );
-                        }
-                    }
-                }
-            )();
-
-            return () => {
-                cancelled =
-                    true;
-            };
-        },
-        [
-            open,
-            view,
-            externalWallet.address,
-            walletCompatibleSourceAssets,
-            readSolanaFundingBalances,
-        ],
-    );
-
-
-    const resetDialogState =
-        useCallback(
-            () => {
-                setView(
-                    "choose",
-                );
-
-                setCryptoAmount(
-                    "",
-                );
-
-                setPreviewStatus(
-                    null,
-                );
-
-                setPreviewError(
-                    null,
-                );
-
-                setPreviewedCryptoAmount(
-                    null,
-                );
-
-                setPreviewDetails(
-                    null,
-                );
-
-                setDestinationAsset(
-                    null,
-                );
-
-                setFiatStartingBalance(
-                    null,
-                );
-
-                setFiatStatus(
-                    null,
-                );
-
-                setFiatError(
-                    null,
-                );
-
-                setExecuting(
-                    false,
-                );
-
-                setExecutionStatus(
-                    null,
-                );
-
-                setExecutionError(
-                    null,
-                );
-
-                setSourceAssets(
-                    [],
-                );
-
-                setSourceAssetId(
-                    null,
-                );
-
-                setSourceAssetsLoading(
-                    false,
-                );
-
-                setSourceAssetsError(
-                    null,
-                );
-            },
-            [],
-        );
 
     const invalidateCryptoPreview =
         useCallback(
@@ -719,6 +299,100 @@ export function AddFundsDialog({
                 );
             },
             [],
+        );
+
+    const {
+        destinationAsset,
+        sourceBlockchain,
+        switchingSourceNetwork,
+        sourceNetworkError,
+        sourceAssets,
+        sourceAssetId,
+        sourceAsset,
+        sourceAssetBalances,
+        sourceAssetBalancesLoading,
+        sourceAssetsLoading,
+        sourceAssetsError,
+        availableSourceBlockchains,
+        filteredSourceAssets,
+        changeSourceNetwork,
+        selectSourceAsset,
+        resetSource,
+    } = useFundingSourceController({
+        active:
+            open &&
+            view ===
+                "crypto",
+        externalWallet,
+        readSolanaFundingBalances,
+        invalidatePreview:
+            () => {
+                invalidateCryptoPreview();
+            },
+        clearAmount:
+            () => {
+                setCryptoAmount(
+                    "",
+                );
+            },
+    });
+
+    const resetDialogState =
+        useCallback(
+            () => {
+                setView(
+                    "choose",
+                );
+
+                setCryptoAmount(
+                    "",
+                );
+
+                setPreviewStatus(
+                    null,
+                );
+
+                setPreviewError(
+                    null,
+                );
+
+                setPreviewedCryptoAmount(
+                    null,
+                );
+
+                setPreviewDetails(
+                    null,
+                );
+
+                setFiatStartingBalance(
+                    null,
+                );
+
+                setFiatStatus(
+                    null,
+                );
+
+                setFiatError(
+                    null,
+                );
+
+                setExecuting(
+                    false,
+                );
+
+                setExecutionStatus(
+                    null,
+                );
+
+                setExecutionError(
+                    null,
+                );
+
+                resetSource();
+            },
+            [
+                resetSource,
+            ],
         );
 
     const handleOpenChange =
@@ -826,110 +500,6 @@ export function AddFundsDialog({
                 );
             },
             [],
-        );
-
-    const handleSourceNetworkChange =
-        useCallback(
-            async (
-                blockchain:
-                    string,
-            ) => {
-                if (
-                    !externalWallet.address ||
-                    switchingSourceNetwork
-                ) {
-                    return;
-                }
-
-                invalidateCryptoPreview();
-
-                setSourceNetworkError(
-                    null,
-                );
-
-                setSwitchingSourceNetwork(
-                    true,
-                );
-
-                try {
-                    if (
-                        externalWallet.family ===
-                        "sol"
-                    ) {
-                        if (
-                            blockchain !==
-                            "sol"
-                        ) {
-                            throw new Error(
-                                "Choose an EVM wallet to use that network.",
-                            );
-                        }
-                    } else {
-                        const provider =
-                            await externalWallet
-                                .getEvmProvider();
-
-                        if (
-                            !provider
-                        ) {
-                            throw new Error(
-                                "Connected wallet provider is unavailable.",
-                            );
-                        }
-
-                        await switchToFundingChain(
-                            provider,
-                            blockchain,
-                        );
-                    }
-
-                    setSourceBlockchain(
-                        blockchain,
-                    );
-
-                    const firstAsset =
-                        sourceAssets.find(
-                            (
-                                asset,
-                            ) =>
-                                asset.blockchain ===
-                                blockchain,
-                        );
-
-                    setSourceAssetId(
-                        firstAsset?.assetId ??
-                        null,
-                    );
-
-                    setCryptoAmount(
-                        "",
-                    );
-                } catch (
-                error
-                ) {
-                    diagnostics.warn(
-                        "funding.source_network_switch_failed",
-                        error,
-                    );
-
-                    setSourceNetworkError(
-                        error instanceof
-                            Error
-                            ? error.message
-                            : "We couldn't switch networks.",
-                    );
-                } finally {
-                    setSwitchingSourceNetwork(
-                        false,
-                    );
-                }
-            },
-            [
-                externalWallet,
-                invalidateCryptoPreview,
-                sourceAssets,
-                switchingSourceNetwork,
-            ],
         );
 
     const executeEmbeddedFunding =
@@ -1762,7 +1332,7 @@ export function AddFundsDialog({
                         onSourceNetworkChange={(
                             blockchain,
                         ) => {
-                            void handleSourceNetworkChange(
+                            void changeSourceNetwork(
                                 blockchain,
                             );
                         }}
@@ -1864,7 +1434,7 @@ export function AddFundsDialog({
                                 "",
                             );
 
-                            setSourceAssetId(
+                            selectSourceAsset(
                                 assetId,
                             );
                         }}
