@@ -9,7 +9,7 @@ import {
 import { App } from "@/app/App";
 import { diagnostics } from "@/lib/diagnostics";
 
-import "@/styles.css";
+import "@/styles/globals.css";
 
 window.addEventListener(
   "error",

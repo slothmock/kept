@@ -33,7 +33,7 @@ import {
 } from "@/features/savings/use-savings-status-controller";
 
 
-import { readFiatEnabled } from "@/config/feature-flags";
+import { readFiatEnabled } from "@/app/feature-flags";
 
 import { ConsumerError } from "@/lib/consumer-error";
 

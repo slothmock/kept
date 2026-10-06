@@ -9,7 +9,7 @@ import { monad } from "viem/chains";
 
 import { createLocalAnvilChain } from "@/wallet/local-anvil-chain";
 import { createMonadTestnetChain } from "@/wallet/monad-testnet-chain";
-import { readFiatEnabled } from "@/config/feature-flags";
+import { readFiatEnabled } from "@/app/feature-flags";
 import { readVaultConfig } from "@/features/savings/vault/config";
 
 type BootstrapEnvironment =
