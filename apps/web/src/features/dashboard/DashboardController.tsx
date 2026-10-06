@@ -17,9 +17,9 @@ import {
   readApiBaseUrl,
 } from "@/api/kept-api";
 import { type Session } from "@/auth/session";
-import { useKeptEvmWallet } from "@/chain/evm-wallet";
-import { checkNetworkReadiness } from "@/chain/network-readiness";
-import { useKeptTransactionSender } from "@/chain/transaction-sender";
+import { useKeptEvmWallet } from "@/wallet/evm-wallet";
+import { checkNetworkReadiness } from "@/wallet/network-readiness";
+import { useKeptTransactionSender } from "@/wallet/transaction-sender";
 import { AccountMenu } from "@/features/account/components/AccountMenu";
 
 import { AppShell } from "@/app/layout/AppShell";

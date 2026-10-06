@@ -34,7 +34,7 @@ import type {
 } from "@/auth/session";
 import {
     useKeptEvmWallet,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 import {
     AccountMenu,
 } from "@/features/account/components/AccountMenu";

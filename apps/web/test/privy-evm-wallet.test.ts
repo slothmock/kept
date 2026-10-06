@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   selectPrivyEvmWallet,
-} from "../src/infrastructure/wallet/privy-evm-wallet.js";
+} from "../src/wallet/privy-evm-wallet.js";
 
 describe("Privy EVM wallet adapter", () => {
   it("selects the embedded Privy Ethereum wallet only", () => {

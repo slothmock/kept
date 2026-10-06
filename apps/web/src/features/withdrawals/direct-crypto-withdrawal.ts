@@ -5,7 +5,7 @@ import {
     type Address,
 } from "viem";
 
-import type { KeptTransactionSender } from "@/chain/transaction-sender";
+import type { KeptTransactionSender } from "@/wallet/transaction-sender";
 
 export async function executeDirectUsdcWithdrawal({
     usdc,

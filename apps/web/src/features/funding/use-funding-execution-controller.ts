@@ -5,7 +5,7 @@ import {
 
 import type {
     KeptEvmWallet,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 import {
     readChainId,
     restoreChain,

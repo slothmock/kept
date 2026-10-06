@@ -13,7 +13,7 @@ import {
 
 import type {
     EthereumProvider,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 
 import {
     intentsConnectApi,

@@ -4,7 +4,7 @@ import {
   checkNetworkReadiness,
   parseEvmChainId,
   parseProviderChainId,
-} from "../src/chain/network-readiness.js";
+} from "../src/wallet/network-readiness.js";
 
 describe("network readiness", () => {
   it("parses EVM CAIP-2 chain identifiers", () => {

@@ -1,6 +1,6 @@
 import type {
   EthereumProvider,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 
 interface EvmFundingChain {
   readonly id:

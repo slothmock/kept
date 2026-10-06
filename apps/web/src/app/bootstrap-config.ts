@@ -7,8 +7,8 @@ import {
 } from "@privy-io/chains";
 import { monad } from "viem/chains";
 
-import { createLocalAnvilChain } from "@/chain/local-anvil-chain";
-import { createMonadTestnetChain } from "@/chain/monad-testnet-chain";
+import { createLocalAnvilChain } from "@/wallet/local-anvil-chain";
+import { createMonadTestnetChain } from "@/wallet/monad-testnet-chain";
 import { readFiatEnabled } from "@/config/feature-flags";
 import { readVaultConfig } from "@/vault/config";
 

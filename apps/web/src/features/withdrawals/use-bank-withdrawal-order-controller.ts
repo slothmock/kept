@@ -15,7 +15,7 @@ import type {
 } from "@/api/kept-api";
 import type {
   EthereumProvider,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 import {
   createKeptIntentsRunner,
 } from "@/features/funding/intents/runner";

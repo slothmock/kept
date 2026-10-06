@@ -9,7 +9,7 @@ import type {
 import {
   createPrivyTransactionSender,
   type PrivySendTransaction,
-} from "@/infrastructure/wallet/privy-transaction-sender";
+} from "@/wallet/privy-transaction-sender";
 
 export type KeptTransactionSender =
   TransactionSender;

@@ -21,7 +21,7 @@ import {
 } from "@/application/money-movement/bank-withdrawal";
 import type {
   EthereumProvider,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 import {
   createKeptIntentsRunner,
 } from "@/features/funding/intents/runner";

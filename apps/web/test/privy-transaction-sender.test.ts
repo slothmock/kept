@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createPrivyTransactionSender,
-} from "../src/infrastructure/wallet/privy-transaction-sender.js";
+} from "../src/wallet/privy-transaction-sender.js";
 
 const transaction = {
   to: "0x1111111111111111111111111111111111111111",

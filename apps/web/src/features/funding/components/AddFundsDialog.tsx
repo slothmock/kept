@@ -5,7 +5,7 @@ import {
 
 import {
     useKeptEvmWallet,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 
 import {
     AddFundsChoiceView,
