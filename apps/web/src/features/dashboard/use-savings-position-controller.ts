@@ -13,7 +13,7 @@ import type {
 } from "@/application/ports/blockchain";
 import {
   checkNetworkReadiness,
-} from "@/chain/network-readiness";
+} from "@/application/blockchain/network-readiness";
 import {
   currentPositionState,
   type BoundPositionState,
