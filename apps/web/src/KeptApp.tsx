@@ -1,5 +1,5 @@
 import { App } from "@/app/App";
-import { usePrivySession } from "@/auth/privy-session";
+import { usePrivySession } from "@/app/providers/privy-session";
 
 export function KeptApp() {
   const session = usePrivySession();

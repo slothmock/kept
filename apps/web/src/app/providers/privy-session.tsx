@@ -3,7 +3,7 @@ import {
   usePrivy,
 } from "@privy-io/react-auth";
 
-import type { Session } from "./session.js";
+import type { Session } from "@/app/providers/session";
 
 export function usePrivySession(): Session {
   const {

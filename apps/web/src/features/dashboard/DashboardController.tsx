@@ -16,7 +16,7 @@ import {
   createKeptApi,
   readApiBaseUrl,
 } from "@/api/kept-api";
-import { type Session } from "@/auth/session";
+import { type Session } from "@/app/providers/session";
 import { useKeptEvmWallet } from "@/wallet/evm-wallet";
 import { checkNetworkReadiness } from "@/wallet/network-readiness";
 import { useKeptTransactionSender } from "@/wallet/transaction-sender";

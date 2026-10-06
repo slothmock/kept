@@ -31,7 +31,7 @@ import {
 } from "@/api/kept-api";
 import type {
     Session,
-} from "@/auth/session";
+} from "@/app/providers/session";
 import {
     useKeptEvmWallet,
 } from "@/wallet/evm-wallet";

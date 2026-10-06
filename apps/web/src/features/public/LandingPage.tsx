@@ -3,7 +3,7 @@ import { ArrowRight, Check, ShieldCheck, Sparkles, Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Session } from "@/auth/session";
+import type { Session } from "@/app/providers/session";
 import { consumerErrorMessage } from "@/lib/consumer-error";
 import { diagnostics } from "@/lib/diagnostics";
 import { Link, useNavigate } from "react-router-dom";

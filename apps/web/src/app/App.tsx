@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import type { Session } from "@/auth/session";
+import type { Session } from "@/app/providers/session";
 import { DashboardController } from "@/features/dashboard/DashboardController";
 import { AccountPage } from "@/features/account/AccountPage";
 import { LandingPage } from "@/features/public/LandingPage";
