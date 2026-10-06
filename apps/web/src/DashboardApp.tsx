@@ -722,29 +722,45 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           readSolanaFundingBalances
         }
 
-        positionState={positionState}
+        savingsOverview={{
+          positionState,
+
+          performanceState:
+            savingsPerformanceState,
+
+          marketStatusState:
+            savingsMarketStatusState,
+
+          onRefreshPosition:
+            refreshPosition,
+
+          onRefreshPerformance:
+            refreshSavingsPerformance,
+
+          onRefreshMarketStatus:
+            refreshSavingsMarketStatus,
+
+          stagingFaucet: {
+            available:
+              stagingFaucetAvailable,
+
+            claiming:
+              stagingFaucetClaiming,
+
+            status:
+              stagingFaucetStatus,
+
+            error:
+              stagingFaucetError,
+
+            onClaim: () =>
+              void claimStagingFaucet(),
+          },
+        }}
 
         goalFundingState={goalFundingState}
 
         productState={productState}
-
-        savingsPerformanceState={savingsPerformanceState}
-
-        savingsMarketStatusState={savingsMarketStatusState}
-
-        onRefreshSavingsPerformance={refreshSavingsPerformance}
-
-        onRefreshSavingsMarketStatus={refreshSavingsMarketStatus}
-
-        stagingFaucetAvailable={stagingFaucetAvailable}
-
-        stagingFaucetClaiming={stagingFaucetClaiming}
-
-        stagingFaucetStatus={stagingFaucetStatus}
-
-        stagingFaucetError={stagingFaucetError}
-
-        onClaimStagingFaucet={() => void claimStagingFaucet()}
 
         savingsTransactions={{
           deposit: {
@@ -879,8 +895,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
               claimReward,
           },
         }}
-
-        onRefreshPosition={refreshPosition}
 
         onRefreshProductData={refreshProductData}
 

@@ -76,8 +76,6 @@ interface DashboardPageProps {
     readonly balances: Readonly<Record<string, string>>;
   }>;
 
-  readonly positionState: PositionState;
-
   readonly goalFundingState: GoalFundingState;
 
   readonly productState: ProductDataState;
@@ -262,67 +260,79 @@ interface DashboardPageProps {
 
   };
 
-  readonly savingsPerformanceState:
+  readonly savingsOverview: {
 
-  | {
+    readonly positionState:
+    PositionState;
 
-    readonly kind: "unavailable";
+    readonly performanceState:
 
-  }
+    | {
 
-  | {
+      readonly kind: "unavailable";
 
-    readonly kind: "loading";
+    }
 
-  }
+    | {
 
-  | {
+      readonly kind: "loading";
 
-    readonly kind: "ready";
+    }
 
-    readonly earningsAssets: bigint;
+    | {
 
-  }
+      readonly kind: "ready";
 
-  | {
+      readonly earningsAssets: bigint;
 
-    readonly kind: "synchronizing";
+    }
 
-    readonly progressPercent: number | null;
+    | {
 
-  }
+      readonly kind: "synchronizing";
 
-  | {
+      readonly progressPercent: number | null;
 
-    readonly kind: "error";
+    }
+
+    | {
+
+      readonly kind: "error";
+
+    };
+
+    readonly marketStatusState:
+    SavingsMarketStatusState;
+
+    readonly onRefreshPosition:
+    () => Promise<void>;
+
+    readonly onRefreshPerformance:
+    () => Promise<void>;
+
+    readonly onRefreshMarketStatus:
+    () => Promise<void>;
+
+    readonly stagingFaucet: {
+
+      readonly available:
+      boolean;
+
+      readonly claiming:
+      boolean;
+
+      readonly status:
+      string | null;
+
+      readonly error:
+      string | null;
+
+      readonly onClaim:
+      () => void;
+
+    };
 
   };
-
-  readonly savingsMarketStatusState:
-  SavingsMarketStatusState;
-
-  readonly onRefreshSavingsPerformance:
-  () => Promise<void>;
-
-  readonly onRefreshSavingsMarketStatus:
-  () => Promise<void>;
-
-  readonly stagingFaucetAvailable:
-  boolean;
-
-  readonly stagingFaucetClaiming:
-  boolean;
-
-  readonly stagingFaucetStatus:
-  string | null;
-
-  readonly stagingFaucetError:
-  string | null;
-
-  readonly onClaimStagingFaucet:
-  () => void;
-
-  readonly onRefreshPosition: () => Promise<void>;
 
   readonly onRefreshProductData: () => Promise<void>;
 
@@ -469,11 +479,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
     readSolanaFundingBalances,
 
-    positionState,
-
-    savingsPerformanceState,
-
-    savingsMarketStatusState,
+    savingsOverview,
 
     goalFundingState,
 
@@ -483,23 +489,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
     goalManagement,
 
-    onRefreshPosition,
-
     onRefreshProductData,
-
-    onRefreshSavingsPerformance,
-
-    onRefreshSavingsMarketStatus,
-
-    stagingFaucetAvailable,
-
-    stagingFaucetClaiming,
-
-    stagingFaucetStatus,
-
-    stagingFaucetError,
-
-    onClaimStagingFaucet,
 
     cryptoWithdrawal,
 
@@ -558,13 +548,13 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const unassignedSavings =
 
-    goalFundingState.kind === "ready" && positionState.kind === "ready"
+    goalFundingState.kind === "ready" && savingsOverview.positionState.kind === "ready"
 
       ? goalFundingState.funding.totalVaultShares === 0n &&
 
-        positionState.position.shares > 0n
+        savingsOverview.positionState.position.shares > 0n
 
-        ? positionState.position.assets
+        ? savingsOverview.positionState.position.assets
 
         : goalFundingState.funding.unallocatedAssets
 
@@ -594,7 +584,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
         </div>
 
-        <SavingsMarketStatus state={savingsMarketStatusState} />
+        <SavingsMarketStatus state={savingsOverview.marketStatusState} />
 
       </section>
 
@@ -602,7 +592,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
         positionState={positionState}
 
-        savingsPerformanceState={savingsPerformanceState}
+        savingsPerformanceState={savingsOverview.performanceState}
 
         transactionPending={savingsTransactions.pendingTransaction !== null}
 
@@ -615,24 +605,24 @@ export function DashboardPage(props: DashboardPageProps) {
         onWithdraw={() => setWithdrawOpen(true)}
 
         onRefresh={async () => {
-          await onRefreshPosition();
+          await savingsOverview.onRefreshPosition();
 
           await onRefreshProductData();
 
-          await onRefreshSavingsPerformance();
+          await savingsOverview.onRefreshPerformance();
 
-          await onRefreshSavingsMarketStatus();
+          await savingsOverview.onRefreshMarketStatus();
         }}
 
-        stagingFaucetAvailable={stagingFaucetAvailable}
+        stagingFaucetAvailable={savingsOverview.stagingFaucet.available}
 
-        stagingFaucetClaiming={stagingFaucetClaiming}
+        stagingFaucetClaiming={savingsOverview.stagingFaucet.claiming}
 
-        stagingFaucetStatus={stagingFaucetStatus}
+        stagingFaucetStatus={savingsOverview.stagingFaucet.status}
 
-        stagingFaucetError={stagingFaucetError}
+        stagingFaucetError={savingsOverview.stagingFaucet.error}
 
-        onClaimStagingFaucet={onClaimStagingFaucet}
+        onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
 
       />
 
@@ -898,15 +888,15 @@ export function DashboardPage(props: DashboardPageProps) {
 
         availableBalance={
 
-          positionState.kind === "ready"
+          savingsOverview.positionState.kind === "ready"
 
-            ? positionState.position.usdcBalance
+            ? savingsOverview.positionState.position.usdcBalance
 
             : null
 
         }
 
-        ready={positionState.kind === "ready" && Boolean(walletAddress)}
+        ready={savingsOverview.positionState.kind === "ready" && Boolean(walletAddress)}
 
         submitting={savingsTransactions.pendingTransaction === "deposit"}
 
@@ -939,9 +929,9 @@ export function DashboardPage(props: DashboardPageProps) {
 
         position={
 
-          positionState.kind === "ready"
+          savingsOverview.positionState.kind === "ready"
 
-            ? positionState.position
+            ? savingsOverview.positionState.position
 
             : null
 
