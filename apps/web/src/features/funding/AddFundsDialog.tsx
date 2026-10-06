@@ -1,7 +1,5 @@
 import {
     useCallback,
-    useEffect,
-    useMemo,
     useState,
     type ReactNode,
 } from "react";
@@ -306,8 +304,6 @@ export function AddFundsDialog({
         sourceBlockchain,
         switchingSourceNetwork,
         sourceNetworkError,
-        sourceAssets,
-        sourceAssetId,
         sourceAsset,
         sourceAssetBalances,
         sourceAssetBalancesLoading,
