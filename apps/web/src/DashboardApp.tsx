@@ -63,11 +63,11 @@ import {
 
 import {
   useRewardStateController,
-} from "@/features/dashboard/use-reward-state-controller";
+} from "@/features/commitments/use-reward-state-controller";
 
 import {
   useRewardClaimController,
-} from "@/features/dashboard/use-reward-claim-controller";
+} from "@/features/commitments/use-reward-claim-controller";
 
 import {
   useGoalDeletionController,
@@ -83,7 +83,7 @@ import {
 
 import {
   useCommitmentCreationController,
-} from "@/features/dashboard/use-commitment-creation-controller";
+} from "@/features/commitments/use-commitment-creation-controller";
 
 import {
   useBankWithdrawalController,
