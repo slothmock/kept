@@ -12,7 +12,7 @@ import {
   readChainId,
   restoreChain,
   switchToFundingChain,
-} from "../src/features/funding/AddFundsDialog.js";
+} from "../src/features/funding/evm-funding-network.js";
 
 function providerWith(
   handler: (
