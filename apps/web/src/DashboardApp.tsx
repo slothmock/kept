@@ -71,15 +71,15 @@ import {
 
 import {
   useGoalDeletionController,
-} from "@/features/dashboard/use-goal-deletion-controller";
+} from "@/features/goals/use-goal-deletion-controller";
 
 import {
   useGoalAllocationController,
-} from "@/features/dashboard/use-goal-allocation-controller";
+} from "@/features/goals/use-goal-allocation-controller";
 
 import {
   useGoalCreationController,
-} from "@/features/dashboard/use-goal-creation-controller";
+} from "@/features/goals/use-goal-creation-controller";
 
 import {
   useCommitmentCreationController,
