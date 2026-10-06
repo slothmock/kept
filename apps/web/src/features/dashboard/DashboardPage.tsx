@@ -59,7 +59,7 @@ import type { RewardState } from "@/features/commitments/reward-claim";
 
 import { formatUsdc } from "@/features/savings/format";
 
-import { readFiatEnabled } from "@/config/feature-flags";
+import { readFiatEnabled } from "@/app/feature-flags";
 
 import type { FundingAsset } from "@/features/funding/intents/supported-tokens";
 
