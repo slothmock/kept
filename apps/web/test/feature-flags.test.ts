@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   readFiatEnabled,
-} from "../src/config/feature-flags.js";
+} from "../src/app/feature-flags.js";
 
 describe("fiat feature flag", () => {
   it("is disabled by default", () => {
