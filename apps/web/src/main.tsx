@@ -6,7 +6,7 @@ import {
 import {
   resolveAppBootstrap,
 } from "@/app/bootstrap-config";
-import { KeptApp } from "@/KeptApp";
+import { App } from "@/app/App";
 import { diagnostics } from "@/lib/diagnostics";
 
 import "@/styles.css";
@@ -63,7 +63,7 @@ if (
         bootstrap.config
       }
     >
-      <KeptApp />
+      <App />
     </AppProviders>,
   );
 }
