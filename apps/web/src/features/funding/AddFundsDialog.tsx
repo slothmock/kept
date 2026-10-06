@@ -36,10 +36,6 @@ import {
 } from "@/components/ui/input";
 
 import {
-    readBaseUsdcBalance,
-} from "@/features/funding/base-usdc";
-
-import {
     BASE_USDC,
 } from "@/features/funding/intents/kept-funding-recipe";
 
@@ -50,10 +46,6 @@ import type {
 import {
     PrivyFundingButton,
 } from "@/features/funding/PrivyFundingButton";
-
-import {
-    waitForBaseUsdcIncrease,
-} from "@/features/funding/reconcile-base-usdc";
 
 import {
     diagnostics,
@@ -81,6 +73,10 @@ import {
 import {
     useFundingExecutionController,
 } from "@/features/funding/use-funding-execution-controller";
+
+import {
+    useFiatFundingController,
+} from "@/features/funding/use-fiat-funding-controller";
 
 const BASE_CHAIN =
     "eip155:8453" as const;
@@ -134,30 +130,6 @@ export function AddFundsDialog({
             "choose",
         );
 
-    const [
-        fiatStartingBalance,
-        setFiatStartingBalance,
-    ] =
-        useState<
-            bigint | null
-        >(null);
-
-    const [
-        fiatStatus,
-        setFiatStatus,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-    const [
-        fiatError,
-        setFiatError,
-    ] =
-        useState<
-            string | null
-        >(null);
-
     const wallet =
         useKeptEvmWallet();
 
@@ -174,6 +146,20 @@ export function AddFundsDialog({
         clearExecutionFeedback,
         resetExecution,
     } = useFundingExecutionController();
+
+    const {
+        fiatStatus,
+        fiatError,
+        handleFiatStarted,
+        handleFiatSubmitted,
+        handleFiatConfirmed,
+        handleFiatError,
+        resetFiat,
+    } = useFiatFundingController({
+        walletAddress,
+        wallet,
+        executeEmbeddedFunding,
+    });
 
     const {
         amount: cryptoAmount,
@@ -237,17 +223,7 @@ export function AddFundsDialog({
 
                 resetPreview();
 
-                setFiatStartingBalance(
-                    null,
-                );
-
-                setFiatStatus(
-                    null,
-                );
-
-                setFiatError(
-                    null,
-                );
+                resetFiat();
 
                 resetExecution();
 
@@ -255,6 +231,7 @@ export function AddFundsDialog({
             },
             [
                 resetExecution,
+                resetFiat,
                 resetPreview,
                 resetSource,
             ],
@@ -294,178 +271,6 @@ export function AddFundsDialog({
             [
                 onOpenChange,
                 onUseAvailableCash,
-            ],
-        );
-
-    const handleFiatStarted =
-        useCallback(
-            async () => {
-                if (
-                    !walletAddress
-                ) {
-                    throw new Error(
-                        "Your Kept account isn't ready yet.",
-                    );
-                }
-
-                setFiatStatus(
-                    "Preparing your purchase…",
-                );
-
-                setFiatError(
-                    null,
-                );
-
-                setFiatStartingBalance(
-                    null,
-                );
-
-                const balance =
-                    await readBaseUsdcBalance(
-                        walletAddress as `0x${string}`,
-                    );
-
-                setFiatStartingBalance(
-                    balance,
-                );
-
-                diagnostics.info(
-                    "funding.privy_starting_balance",
-                    {
-                        amount:
-                            balance.toString(),
-                    },
-                );
-
-                setFiatStatus(
-                    "Waiting for your purchase…",
-                );
-            },
-            [
-                walletAddress,
-            ],
-        );
-
-    const handleFiatError =
-        useCallback(
-            (
-                message:
-                    string,
-            ) => {
-                setFiatStatus(
-                    null,
-                );
-
-                setFiatStartingBalance(
-                    null,
-                );
-
-                setFiatError(
-                    message || null,
-                );
-            },
-            [],
-        );
-
-    const handleFiatConfirmed =
-        useCallback(
-            async () => {
-                if (
-                    !walletAddress
-                ) {
-                    setFiatError(
-                        "Your Kept account isn't ready yet.",
-                    );
-
-                    return;
-                }
-
-                if (
-                    fiatStartingBalance ===
-                    null
-                ) {
-                    setFiatError(
-                        "We couldn't determine how much was added.",
-                    );
-
-                    return;
-                }
-
-                setFiatError(
-                    null,
-                );
-
-                setFiatStatus(
-                    "Your purchase is confirmed. Waiting for the funds to arrive…",
-                );
-
-                try {
-                    const received =
-                        await waitForBaseUsdcIncrease({
-                            address:
-                                walletAddress as `0x${string}`,
-
-                            startingBalance:
-                                fiatStartingBalance,
-
-                            readBalance:
-                                readBaseUsdcBalance,
-                        });
-
-                    diagnostics.info(
-                        "funding.privy_usdc_received",
-                        {
-                            amount:
-                                received.toString(),
-                        },
-                    );
-
-
-                    setFiatStatus(
-                        "Your money has arrived. Moving it into Kept…",
-                    );
-
-                    const succeeded =
-                        await executeEmbeddedFunding({
-                            amount:
-                                received,
-                            walletAddress,
-                            wallet,
-                        });
-
-                    setFiatStatus(
-                        null,
-                    );
-
-                    if (
-                        !succeeded
-                    ) {
-                        return;
-                    }
-                } catch (
-                error
-                ) {
-                    diagnostics.error(
-                        "funding.privy_reconciliation_failed",
-                        error,
-                    );
-
-                    setFiatError(
-                        error instanceof
-                            Error
-                            ? error.message
-                            : "We couldn't confirm that your money arrived.",
-                    );
-
-                    setFiatStatus(
-                        null,
-                    );
-                }
-            },
-            [
-                executeEmbeddedFunding,
-                fiatStartingBalance,
-                walletAddress,
             ],
         );
 
@@ -515,11 +320,9 @@ export function AddFundsDialog({
                             handleFiatStarted
                         }
 
-                        onFiatSubmitted={() => {
-                            setFiatStatus(
-                                "Your purchase is being processed…",
-                            );
-                        }}
+                        onFiatSubmitted={
+                            handleFiatSubmitted
+                        }
 
                         onFiatConfirmed={() => {
                             void handleFiatConfirmed();
