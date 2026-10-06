@@ -35,10 +35,8 @@ import {
   buildCreateCommitmentTransaction,
   commitmentManagerAbi,
   confirmCommitmentCreation,
-  readCommitmentRewardState,
   referenceIdForCommitment,
   timestampSeconds,
-  type CommitmentRewardState,
 } from "@/commitments/commitment-manager";
 
 import { claimCommitmentReward } from "@/commitments/reward-claim";
@@ -135,6 +133,10 @@ import {
 import {
   useStagingFaucetController,
 } from "@/features/dashboard/use-staging-faucet-controller";
+
+import {
+  useRewardStateController,
+} from "@/features/dashboard/use-reward-state-controller";
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
@@ -444,6 +446,35 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     refreshPosition,
   });
 
+  const rewardContractReader =
+    useMemo(
+      () =>
+        publicClient
+          ? (input: unknown) =>
+              publicClient.readContract(
+                input as never,
+              )
+          : null,
+      [
+        publicClient,
+      ],
+    );
+
+  const {
+    rewardStates,
+    refreshRewardStates,
+  } = useRewardStateController({
+    manager:
+      commitmentManagerConfig?.address
+      ?? null,
+    commitments:
+      productState.kind === "ready"
+        ? productState.commitments
+        : null,
+    readContract:
+      rewardContractReader,
+  });
+
   const {
     depositQuoteState,
   } = useDepositQuoteController({
@@ -532,23 +563,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     bankWithdrawal.phase,
   ]);
 
-  type RewardState =
-    | { readonly kind: "loading" }
-    | {
-      readonly kind: "ready";
-
-      readonly reward: CommitmentRewardState;
-    }
-    | {
-      readonly kind: "error";
-
-      readonly message: string;
-    };
-
-  const [rewardStates, setRewardStates] = useState<
-    Readonly<Record<string, RewardState>>
-  >({});
-
   const [claimingRewardId, setClaimingRewardId] = useState<string | null>(null);
 
   const [rewardClaimError, setRewardClaimError] = useState<{
@@ -556,89 +570,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     readonly message: string;
   } | null>(null);
-
-  const refreshRewardStates = useCallback(
-    async (commitments: readonly CommitmentDto[]) => {
-      if (!commitmentManagerConfig || !publicClient) {
-        return;
-      }
-
-      const completed = commitments.filter(
-        (commitment) =>
-          commitment.state === "COMPLETED" &&
-          commitment.onchainCommitmentId !== null,
-      );
-
-      if (completed.length === 0) {
-        setRewardStates({});
-
-        return;
-      }
-
-      setRewardStates((current) => {
-        const next = { ...current };
-
-        for (const commitment of completed) {
-          next[commitment.id] = {
-            kind: "loading",
-          };
-        }
-
-        return next;
-      });
-
-      await Promise.all(
-        completed.map(async (commitment) => {
-          try {
-            const onchainCommitmentId = commitment.onchainCommitmentId;
-
-            if (!onchainCommitmentId) return;
-
-            const reward = await readCommitmentRewardState({
-              manager: commitmentManagerConfig.address,
-
-              commitmentId: onchainCommitmentId,
-
-              readContract: (request) =>
-                publicClient.readContract(request as never),
-            });
-
-            setRewardStates((current) => ({
-              ...current,
-
-              [commitment.id]: {
-                kind: "ready",
-
-                reward,
-              },
-            }));
-          } catch (error) {
-            diagnostics.warn(
-              "commitment.reward_read_failed",
-
-              error,
-
-              {
-                commitmentId: commitment.id,
-              },
-            );
-
-            setRewardStates((current) => ({
-              ...current,
-
-              [commitment.id]: {
-                kind: "error",
-
-                message: "Reward details are temporarily unavailable.",
-              },
-            }));
-          }
-        }),
-      );
-    },
-
-    [commitmentManagerConfig, publicClient],
-  );
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -661,16 +592,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     refreshSavingsPerformance,
     refreshSavingsMarketStatus,
   ]);
-
-  useEffect(() => {
-    if (productState.kind !== "ready") {
-      return;
-    }
-
-    queueMicrotask(() => {
-      void refreshRewardStates(productState.commitments);
-    });
-  }, [productState, refreshRewardStates]);
 
   const submitDeposit = useCallback(async (): Promise<boolean> => {
     if (
