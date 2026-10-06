@@ -46,7 +46,7 @@ const {
 }));
 
 vi.mock(
-    "../src/chain/evm-wallet.js",
+    "../src/wallet/evm-wallet.js",
     () => ({
         useKeptEvmWallet:
             () => ({

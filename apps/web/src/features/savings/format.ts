@@ -1,7 +1,7 @@
 import {
   formatUsdc as formatDomainUsdc,
   formatUsdcPrecise as formatDomainUsdcPrecise,
-} from "../../domain/money/usdc.js";
+} from "@/lib/usdc";
 
 export function formatUsdc(
   value: bigint,
