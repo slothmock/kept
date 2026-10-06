@@ -967,73 +967,73 @@ export function DashboardPage(props: DashboardPageProps) {
 
         }
 
-        cryptoWithdrawal.amount={
+        cryptoAmount={
 
           cryptoWithdrawal.amount
 
         }
 
-        cryptoWithdrawal.recipient={
+        cryptoRecipient={
 
           cryptoWithdrawal.recipient
 
         }
 
-        cryptoWithdrawal.destinationAssets={
+        cryptoDestinationAssets={
 
           cryptoWithdrawal.destinationAssets
 
         }
 
-        cryptoWithdrawal.destinationAssetId={
+        cryptoDestinationAssetId={
 
           cryptoWithdrawal.destinationAssetId
 
         }
 
-        cryptoWithdrawal.previewing={
+        cryptoPreviewing={
 
           cryptoWithdrawal.previewing
 
         }
 
-        cryptoWithdrawal.previewReady={
+        cryptoPreviewReady={
 
           cryptoWithdrawal.previewReady
 
         }
 
-        cryptoWithdrawal.previewStatus={
+        cryptoPreviewStatus={
 
           cryptoWithdrawal.previewStatus
 
         }
 
-        cryptoWithdrawal.previewError={
+        cryptoPreviewError={
 
           cryptoWithdrawal.previewError
 
         }
 
-        cryptoWithdrawal.executing={
+        cryptoExecuting={
 
           cryptoWithdrawal.executing
 
         }
 
-        cryptoWithdrawal.executionStatus={
+        cryptoExecutionStatus={
 
           cryptoWithdrawal.executionStatus
 
         }
 
-        cryptoWithdrawal.executionError={
+        cryptoExecutionError={
 
           cryptoWithdrawal.executionError
 
         }
 
-        cryptoWithdrawal.estimatedReceive={
+        cryptoEstimatedReceive={
 
           cryptoWithdrawal.estimatedReceive
 
@@ -1071,31 +1071,31 @@ export function DashboardPage(props: DashboardPageProps) {
         }}
         
 
-        cryptoWithdrawal.onAmountChange={
+        onCryptoAmountChange={
 
           cryptoWithdrawal.onAmountChange
 
         }
 
-        cryptoWithdrawal.onRecipientChange={
+        onCryptoRecipientChange={
 
           cryptoWithdrawal.onRecipientChange
 
         }
 
-        cryptoWithdrawal.onDestinationAssetChange={
+        onCryptoDestinationAssetChange={
 
           cryptoWithdrawal.onDestinationAssetChange
 
         }
 
-        cryptoWithdrawal.onPreview={
+        onPreviewCryptoWithdrawal={
 
           cryptoWithdrawal.onPreview
 
         }
 
-        cryptoWithdrawal.onExecute={
+        onExecuteCryptoWithdrawal={
 
           cryptoWithdrawal.onExecute
 
@@ -1105,59 +1105,59 @@ export function DashboardPage(props: DashboardPageProps) {
 
         bankEnabled={fiatEnabled}
 
-        bankWithdrawal.amount={
+        bankAmount={
 
           bankWithdrawal.amount
 
         }
 
-        bankWithdrawal.submitting={
+        bankSubmitting={
 
           bankWithdrawal.submitting
 
         }
 
-        bankWithdrawal.status={
+        bankStatus={
 
           bankWithdrawal.status
 
         }
 
-        bankWithdrawal.error={
+        bankError={
 
           bankWithdrawal.error
 
         }
 
-        bankWithdrawal.phase={
+        bankPhase={
           bankWithdrawal.phase
         }
 
-        bankWithdrawal.reviewAmount={
+        bankReviewAmount={
           bankWithdrawal.reviewAmount
         }
 
-        bankWithdrawal.minimumReceive={
+        bankMinimumReceive={
           bankWithdrawal.minimumReceive
         }
 
-        bankWithdrawal.onAmountChange={
+        onBankAmountChange={
 
           bankWithdrawal.onAmountChange
 
         }
 
-        bankWithdrawal.onStart={
+        onStartBankWithdrawal={
 
           bankWithdrawal.onStart
 
         }
 
-        bankWithdrawal.onRefresh={
+        onRefreshBankWithdrawal={
           bankWithdrawal.onRefresh
         }
 
-        bankWithdrawal.onConfirm={
+        onConfirmBankWithdrawal={
           bankWithdrawal.onConfirm
         }
 
