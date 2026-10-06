@@ -254,7 +254,7 @@ const EVM_FUNDING_CHAINS:
     },
 };
 
-async function readChainId(
+export async function readChainId(
     provider: EthereumProvider,
 ): Promise<number> {
     const rawChainId =
@@ -291,7 +291,7 @@ async function readChainId(
     return chainId;
 }
 
-async function switchToFundingChain(
+export async function switchToFundingChain(
     provider: EthereumProvider,
     blockchain: string,
 ): Promise<void> {
@@ -381,7 +381,7 @@ async function switchToFundingChain(
     }
 }
 
-async function restoreChain(
+export async function restoreChain(
     provider: EthereumProvider,
     chainId: number,
 ): Promise<void> {
