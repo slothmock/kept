@@ -18,9 +18,11 @@ import {
     getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 
+import type {
+    FundingAsset,
+} from "@/application/money-movement/funding-assets";
 import {
     resolveKeptFundingAssets,
-    type FundingAsset,
 } from "@/features/funding/intents/supported-tokens";
 
 export interface KeptWithdrawalRecipeParams {

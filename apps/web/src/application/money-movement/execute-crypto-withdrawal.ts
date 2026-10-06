@@ -12,7 +12,7 @@ import {
 
 import type {
     FundingAsset,
-} from "@/features/funding/intents/supported-tokens";
+} from "@/application/money-movement/funding-assets";
 
 type ExecutionRunner =
     ReturnType<

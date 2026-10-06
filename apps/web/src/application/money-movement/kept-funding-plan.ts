@@ -2,9 +2,11 @@ import type {
     Recipe,
 } from "@aurora-is-near/intents-connect";
 
+import type {
+    FundingAsset,
+} from "@/application/money-movement/funding-assets";
 import {
     resolveKeptFundingAssets,
-    type FundingAsset,
 } from "@/features/funding/intents/supported-tokens";
 
 export interface KeptFundingRecipeParams {

@@ -9,7 +9,7 @@ import {
 import {
   createKeptFundingPlan,
 } from "@/application/money-movement/kept-funding-plan";
-import type { FundingAsset } from "@/features/funding/intents/supported-tokens";
+import type { FundingAsset } from "@/application/money-movement/funding-assets";
 
 type ExecutionRunner =
   ReturnType<
