@@ -27,25 +27,25 @@ import {
 } from "@/lib/diagnostics";
 import type {
   VaultConfig,
-} from "@/features/savings/vault/config";
+} from "@/wallet/vault/config";
 import {
   minimumUsdcDepositError,
   parseUsdcDepositAmount,
-} from "@/features/savings/vault/deposit-input";
+} from "@/lib/usdc-input";
 import {
   submitVaultDeposit,
   submitVaultWithdrawal,
-} from "@/features/savings/vault/executor";
+} from "@/wallet/vault/executor";
 import type {
   VaultPosition,
-} from "@/features/savings/vault/position";
+} from "@/wallet/vault/position";
 import type {
   VaultTransactionCoordinator,
-} from "@/features/savings/vault/transaction-lock";
+} from "@/lib/transaction-lock";
 import {
   buildVaultDepositTransactions,
   buildVaultWithdrawTransaction,
-} from "@/wallet/vault-transactions";
+} from "@/wallet/vault/transactions";
 
 interface UseSavingsTransactionsControllerInput {
   readonly api:

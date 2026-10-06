@@ -6,7 +6,7 @@ import type {
 } from "@/wallet/blockchain";
 
 import { ConsumerError } from "@/lib/consumer-error";
-import type { UnsignedVaultTransaction } from "@/wallet/vault-transactions";
+import type { UnsignedVaultTransaction } from "@/wallet/vault/transactions";
 
 export interface SubmitVaultDepositInput {
   readonly allowance: bigint;

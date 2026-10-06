@@ -32,10 +32,10 @@ import {
 } from "@/lib/latest-request";
 import type {
   VaultConfig,
-} from "@/features/savings/vault/config";
+} from "@/wallet/vault/config";
 import {
   readVaultPosition,
-} from "@/features/savings/vault/position";
+} from "@/wallet/vault/position";
 
 interface UseSavingsPositionControllerInput {
   readonly account:

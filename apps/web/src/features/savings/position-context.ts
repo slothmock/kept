@@ -1,7 +1,7 @@
 import type { Address } from "viem";
 
 import type { PositionState } from "@/features/savings/state";
-import type { VaultPosition } from "@/features/savings/vault/position";
+import type { VaultPosition } from "@/wallet/vault/position";
 
 export type BoundPositionState =
   | Exclude<PositionState, { readonly kind: "ready" }>

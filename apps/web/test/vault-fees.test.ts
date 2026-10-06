@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatBasisPoints,
   readVaultDepositQuote,
-} from "../src/features/savings/vault/fees.js";
+} from "../src/wallet/vault/fees.js";
 
 const vault = "0x3333333333333333333333333333333333333333";
 

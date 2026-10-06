@@ -6,7 +6,7 @@ import {
 import {
   submitVaultDeposit,
   submitVaultWithdrawal,
-} from "../src/features/savings/vault/vault-transfers.js";
+} from "../src/wallet/vault/transfers.js";
 
 describe("money movement application workflows", () => {
   it("does not repeat a bank transfer when acknowledgement is retried", async () => {

@@ -14,7 +14,7 @@ import {
 } from "@/lib/diagnostics";
 import {
   parseUsdcDepositAmount,
-} from "@/features/savings/vault/deposit-input";
+} from "@/lib/usdc-input";
 
 export interface CreateGoalInput {
   readonly name:

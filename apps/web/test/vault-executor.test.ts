@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { submitVaultDeposit } from "../src/features/savings/vault/executor.js";
-import type { UnsignedVaultTransaction } from "../src/wallet/vault-transactions.js";
+import { submitVaultDeposit } from "../src/wallet/vault/executor.js";
+import type { UnsignedVaultTransaction } from "../src/wallet/vault/transactions.js";
 
 const approval: UnsignedVaultTransaction = {
   to: "0x1111111111111111111111111111111111111111",

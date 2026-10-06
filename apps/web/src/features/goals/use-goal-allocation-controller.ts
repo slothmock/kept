@@ -25,7 +25,7 @@ import {
 } from "@/lib/diagnostics";
 import {
   parseUsdcDepositAmount,
-} from "@/features/savings/vault/deposit-input";
+} from "@/lib/usdc-input";
 
 interface UseGoalAllocationControllerInput {
   readonly api:

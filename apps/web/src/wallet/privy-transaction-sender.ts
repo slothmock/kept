@@ -6,7 +6,7 @@ import type {
 import { ConsumerError } from "@/lib/consumer-error";
 import type {
   UnsignedVaultTransaction,
-} from "@/wallet/vault-transactions";
+} from "@/wallet/vault/transactions";
 
 export type PrivySendTransaction = (
   transaction:

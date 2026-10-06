@@ -30,7 +30,7 @@ import {
 } from "@/lib/diagnostics";
 import type {
   VaultTransactionCoordinator,
-} from "@/features/savings/vault/transaction-lock";
+} from "@/lib/transaction-lock";
 
 interface UseGoalDeletionControllerInput {
   readonly api:
