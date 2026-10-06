@@ -590,7 +590,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
       <BalanceCard
 
-        positionState={positionState}
+        positionState={savingsOverview.positionState}
 
         savingsPerformanceState={savingsOverview.performanceState}
 
