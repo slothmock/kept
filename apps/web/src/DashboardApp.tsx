@@ -24,7 +24,6 @@ import { useKeptEvmWallet } from "@/chain/evm-wallet";
 import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import {
-  buildCancelCommitmentTransaction,
   buildCreateCommitmentTransaction,
   commitmentManagerAbi,
   confirmCommitmentCreation,
@@ -65,8 +64,6 @@ import {
   deallocationInputError,
   previewAllocationShares,
 } from "@/features/goals/funding";
-
-import { runGoalDeletion } from "@/features/goals/delete-goal-flow";
 
 import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
 
@@ -128,6 +125,10 @@ import {
   useRewardClaimController,
 } from "@/features/dashboard/use-reward-claim-controller";
 
+import {
+  useGoalDeletionController,
+} from "@/features/dashboard/use-goal-deletion-controller";
+
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
@@ -137,12 +138,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     );
 
   const [creatingGoal, setCreatingGoal] = useState(false);
-
-  const [deletingGoal, setDeletingGoal] = useState(false);
-
-  const [deleteGoalStatus, setDeleteGoalStatus] = useState<string | null>(null);
-
-  const [deleteGoalError, setDeleteGoalError] = useState<string | null>(null);
 
   const [goalError, setGoalError] = useState<string | null>(null);
 
@@ -513,6 +508,37 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         : null,
     refreshPosition,
     refreshRewardStates,
+  });
+
+  const {
+    deletingGoal,
+    deleteGoalStatus,
+    deleteGoalError,
+    deleteGoal,
+    dismissGoalDeletion,
+  } = useGoalDeletionController({
+    api,
+    account,
+    manager:
+      commitmentManagerConfig?.address
+      ?? null,
+    chainId:
+      config?.chainId
+      ?? null,
+    commitments:
+      productState.kind === "ready"
+        ? productState.commitments
+        : [],
+    sender,
+    transactionCoordinator,
+    ensureTransactionNetwork,
+    readContract:
+      rewardContractReader,
+    waitForReceipt:
+      publicClient
+        ? waitForRewardClaimReceipt
+        : null,
+    refreshProductData,
   });
 
   const depositQuoteReader =
@@ -1207,233 +1233,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     },
     [api, refreshProductData],
   );
-
-  const deleteGoal = useCallback(
-    async (goal: GoalDto): Promise<boolean> => {
-      if (
-        !api ||
-        !config ||
-        !publicClient ||
-        !account ||
-        !commitmentManagerConfig
-      ) {
-        setDeleteGoalError("Your Kept account is not ready yet.");
-
-        return false;
-      }
-
-      setDeletingGoal(true);
-
-      setDeleteGoalError(null);
-
-      setDeleteGoalStatus(null);
-
-      let succeeded = false;
-
-      const acquired = await transactionCoordinator.run(
-        "commitment",
-
-        async () => {
-          try {
-            await runGoalDeletion(
-              goal,
-
-              {
-                commitments: productState.commitments,
-
-                readOnchainStatus: async (commitment) => {
-                  if (!commitment.onchainCommitmentId) {
-                    throw new Error(
-                      "Active commitment is missing its on-chain reference.",
-                    );
-                  }
-
-                  const record = await publicClient.readContract({
-                    address: commitmentManagerConfig.address,
-
-                    abi: commitmentManagerAbi,
-
-                    functionName: "commitments",
-
-                    args: [BigInt(commitment.onchainCommitmentId)],
-                  });
-
-                  const rawStatus = record[6];
-
-                  const status =
-                    typeof rawStatus === "bigint"
-                      ? Number(rawStatus)
-                      : rawStatus;
-
-                  switch (status) {
-                    case 1:
-                      return "ACTIVE";
-
-                    case 2:
-                      return "COMPLETED";
-
-                    case 3:
-                      return "FAILED";
-
-                    case 4:
-                      return "CANCELLED";
-
-                    default:
-                      throw new Error(
-                        `Unknown on-chain commitment status: ${status}`,
-                      );
-                  }
-                },
-
-                cancelOnchain: async (commitment) => {
-                  if (!commitment.onchainCommitmentId) {
-                    throw new Error(
-                      "Active commitment is missing its on-chain reference.",
-                    );
-                  }
-
-                  await ensureTransactionNetwork();
-
-                  const transactionHash = await sender.sendTransaction(
-                    buildCancelCommitmentTransaction({
-                      manager: commitmentManagerConfig.address,
-
-                      chainId: config.chainId,
-
-                      commitmentId: commitment.onchainCommitmentId,
-                    }),
-                  );
-
-                  const receipt = await publicClient.waitForTransactionReceipt({
-                    hash: transactionHash,
-
-                    confirmations:
-                      import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true"
-                        ? 1
-                        : 2,
-                  });
-
-                  if (receipt.status !== "success") {
-                    throw new Error(
-                      "Commitment cancellation transaction reverted.",
-                    );
-                  }
-                },
-
-                persistCancellation: async (commitment) => {
-                  if (!commitment.onchainCommitmentId) {
-                    throw new Error(
-                      "Active commitment is missing its on-chain reference.",
-                    );
-                  }
-
-                  await api.cancelCommitment(
-                    commitment,
-
-                    {
-                      onchainCommitmentId: commitment.onchainCommitmentId,
-
-                      owner: account,
-                    },
-                  );
-                },
-
-                archiveGoal: async (goalToArchive) => {
-                  await api.archiveGoal(
-                    goalToArchive.id,
-
-                    globalThis.crypto.randomUUID(),
-                  );
-                },
-
-                refresh: refreshProductData,
-
-                onStage: (stage) => {
-                  setDeleteGoalStatus(
-                    {
-                      cancelling: "Removing connected commitment…",
-
-                      confirming: "Confirming removal of commitment…",
-
-                      archiving: "Deleting goal…",
-                    }[stage],
-                  );
-                },
-              },
-            );
-
-            setDeleteGoalStatus(null);
-
-            succeeded = true;
-          } catch (error) {
-            diagnostics.error(
-              "api.goal_archive_failed",
-
-              error,
-
-              {
-                goalId: goal.id,
-
-                activeCommitments: productState.commitments.filter(
-                  (commitment) =>
-                    commitment.savingsGoalId === goal.id &&
-                    commitment.state === "ACTIVE",
-                ).length,
-              },
-            );
-
-            setDeleteGoalStatus(null);
-
-            setDeleteGoalError(
-              consumerErrorMessage(
-                error,
-
-                "We could not delete this goal. Try again.",
-              ),
-            );
-          }
-        },
-      );
-
-      if (!acquired) {
-        setDeleteGoalError(
-          "Another account action is still being processed. Try again in a moment.",
-        );
-      }
-
-      setDeletingGoal(false);
-
-      return succeeded;
-    },
-
-    [
-      account,
-
-      api,
-
-      commitmentManagerConfig,
-
-      config,
-
-      ensureTransactionNetwork,
-
-      productState.commitments,
-
-      publicClient,
-
-      refreshProductData,
-
-      sender,
-
-      transactionCoordinator,
-    ],
-  );
-
-  const dismissGoalDeletion = useCallback(() => {
-    setDeleteGoalError(null);
-
-    setDeleteGoalStatus(null);
-  }, []);
 
   type GoalAllocationDirection = "fund" | "unfund";
 
