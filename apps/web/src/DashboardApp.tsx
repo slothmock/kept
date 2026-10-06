@@ -12,13 +12,7 @@ import {
   getAddress,
   http,
   isAddress,
-  encodeFunctionData,
-  erc20Abi,
 } from "viem";
-
-import {
-  PublicKey,
-} from "@solana/web3.js";
 
 import {
   createKeptApi,
@@ -103,9 +97,6 @@ import {
   createKeptIntentsRunner,
 } from "@/features/funding/intents/runner";
 
-import {
-  previewCryptoWithdrawal,
-} from "@/features/withdrawal/preview-crypto-withdrawal";
 import { executeCryptoWithdrawal } from "./features/withdrawal/execute-withdrawal";
 import {
   deliverBankWithdrawal,
@@ -117,8 +108,8 @@ import {
 } from "@/features/dashboard/use-bank-withdrawal-order-controller";
 
 import {
-  useCryptoWithdrawalUiController,
-} from "@/features/dashboard/use-crypto-withdrawal-ui-controller";
+  useCryptoWithdrawalController,
+} from "@/features/dashboard/use-crypto-withdrawal-controller";
 
 import {
   useSavingsPositionController,
@@ -143,31 +134,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     readFiatEnabled(
       import.meta.env,
     );
-
-  const {
-    amount: cryptoWithdrawAmount,
-    recipient: cryptoRecipient,
-    destinationAssets: cryptoDestinationAssets,
-    destinationAssetId: cryptoDestinationAssetId,
-    previewing: cryptoPreviewing,
-    previewReady: cryptoPreviewReady,
-    previewStatus: cryptoPreviewStatus,
-    previewError: cryptoPreviewError,
-    executing: cryptoExecuting,
-    executionStatus: cryptoExecutionStatus,
-    executionError: cryptoExecutionError,
-    setAmount: handleCryptoWithdrawAmountChange,
-    setRecipient: handleCryptoRecipientChange,
-    setDestinationAssetId: handleCryptoDestinationAssetChange,
-    startPreview: startCryptoPreview,
-    completePreview: completeCryptoPreview,
-    failPreview: failCryptoPreview,
-    startExecution: startCryptoExecution,
-    setExecutionStatus: setCryptoExecutionStatus,
-    completeExecution: completeCryptoExecution,
-    failExecution: failCryptoExecution,
-    clearAfterExecution: clearCryptoAfterExecution,
-  } = useCryptoWithdrawalUiController();
 
   const [creatingGoal, setCreatingGoal] = useState(false);
 
@@ -565,6 +531,44 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     refreshSavingsMarketStatus,
   });
 
+  const {
+    amount: cryptoWithdrawAmount,
+    recipient: cryptoRecipient,
+    destinationAssets: cryptoDestinationAssets,
+    destinationAssetId: cryptoDestinationAssetId,
+    previewing: cryptoPreviewing,
+    previewReady: cryptoPreviewReady,
+    previewStatus: cryptoPreviewStatus,
+    previewError: cryptoPreviewError,
+    executing: cryptoExecuting,
+    executionStatus: cryptoExecutionStatus,
+    executionError: cryptoExecutionError,
+    setAmount: handleCryptoWithdrawAmountChange,
+    setRecipient: handleCryptoRecipientChange,
+    setDestinationAssetId: handleCryptoDestinationAssetChange,
+    preview: previewCryptoTransfer,
+    execute: executeCryptoTransfer,
+  } = useCryptoWithdrawalController({
+    api,
+    account,
+    config,
+    position:
+      positionState.kind === "ready"
+        ? positionState.position
+        : null,
+    sender,
+    transactionCoordinator,
+    ensureTransactionNetwork,
+    waitForTransactionReceipt:
+      publicClient
+        ? waitForSavingsTransactionReceipt
+        : null,
+    getProvider:
+      wallet.getProvider,
+    refreshPosition,
+    refreshProductData,
+  });
+
   const bankWithdrawal =
     useBankWithdrawalOrderController({
       api,
@@ -635,628 +639,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     refreshSavingsPerformance,
     refreshSavingsMarketStatus,
   ]);
-
-  const previewCryptoTransfer =
-    useCallback(
-      async () => {
-        if (
-          !account ||
-          !config ||
-          positionState.kind !==
-          "ready"
-        ) {
-          failCryptoPreview(
-            "Your Kept account is not ready yet.",
-          );
-
-          return;
-        }
-
-        const parsedAmount =
-          parseUsdcDepositAmount(
-            cryptoWithdrawAmount,
-          );
-
-        if (
-          "error" in
-          parsedAmount
-        ) {
-          failCryptoPreview(
-            parsedAmount.error,
-          );
-
-          return;
-        }
-
-        if (
-          parsedAmount.assets >
-          positionState.position
-            .withdrawableAssets
-        ) {
-          failCryptoPreview(
-            "Enter an amount no greater than your available savings.",
-          );
-
-          return;
-        }
-
-        const destinationAsset =
-          cryptoDestinationAssets.find(
-            (
-              asset,
-            ) =>
-              asset.assetId ===
-              cryptoDestinationAssetId,
-          );
-
-        if (
-          !destinationAsset
-        ) {
-          failCryptoPreview(
-            "Choose a withdrawal network.",
-          );
-
-          return;
-        }
-
-        startCryptoPreview();
-
-        try {
-          const directMonadTransfer =
-            destinationAsset.blockchain ===
-            "monad";
-
-          if (
-            directMonadTransfer
-          ) {
-            completeCryptoPreview(
-              "Transfer ready.",
-            );
-
-            return;
-          }
-
-          await ensureTransactionNetwork();
-
-          const provider =
-            await wallet.getProvider();
-
-          if (
-            !provider
-          ) {
-            throw new Error(
-              "Wallet provider is unavailable.",
-            );
-          }
-
-          const runner =
-            createKeptIntentsRunner({
-              sourceAddress:
-                account,
-
-              family:
-                "evm",
-
-              provider,
-            });
-
-          try {
-            await previewCryptoWithdrawal({
-              runner,
-              amount:
-                parsedAmount.assets,
-              recipient:
-                cryptoRecipient,
-              destinationAsset,
-            });
-
-            completeCryptoPreview(
-              "Transfer route ready.",
-            );
-          } finally {
-            runner.dispose?.();
-          }
-        } catch (
-        error
-        ) {
-          diagnostics.error(
-            "withdrawal.crypto_preview_failed",
-            error,
-          );
-
-          failCryptoPreview(
-            consumerErrorMessage(
-              error,
-              "We could not prepare this transfer. Try again.",
-            ),
-          );
-        }
-      },
-      [
-        account,
-        config,
-        cryptoDestinationAssetId,
-        cryptoDestinationAssets,
-        cryptoRecipient,
-        cryptoWithdrawAmount,
-        ensureTransactionNetwork,
-        positionState,
-        wallet,
-      ],
-    );
-
-  const executeCryptoTransfer =
-    useCallback(
-      async () => {
-        if (
-          !config ||
-          !publicClient ||
-          !account ||
-          positionState.kind !==
-          "ready"
-        ) {
-          failCryptoExecution(
-            "Your Kept account is not ready yet.",
-          );
-
-          return;
-        }
-
-        const parsedAmount =
-          parseUsdcDepositAmount(
-            cryptoWithdrawAmount,
-          );
-
-        if (
-          "error" in
-          parsedAmount
-        ) {
-          failCryptoExecution(
-            parsedAmount.error,
-          );
-
-          return;
-        }
-
-        const availableCash =
-          positionState.position
-            .usdcBalance;
-
-        const withdrawableSavings =
-          positionState.position
-            .withdrawableAssets;
-
-        const availableToSend =
-          positionState.position.usdcBalance +
-          positionState.position.withdrawableAssets;
-
-        if (
-          parsedAmount.assets >
-          availableToSend
-        ) {
-          failCryptoPreview(
-            "Enter an amount no greater than your available balance.",
-          );
-
-          return;
-        }
-
-        const destinationAsset =
-          cryptoDestinationAssets.find(
-            (
-              asset,
-            ) =>
-              asset.assetId ===
-              cryptoDestinationAssetId,
-          );
-
-        if (
-          !destinationAsset
-        ) {
-          failCryptoExecution(
-            "Choose a withdrawal network.",
-          );
-
-          return;
-        }
-
-        if (
-          !cryptoPreviewReady
-        ) {
-          failCryptoExecution(
-            "Review the transfer before confirming it.",
-          );
-
-          return;
-        }
-
-        let recipient:
-          string;
-
-        if (
-          destinationAsset.blockchain ===
-          "sol"
-        ) {
-          try {
-            recipient =
-              new PublicKey(
-                cryptoRecipient,
-              ).toBase58();
-          } catch {
-            failCryptoExecution(
-              "Enter a valid Solana wallet address.",
-            );
-
-            return;
-          }
-        } else {
-          if (
-            !isAddress(
-              cryptoRecipient,
-            )
-          ) {
-            failCryptoExecution(
-              "Enter a valid wallet address.",
-            );
-
-            return;
-          }
-
-          recipient =
-            getAddress(
-              cryptoRecipient,
-            );
-        }
-
-        const requiredFromSavings =
-          parsedAmount.assets >
-            availableCash
-            ? parsedAmount.assets -
-            availableCash
-            : 0n;
-
-        startCryptoExecution(
-          requiredFromSavings > 0n
-            ? "Preparing your money…"
-            : "Preparing transfer…",
-        );
-
-        let savingsWithdrawn =
-          false;
-
-        try {
-          await transactionCoordinator.run(
-            "withdraw",
-            async () => {
-              /*
-               * Stage 1:
-               *
-               * Only withdraw the amount that is not
-               * already sitting in Available cash.
-               */
-              if (
-                requiredFromSavings >
-                0n
-              ) {
-                if (
-                  requiredFromSavings >
-                  withdrawableSavings
-                ) {
-                  throw new Error(
-                    "There is not enough available savings for this transfer.",
-                  );
-                }
-
-                const withdrawal =
-                  buildVaultWithdrawTransaction({
-                    vault:
-                      config.vault,
-
-                    receiver:
-                      account,
-
-                    owner:
-                      account,
-
-                    assets:
-                      requiredFromSavings,
-
-                    chainId:
-                      config.chainId,
-                  });
-
-                setCryptoExecutionStatus(
-                  "Confirm the withdrawal from your savings.",
-                );
-
-                const savingsWithdrawalResult =
-                  await submitVaultWithdrawal({
-                    withdrawal,
-
-                    beforeSend:
-                      async () =>
-                        ensureTransactionNetwork(),
-
-                    sender,
-
-                    receipts: {
-                      waitForTransactionReceipt:
-                        async ({
-                          hash,
-                        }) => {
-                          const receipt =
-                            await publicClient
-                              .waitForTransactionReceipt({
-                                hash,
-                              });
-
-                          return {
-                            status:
-                              receipt.status ===
-                                "success"
-                                ? "success"
-                                : "reverted",
-                          };
-                        },
-                    },
-                  });
-
-                if (api) {
-                  await api.recordTransaction(
-                    {
-                      type:
-                        "SAVINGS_WITHDRAWAL",
-
-                      amountAtomic:
-                        requiredFromSavings
-                          .toString(),
-
-                      asset:
-                        "USDC",
-
-                      description:
-                        "Moved to available cash",
-
-                      chainId:
-                        config.chainId
-                          .toString(),
-
-                      transactionHash:
-                        savingsWithdrawalResult
-                          .withdrawalHash,
-
-                      externalReference:
-                        savingsWithdrawalResult
-                          .withdrawalHash,
-                    },
-                    savingsWithdrawalResult
-                      .withdrawalHash,
-                  );
-                }
-
-                savingsWithdrawn =
-                  true;
-
-                setCryptoExecutionStatus(
-                  "Savings withdrawn. Preparing transfer…",
-                );
-              }
-
-              /*
-               * Stage 2:
-               *
-               * Send the entire requested amount.
-               *
-               * Same-chain Monad USDC does not need
-               * Aurora Intents.
-               */
-              const directMonadTransfer =
-                destinationAsset
-                  .blockchain ===
-                "monad";
-
-              if (
-                directMonadTransfer
-              ) {
-                await ensureTransactionNetwork();
-
-                const usdcAddress =
-                  config.usdc;
-
-                const hash =
-                  await sender.sendTransaction({
-                    to:
-                      usdcAddress,
-
-                    chainId:
-                      config.chainId,
-
-                    data:
-                      encodeFunctionData({
-                        abi:
-                          erc20Abi,
-
-                        functionName:
-                          "transfer",
-
-                        args: [
-                          getAddress(
-                            recipient,
-                          ),
-                          parsedAmount.assets,
-                        ],
-                      }),
-                  });
-
-                setCryptoExecutionStatus(
-                  "Transfer submitted. Waiting for confirmation…",
-                );
-
-                const receipt =
-                  await publicClient
-                    .waitForTransactionReceipt({
-                      hash,
-                    });
-
-                if (
-                  receipt.status !==
-                  "success"
-                ) {
-                  throw new Error(
-                    "The transfer did not complete successfully.",
-                  );
-                }
-
-                return;
-              }
-
-              /*
-               * Cross-chain route:
-               *
-               * Monad USDC in the embedded wallet
-               * becomes the Aurora origin asset.
-               */
-              await ensureTransactionNetwork();
-
-              const provider =
-                await wallet.getProvider();
-
-              if (
-                !provider
-              ) {
-                throw new Error(
-                  "Wallet provider is unavailable.",
-                );
-              }
-
-              const runner =
-                createKeptIntentsRunner({
-                  sourceAddress:
-                    account,
-
-                  family:
-                    "evm",
-
-                  provider,
-                });
-
-              try {
-                setCryptoExecutionStatus(
-                  "Confirm the transfer in your wallet.",
-                );
-
-                const execution =
-                  await executeCryptoWithdrawal({
-                    runner,
-
-                    amount:
-                      parsedAmount.assets,
-
-                    recipient,
-
-                    destinationAsset,
-                  });
-
-                if (api) {
-                  await api.recordTransaction(
-                    {
-                      type:
-                        "CRYPTO_WITHDRAWAL",
-
-                      amountAtomic:
-                        parsedAmount.assets
-                          .toString(),
-
-                      asset:
-                        destinationAsset.symbol,
-
-                      description:
-                        "Sent to external wallet",
-
-                      chainId:
-                        null,
-
-                      transactionHash:
-                        null,
-
-                      externalReference:
-                        execution.id
-                    },
-                    execution.id,
-                  );
-                }
-              } finally {
-                runner.dispose?.();
-              }
-            },
-          );
-
-          completeCryptoExecution(
-            "Transfer complete.",
-          );
-
-          clearCryptoAfterExecution();
-
-          await Promise.all([
-            refreshPosition(),
-            refreshProductData(),
-          ]);
-        } catch (
-        error
-        ) {
-          diagnostics.warn(
-            "withdrawal.crypto_execution_failed",
-            error,
-          );
-
-          /*
-           * This distinction is important.
-           *
-           * If the vault withdrawal succeeded,
-           * the user's funds are not stuck or
-           * lost. They're now simply Available
-           * cash in the embedded wallet.
-           */
-          if (
-            savingsWithdrawn
-          ) {
-            failCryptoExecution(
-              "The transfer couldn't be completed. Your money was withdrawn from savings successfully and is now available in Kept.",
-            );
-
-            await Promise.all([
-              refreshPosition(),
-              refreshProductData(),
-            ]);
-          } else {
-            failCryptoExecution(
-              consumerErrorMessage(
-                error,
-                "We could not complete this transfer. Try again.",
-              ),
-            );
-          }
-        }
-      },
-      [
-        account,
-        api,
-        config,
-        cryptoDestinationAssetId,
-        cryptoDestinationAssets,
-        cryptoPreviewReady,
-        cryptoRecipient,
-        cryptoWithdrawAmount,
-        ensureTransactionNetwork,
-        positionState,
-        publicClient,
-        refreshPosition,
-        refreshProductData,
-        sender,
-        transactionCoordinator,
-        wallet,
-      ],
-    );
 
   const startBankWithdrawal =
     useCallback(
