@@ -69,13 +69,6 @@ import {
   useSavingsStatusController,
 } from "@/features/dashboard/use-savings-status-controller";
 
-import {
-  currentPositionState,
-  type BoundPositionState,
-} from "@/features/dashboard/position-context";
-
-import type { PositionState } from "@/features/savings/BalanceCard";
-
 import { formatUsdc } from "@/features/savings/format";
 
 import {
@@ -112,8 +105,6 @@ import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
 
 import { readVaultDepositQuote } from "@/vault/fees";
 
-import { readVaultPosition } from "@/vault/position";
-
 import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 
 import {
@@ -141,6 +132,10 @@ import {
 import {
   useCryptoWithdrawalUiController,
 } from "@/features/dashboard/use-crypto-withdrawal-ui-controller";
+
+import {
+  useSavingsPositionController,
+} from "@/features/dashboard/use-savings-position-controller";
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
@@ -190,9 +185,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     failExecution: failCryptoExecution,
     clearAfterExecution: clearCryptoAfterExecution,
   } = useCryptoWithdrawalUiController();
-
-  const [storedPositionState, setStoredPositionState] =
-    useState<BoundPositionState>({ kind: "unavailable" });
 
   const [creatingGoal, setCreatingGoal] = useState(false);
 
@@ -268,8 +260,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     bankActionActive,
     setBankActionActive,
   ] = useState(false);
-
-  const positionRequestGate = useMemo(() => createLatestRequestGate(), []);
 
   const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
 
@@ -431,21 +421,34 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [stagingFaucetError, setStagingFaucetError] =
     useState<string | null>(null);
 
-  const positionState: PositionState = currentPositionState(
-    storedPositionState,
-    {
-      account,
-
-      chainId: wallet.liveChainId,
-    },
-  );
-
   const depositQuoteState = currentDepositQuote(
     storedDepositQuote,
     depositAmount,
   );
 
   const getCurrentWalletChainId = wallet.getCurrentChainId;
+
+  const {
+    positionState,
+    refreshPosition,
+  } = useSavingsPositionController({
+    account,
+    liveWalletChainId:
+      wallet.liveChainId,
+    config,
+    publicClient:
+      publicClient
+        ? {
+            readContract: (input) =>
+              publicClient.readContract(
+                input as never,
+              ) as Promise<bigint>,
+            getChainId: () =>
+              publicClient.getChainId(),
+          }
+        : null,
+    getCurrentWalletChainId,
+  });
 
   const ensureTransactionNetwork = useCallback(async () => {
     if (!config || !publicClient) {
@@ -513,114 +516,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     bankActionActive,
     bankActionPhase,
     bankWithdrawal.phase,
-  ]);
-
-  const refreshPosition = useCallback(async () => {
-    const requestId = positionRequestGate.begin();
-
-    if (!config || !publicClient) {
-      if (positionRequestGate.isCurrent(requestId)) {
-        setStoredPositionState({
-          kind: "error",
-          message: "Savings are unavailable because Kept is not configured.",
-        });
-      }
-
-      return;
-    }
-
-    if (!account) {
-      if (positionRequestGate.isCurrent(requestId)) {
-        setStoredPositionState({ kind: "unavailable" });
-      }
-
-      return;
-    }
-
-    setStoredPositionState({ kind: "loading" });
-
-    try {
-      const liveWalletChainId = await getCurrentWalletChainId();
-
-      if (
-        wallet.liveChainId === null ||
-        wallet.liveChainId !== liveWalletChainId
-      ) {
-        if (positionRequestGate.isCurrent(requestId)) {
-          setStoredPositionState({
-            kind: "error",
-
-            message:
-              "Your Kept account is getting ready. Try again in a moment.",
-          });
-        }
-
-        return;
-      }
-
-      const network = await checkNetworkReadiness({
-        expectedChainId: config.chainId,
-
-        walletChainId: liveWalletChainId,
-
-        rpc: publicClient,
-      });
-
-      if (!network.ready) {
-        if (positionRequestGate.isCurrent(requestId)) {
-          diagnostics.warn("wallet.network_not_ready", network.diagnostic);
-
-          setStoredPositionState({ kind: "error", message: network.message });
-        }
-
-        return;
-      }
-
-      const position = await readVaultPosition({
-        publicClient: {
-          readContract: (input) =>
-            publicClient.readContract(input as never) as Promise<bigint>,
-        },
-
-        usdc: config.usdc,
-
-        vault: config.vault,
-
-        account,
-      });
-
-      if (positionRequestGate.isCurrent(requestId)) {
-        setStoredPositionState({
-          kind: "ready",
-
-          account,
-
-          chainId: config.chainId,
-
-          position,
-        });
-      }
-    } catch (error) {
-      if (positionRequestGate.isCurrent(requestId)) {
-        diagnostics.error("vault.position_refresh_failed", error);
-
-        setStoredPositionState({
-          kind: "error",
-
-          message: consumerErrorMessage(
-            error,
-            "We could not refresh your savings. Try again.",
-          ),
-        });
-      }
-    }
-  }, [
-    account,
-    config,
-    getCurrentWalletChainId,
-    positionRequestGate,
-    publicClient,
-    wallet.liveChainId,
   ]);
 
   const claimStagingFaucet = useCallback(async () => {
