@@ -13,6 +13,9 @@ import type {
 import type {
   TransactionSender,
 } from "@/application/ports/blockchain";
+import {
+  useDepositQuoteController,
+} from "@/features/dashboard/use-deposit-quote-controller";
 import type {
   DepositQuoteState,
 } from "@/features/savings/deposit-quote";
@@ -57,8 +60,13 @@ interface UseSavingsTransactionsControllerInput {
   readonly position:
     VaultPosition | null;
 
-  readonly depositQuoteState:
-    DepositQuoteState;
+  readonly depositQuoteReader:
+    {
+      readContract(
+        input: unknown,
+      ): Promise<unknown>;
+    }
+    | null;
 
   readonly sender:
     TransactionSender;
@@ -97,7 +105,7 @@ export function useSavingsTransactionsController({
   account,
   config,
   position,
-  depositQuoteState,
+  depositQuoteReader,
   sender,
   transactionCoordinator,
   ensureTransactionNetwork,
@@ -115,6 +123,9 @@ export function useSavingsTransactionsController({
 
   readonly depositError:
     string | null;
+
+  readonly depositQuoteState:
+    DepositQuoteState;
 
   readonly withdrawAmount:
     string;
@@ -186,6 +197,19 @@ export function useSavingsTransactionsController({
     useState<
       string | null
     >(null);
+
+  const {
+    depositQuoteState,
+  } = useDepositQuoteController({
+    amount:
+      depositAmount,
+    vault:
+      config?.vault ?? null,
+    publicClient:
+      depositQuoteReader,
+    positionReady:
+      position !== null,
+  });
 
   const refreshSavingsData =
     useCallback(
@@ -624,6 +648,7 @@ export function useSavingsTransactionsController({
     depositAmount,
     depositStatus,
     depositError,
+    depositQuoteState,
     withdrawAmount,
     withdrawStatus,
     withdrawError,
