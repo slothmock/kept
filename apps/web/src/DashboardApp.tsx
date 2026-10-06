@@ -30,7 +30,7 @@ import {
 
 import {
   useSavingsStatusController,
-} from "@/features/dashboard/use-savings-status-controller";
+} from "@/features/savings/use-savings-status-controller";
 
 
 import { readFiatEnabled } from "@/config/feature-flags";
@@ -51,11 +51,11 @@ import {
 
 import {
   useSavingsPositionController,
-} from "@/features/dashboard/use-savings-position-controller";
+} from "@/features/savings/use-savings-position-controller";
 
 import {
   useSavingsTransactionsController,
-} from "@/features/dashboard/use-savings-transactions-controller";
+} from "@/features/savings/use-savings-transactions-controller";
 
 import {
   useStagingFaucetController,
