@@ -25,7 +25,6 @@ import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import {
   buildCreateCommitmentTransaction,
-  commitmentManagerAbi,
   confirmCommitmentCreation,
   referenceIdForCommitment,
   timestampSeconds,
