@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 
 import {
   AppProviders,
-} from "@/app/AppProviders";
+} from "@/app/providers/AppProviders";
 import {
   resolveAppBootstrap,
 } from "@/app/bootstrap-config";

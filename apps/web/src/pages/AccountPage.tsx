@@ -40,7 +40,7 @@ import {
 } from "@/components/AccountMenu";
 import {
     AppShell,
-} from "@/components/AppShell";
+} from "@/app/layout/AppShell";
 import {
     Button,
 } from "@/components/ui/button";

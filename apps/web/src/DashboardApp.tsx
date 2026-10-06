@@ -22,7 +22,7 @@ import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
 import { AccountMenu } from "@/components/AccountMenu";
 
-import { AppShell } from "@/components/AppShell";
+import { AppShell } from "@/app/layout/AppShell";
 
 import {
   useProductDataController,
