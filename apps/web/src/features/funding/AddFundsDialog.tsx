@@ -99,20 +99,20 @@ const BASE_CHAIN =
 const MIN_FIAT_ONRAMP =
     20;
 
-const SOURCE_NETWORK_ORDER =
-    [
-        "eth",
-        "base",
-        "arb",
-        "op",
-        "sol",
-    ] as const;
-
 import {
     readChainId,
     restoreChain,
     switchToFundingChain,
 } from "@/features/funding/evm-funding-network";
+
+import {
+    filterFundingAssetsByBlockchain,
+    filterFundingAssetsForWallet,
+    findFundingSourceAsset,
+    listFundingSourceBlockchains,
+    selectFundingSourceAssetId,
+    selectFundingSourceBlockchain,
+} from "@/features/funding/funding-source-selection";
 
 type FundingView =
     | "choose"
@@ -364,24 +364,11 @@ export function AddFundsDialog({
 
     const sourceAsset =
         useMemo(
-            () => {
-                if (
-                    !sourceAssetId
-                ) {
-                    return null;
-                }
-
-                return (
-                    sourceAssets.find(
-                        (
-                            asset,
-                        ) =>
-                            asset.assetId ===
-                            sourceAssetId,
-                    ) ??
-                    null
-                );
-            },
+            () =>
+                findFundingSourceAsset(
+                    sourceAssets,
+                    sourceAssetId,
+                ),
             [
                 sourceAssetId,
                 sourceAssets,
@@ -390,39 +377,11 @@ export function AddFundsDialog({
 
     const walletCompatibleSourceAssets =
         useMemo(
-            () => {
-                return sourceAssets.filter(
-                    (
-                        asset,
-                    ) => {
-                        if (
-                            !SOURCE_NETWORK_ORDER.includes(
-                                asset.blockchain as typeof SOURCE_NETWORK_ORDER[number],
-                            )
-                        ) {
-                            return false;
-                        }
-
-                        if (
-                            externalWallet.family ===
-                            "sol"
-                        ) {
-                            return asset.blockchain ===
-                                "sol";
-                        }
-
-                        if (
-                            externalWallet.family ===
-                            "evm"
-                        ) {
-                            return asset.blockchain !==
-                                "sol";
-                        }
-
-                        return true;
-                    },
-                );
-            },
+            () =>
+                filterFundingAssetsForWallet(
+                    sourceAssets,
+                    externalWallet.family,
+                ),
             [
                 externalWallet.family,
                 sourceAssets,
@@ -432,17 +391,8 @@ export function AddFundsDialog({
     const availableSourceBlockchains =
         useMemo(
             () =>
-                SOURCE_NETWORK_ORDER.filter(
-                    (
-                        blockchain,
-                    ) =>
-                        walletCompatibleSourceAssets.some(
-                            (
-                                asset,
-                            ) =>
-                                asset.blockchain ===
-                                blockchain,
-                        ),
+                listFundingSourceBlockchains(
+                    walletCompatibleSourceAssets,
                 ),
             [
                 walletCompatibleSourceAssets,
@@ -451,21 +401,11 @@ export function AddFundsDialog({
 
     const filteredSourceAssets =
         useMemo(
-            () => {
-                if (
-                    !sourceBlockchain
-                ) {
-                    return [];
-                }
-
-                return walletCompatibleSourceAssets.filter(
-                    (
-                        asset,
-                    ) =>
-                        asset.blockchain ===
-                        sourceBlockchain,
-                );
-            },
+            () =>
+                filterFundingAssetsByBlockchain(
+                    walletCompatibleSourceAssets,
+                    sourceBlockchain,
+                ),
             [
                 sourceBlockchain,
                 walletCompatibleSourceAssets,
@@ -519,115 +459,23 @@ export function AddFundsDialog({
                         setSourceBlockchain(
                             (
                                 current,
-                            ) => {
-                                if (
-                                    current &&
-                                    origins.some(
-                                        (
-                                            asset,
-                                        ) =>
-                                            asset.blockchain ===
-                                            current,
-                                    ) &&
-                                    (
-                                        externalWallet.family ===
-                                            "sol"
-                                            ? current ===
-                                                "sol"
-                                            : externalWallet.family ===
-                                                "evm"
-                                              ? current !==
-                                                "sol"
-                                              : true
-                                    )
-                                ) {
-                                    return current;
-                                }
-
-                                const preferredAsset =
-                                    externalWallet.family ===
-                                        "sol"
-                                        ? origins.find(
-                                            (
-                                                asset,
-                                            ) =>
-                                                asset.blockchain ===
-                                                "sol",
-                                        )
-                                        : origins.find(
-                                            (
-                                                asset,
-                                            ) =>
-                                                asset.blockchain ===
-                                                "base",
-                                        );
-
-                                return (
-                                    preferredAsset?.blockchain ??
-                                    origins[0]?.blockchain ??
-                                    null
-                                );
-                            },
+                            ) =>
+                                selectFundingSourceBlockchain(
+                                    origins,
+                                    externalWallet.family,
+                                    current,
+                                ),
                         );
 
                         setSourceAssetId(
                             (
                                 current,
-                            ) => {
-                                if (
-                                    current
-                                ) {
-                                    const currentAsset =
-                                        origins.find(
-                                            (
-                                                asset,
-                                            ) =>
-                                                asset.assetId ===
-                                                current,
-                                        );
-
-                                    if (
-                                        currentAsset &&
-                                        (
-                                            externalWallet.family ===
-                                                "sol"
-                                                ? currentAsset.blockchain ===
-                                                    "sol"
-                                                : externalWallet.family ===
-                                                    "evm"
-                                                  ? currentAsset.blockchain !==
-                                                    "sol"
-                                                  : true
-                                        )
-                                    ) {
-                                        return current;
-                                    }
-                                }
-
-                                const preferredUsdc =
-                                    origins.find(
-                                        (
-                                            asset,
-                                        ) =>
-                                            asset.blockchain ===
-                                            (
-                                                externalWallet.family ===
-                                                    "sol"
-                                                    ? "sol"
-                                                    : "base"
-                                            ) &&
-                                            asset.symbol ===
-                                            "USDC",
-                                    );
-
-                                return (
-                                    preferredUsdc
-                                        ?.assetId ??
-                                    origins[0]
-                                        ?.assetId ??
-                                    null
-                                );
-                            },
+                            ) =>
+                                selectFundingSourceAssetId(
+                                    origins,
+                                    externalWallet.family,
+                                    current,
+                                ),
                         );
                     } catch (
                     error
