@@ -1,6 +1,6 @@
 import {
   previewCryptoWithdrawal as previewApplicationCryptoWithdrawal,
-} from "@/application/money-movement/preview-crypto-withdrawal";
+} from "@/features/withdrawals/core/preview-crypto-withdrawal";
 import {
   resolveKeptFundingAssets,
 } from "@/features/funding/intents/supported-tokens";

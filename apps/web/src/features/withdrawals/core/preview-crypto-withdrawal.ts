@@ -2,48 +2,48 @@ import type {
     createExecutionRunner,
 } from "@aurora-is-near/intents-connect";
 
+import type {
+    FundingAsset,
+    FundingAssetsResolver,
+} from "@/features/funding/intents/core/funding-assets";
+
 import {
     diagnostics,
 } from "@/lib/diagnostics";
 
 import {
     createKeptWithdrawalPlan,
-} from "./kept-withdrawal-plan";
-
-import type {
-    FundingAsset,
-    FundingAssetsResolver,
-} from "@/features/funding/intents/core/funding-assets";
+} from "@/features/withdrawals/core/kept-withdrawal-plan";
 
 type ExecutionRunner =
     ReturnType<
         typeof createExecutionRunner
     >;
 
-interface ExecuteCryptoWithdrawalInput {
+interface PreviewCryptoWithdrawalInput {
     readonly runner:
-        ExecutionRunner;
+    ExecutionRunner;
 
     readonly amount:
-        bigint;
+    bigint;
 
     readonly recipient:
-        string;
+    string;
 
     readonly destinationAsset:
-        FundingAsset;
+    FundingAsset;
 
     readonly resolveFundingAssets:
-        FundingAssetsResolver;
+    FundingAssetsResolver;
 }
 
-export async function executeCryptoWithdrawal({
+export async function previewCryptoWithdrawal({
     runner,
     amount,
     recipient,
     destinationAsset,
     resolveFundingAssets,
-}: ExecuteCryptoWithdrawalInput) {
+}: PreviewCryptoWithdrawalInput) {
     try {
         const plan =
             await createKeptWithdrawalPlan({
@@ -53,13 +53,13 @@ export async function executeCryptoWithdrawal({
                 resolveFundingAssets,
             });
 
-        const execution =
-            await runner.run(
+        const preview =
+            await runner.preview(
                 plan,
             );
 
         diagnostics.info(
-            "withdrawal.intents_execution_complete",
+            "withdrawal.intents_preview_ready",
             {
                 amount:
                     amount.toString(),
@@ -69,12 +69,13 @@ export async function executeCryptoWithdrawal({
             },
         );
 
-        return execution;
-    } catch (
-        cause
-    ) {
+        return {
+            plan,
+            preview,
+        };
+    } catch (cause) {
         diagnostics.error(
-            "withdrawal.intents_execution_failed",
+            "withdrawal.intents_preview_failed",
             cause,
         );
 

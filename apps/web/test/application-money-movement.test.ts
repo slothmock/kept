@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   deliverBankWithdrawal,
-} from "../src/application/money-movement/bank-withdrawal.js";
+} from "../src/features/withdrawals/core/bank-withdrawal.js";
 import {
   submitVaultDeposit,
   submitVaultWithdrawal,

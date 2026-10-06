@@ -1,6 +1,6 @@
 import {
   executeCryptoWithdrawal as executeApplicationCryptoWithdrawal,
-} from "@/application/money-movement/execute-crypto-withdrawal";
+} from "@/features/withdrawals/core/execute-crypto-withdrawal";
 import {
   resolveKeptFundingAssets,
 } from "@/features/funding/intents/supported-tokens";

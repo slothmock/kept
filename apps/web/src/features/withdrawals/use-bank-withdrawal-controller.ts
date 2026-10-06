@@ -18,7 +18,7 @@ import type {
 import {
   deliverBankWithdrawal,
   type BankWithdrawalPhase,
-} from "@/application/money-movement/bank-withdrawal";
+} from "@/features/withdrawals/core/bank-withdrawal";
 import type {
   EthereumProvider,
 } from "@/wallet/evm-wallet";

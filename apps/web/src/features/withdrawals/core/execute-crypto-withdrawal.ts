@@ -2,48 +2,48 @@ import type {
     createExecutionRunner,
 } from "@aurora-is-near/intents-connect";
 
-import type {
-    FundingAsset,
-    FundingAssetsResolver,
-} from "@/features/funding/intents/core/funding-assets";
-
 import {
     diagnostics,
 } from "@/lib/diagnostics";
 
 import {
     createKeptWithdrawalPlan,
-} from "./kept-withdrawal-plan";
+} from "@/features/withdrawals/core/kept-withdrawal-plan";
+
+import type {
+    FundingAsset,
+    FundingAssetsResolver,
+} from "@/features/funding/intents/core/funding-assets";
 
 type ExecutionRunner =
     ReturnType<
         typeof createExecutionRunner
     >;
 
-interface PreviewCryptoWithdrawalInput {
+interface ExecuteCryptoWithdrawalInput {
     readonly runner:
-    ExecutionRunner;
+        ExecutionRunner;
 
     readonly amount:
-    bigint;
+        bigint;
 
     readonly recipient:
-    string;
+        string;
 
     readonly destinationAsset:
-    FundingAsset;
+        FundingAsset;
 
     readonly resolveFundingAssets:
-    FundingAssetsResolver;
+        FundingAssetsResolver;
 }
 
-export async function previewCryptoWithdrawal({
+export async function executeCryptoWithdrawal({
     runner,
     amount,
     recipient,
     destinationAsset,
     resolveFundingAssets,
-}: PreviewCryptoWithdrawalInput) {
+}: ExecuteCryptoWithdrawalInput) {
     try {
         const plan =
             await createKeptWithdrawalPlan({
@@ -53,13 +53,13 @@ export async function previewCryptoWithdrawal({
                 resolveFundingAssets,
             });
 
-        const preview =
-            await runner.preview(
+        const execution =
+            await runner.run(
                 plan,
             );
 
         diagnostics.info(
-            "withdrawal.intents_preview_ready",
+            "withdrawal.intents_execution_complete",
             {
                 amount:
                     amount.toString(),
@@ -69,13 +69,12 @@ export async function previewCryptoWithdrawal({
             },
         );
 
-        return {
-            plan,
-            preview,
-        };
-    } catch (cause) {
+        return execution;
+    } catch (
+        cause
+    ) {
         diagnostics.error(
-            "withdrawal.intents_preview_failed",
+            "withdrawal.intents_execution_failed",
             cause,
         );
 
