@@ -18,7 +18,6 @@ import {
   createKeptApi,
   readApiBaseUrl,
   type GoalDto,
-  type CommitmentDto,
 } from "@/api/kept-api";
 import { type Session } from "@/auth/session";
 import { useKeptEvmWallet } from "@/chain/evm-wallet";
@@ -32,8 +31,6 @@ import {
   referenceIdForCommitment,
   timestampSeconds,
 } from "@/commitments/commitment-manager";
-
-import { claimCommitmentReward } from "@/commitments/reward-claim";
 
 import {
   runCommitmentCreation,
@@ -126,6 +123,10 @@ import {
 import {
   useRewardStateController,
 } from "@/features/dashboard/use-reward-state-controller";
+
+import {
+  useRewardClaimController,
+} from "@/features/dashboard/use-reward-claim-controller";
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
@@ -453,6 +454,67 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [config, getCurrentWalletChainId, publicClient]);
 
+  const waitForRewardClaimReceipt =
+    useCallback(
+      async (transactionHash: `0x${string}`) => {
+        if (!publicClient) {
+          throw new Error(
+            "Savings are unavailable because Kept is not configured.",
+          );
+        }
+
+        const receipt =
+          await publicClient.waitForTransactionReceipt({
+            hash:
+              transactionHash,
+            confirmations:
+              import.meta.env.VITE_ENABLE_LOCAL_ANVIL
+                === "true"
+                ? 1
+                : 2,
+          });
+
+        return {
+          status:
+            receipt.status === "success"
+              ? "success" as const
+              : "reverted" as const,
+        };
+      },
+      [
+        publicClient,
+      ],
+    );
+
+  const {
+    claimingRewardId,
+    rewardClaimError,
+    claimReward,
+  } = useRewardClaimController({
+    account,
+    manager:
+      commitmentManagerConfig?.address
+      ?? null,
+    chainId:
+      config?.chainId
+      ?? null,
+    commitments:
+      productState.kind === "ready"
+        ? productState.commitments
+        : null,
+    sender,
+    transactionCoordinator,
+    ensureTransactionNetwork,
+    readContract:
+      rewardContractReader,
+    waitForReceipt:
+      publicClient
+        ? waitForRewardClaimReceipt
+        : null,
+    refreshPosition,
+    refreshRewardStates,
+  });
+
   const depositQuoteReader =
     useMemo(
       () =>
@@ -609,14 +671,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     bankActionPhase,
     bankWithdrawal.phase,
   ]);
-
-  const [claimingRewardId, setClaimingRewardId] = useState<string | null>(null);
-
-  const [rewardClaimError, setRewardClaimError] = useState<{
-    readonly commitmentId: string;
-
-    readonly message: string;
-  } | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -1959,141 +2013,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     setAllocationStatus(null);
   }, []);
-
-  const claimReward = useCallback(
-    async (commitment: CommitmentDto): Promise<boolean> => {
-      if (
-        !config ||
-        !commitmentManagerConfig ||
-        !publicClient ||
-        !account ||
-        !commitment.onchainCommitmentId
-      ) {
-        setRewardClaimError({
-          commitmentId: commitment.id,
-
-          message: "Your Kept account is not ready yet.",
-        });
-
-        return false;
-      }
-
-      setRewardClaimError(null);
-
-      setClaimingRewardId(commitment.id);
-
-      let succeeded = false;
-
-      const acquired = await transactionCoordinator.run(
-        "commitment",
-
-        async () => {
-          try {
-            await ensureTransactionNetwork();
-
-            const result = await claimCommitmentReward({
-              manager: commitmentManagerConfig.address,
-
-              chainId: config.chainId,
-
-              commitmentId: commitment.onchainCommitmentId!,
-
-              sender,
-
-              readContract: (request) =>
-                publicClient.readContract(request as never),
-
-              waitForReceipt: async (transactionHash) => {
-                const receipt = await publicClient.waitForTransactionReceipt({
-                  hash: transactionHash,
-
-                  confirmations:
-                    import.meta.env.VITE_ENABLE_LOCAL_ANVIL === "true" ? 1 : 2,
-                });
-
-                return {
-                  status: receipt.status === "success" ? "success" : "reverted",
-                };
-              },
-            });
-
-            if (!result.ok) {
-              throw result.error;
-            }
-
-            await Promise.all([
-              refreshPosition(),
-
-              refreshRewardStates(
-                productState.kind === "ready"
-                  ? productState.commitments
-                  : [commitment],
-              ),
-            ]);
-
-            succeeded = true;
-          } catch (error) {
-            diagnostics.warn(
-              "commitment.reward_claim_failed",
-
-              error,
-
-              {
-                commitmentId: commitment.id,
-
-                onchainCommitmentId: commitment.onchainCommitmentId,
-              },
-            );
-
-            setRewardClaimError({
-              commitmentId: commitment.id,
-
-              message: consumerErrorMessage(
-                error,
-
-                "We could not claim your reward. Try again.",
-              ),
-            });
-          }
-        },
-      );
-
-      if (!acquired) {
-        setRewardClaimError({
-          commitmentId: commitment.id,
-
-          message:
-            "Another account action is still being processed. Try again in a moment.",
-        });
-      }
-
-      setClaimingRewardId(null);
-
-      return succeeded;
-    },
-
-    [
-      account,
-
-      commitmentManagerConfig,
-
-      config,
-
-      ensureTransactionNetwork,
-
-      productState,
-
-      publicClient,
-
-      refreshPosition,
-
-      refreshRewardStates,
-
-      sender,
-
-      transactionCoordinator,
-    ],
-  );
 
   if (!session.isReady) {
     return (
