@@ -5,6 +5,7 @@ import {
 } from "../src/application/money-movement/bank-withdrawal.js";
 import {
   submitVaultDeposit,
+  submitVaultWithdrawal,
 } from "../src/application/money-movement/vault-transfers.js";
 
 describe("money movement application workflows", () => {
@@ -128,5 +129,86 @@ describe("money movement application workflows", () => {
       "send:0x02",
       "receipt:0xbbb",
     ]);
+  });
+
+  it("revalidates immediately before a vault withdrawal send", async () => {
+    const events: string[] = [];
+
+    await expect(
+      submitVaultWithdrawal({
+        withdrawal: {
+          to: "0x2222222222222222222222222222222222222222",
+          data: "0x03",
+          chainId: 143,
+        },
+        beforeSend: async (
+          transaction,
+        ) => {
+          events.push(
+            `validate:${transaction.data}`,
+          );
+        },
+        sender: {
+          sendTransaction:
+            async (transaction) => {
+              events.push(
+                `send:${transaction.data}`,
+              );
+
+              return "0xccc";
+            },
+        },
+        receipts: {
+          waitForTransactionReceipt:
+            async ({ hash }) => {
+              events.push(
+                `receipt:${hash}`,
+              );
+
+              return {
+                status:
+                  "success",
+              };
+            },
+        },
+      }),
+    ).resolves.toEqual({
+      withdrawalHash:
+        "0xccc",
+    });
+
+    expect(events).toEqual([
+      "validate:0x03",
+      "send:0x03",
+      "receipt:0xccc",
+    ]);
+  });
+
+  it("does not report a reverted vault withdrawal as completed", async () => {
+    await expect(
+      submitVaultWithdrawal({
+        withdrawal: {
+          to: "0x2222222222222222222222222222222222222222",
+          data: "0x03",
+          chainId: 143,
+        },
+        beforeSend:
+          async () => {},
+        sender: {
+          sendTransaction:
+            async () =>
+              "0xccc",
+        },
+        receipts: {
+          waitForTransactionReceipt:
+            async () => ({
+              status:
+                "reverted",
+            }),
+        },
+      }),
+    ).rejects.toThrow(
+      "The transaction was not completed. Your money was not moved.",
+    );
   });
 });
