@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consumeMoonPayReturnUrl } from "../src/features/withdrawal/moonpay-return.js";
+import { consumeMoonPayReturnUrl } from "../src/features/withdrawals/moonpay-return.js";
 
 describe("MoonPay return handling", () => {
   it("keeps only the Kept order reference and removes browser-supplied payout details", () => {
