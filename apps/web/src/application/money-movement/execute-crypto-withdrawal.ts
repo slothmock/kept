@@ -12,6 +12,7 @@ import {
 
 import type {
     FundingAsset,
+    FundingAssetsResolver,
 } from "@/application/money-movement/funding-assets";
 
 type ExecutionRunner =
@@ -31,6 +32,9 @@ interface ExecuteCryptoWithdrawalInput {
 
     readonly destinationAsset:
         FundingAsset;
+
+    readonly resolveFundingAssets:
+        FundingAssetsResolver;
 }
 
 export async function executeCryptoWithdrawal({
@@ -38,6 +42,7 @@ export async function executeCryptoWithdrawal({
     amount,
     recipient,
     destinationAsset,
+    resolveFundingAssets,
 }: ExecuteCryptoWithdrawalInput) {
     try {
         const plan =
@@ -45,6 +50,7 @@ export async function executeCryptoWithdrawal({
                 amount,
                 recipient,
                 destinationAsset,
+                resolveFundingAssets,
             });
 
         const execution =

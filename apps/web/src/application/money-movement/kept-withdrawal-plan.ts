@@ -20,11 +20,8 @@ import {
 
 import type {
     FundingAsset,
+    FundingAssetsResolver,
 } from "@/application/money-movement/funding-assets";
-import {
-    resolveKeptFundingAssets,
-} from "@/features/funding/intents/supported-tokens";
-
 export interface KeptWithdrawalRecipeParams {
     readonly recipient:
     string;
@@ -39,6 +36,9 @@ interface CreateKeptWithdrawalPlanInput {
 
     readonly destinationAsset:
     FundingAsset;
+
+    readonly resolveFundingAssets:
+    FundingAssetsResolver;
 }
 
 function createEvmWithdrawalRecipe(
@@ -295,12 +295,13 @@ export async function createKeptWithdrawalPlan({
     amount,
     recipient,
     destinationAsset,
+    resolveFundingAssets,
 }: CreateKeptWithdrawalPlanInput) {
     const {
         destination:
         monadUsdc,
     } =
-        await resolveKeptFundingAssets();
+        await resolveFundingAssets();
 
     const monadUsdcAddress =
         monadUsdc.contractAddress;

@@ -4,11 +4,8 @@ import type {
 
 import type {
     FundingAsset,
+    FundingAssetsResolver,
 } from "@/application/money-movement/funding-assets";
-import {
-    resolveKeptFundingAssets,
-} from "@/features/funding/intents/supported-tokens";
-
 export interface KeptFundingRecipeParams {
     readonly recipient:
     string;
@@ -23,17 +20,21 @@ interface CreateKeptFundingPlanInput {
 
     readonly sourceAsset:
     FundingAsset;
+
+    readonly resolveFundingAssets:
+    FundingAssetsResolver;
 }
 
 export async function createKeptFundingPlan({
     amount,
     walletAddress,
     sourceAsset,
+    resolveFundingAssets,
 }: CreateKeptFundingPlanInput) {
     const {
         destination,
     } =
-        await resolveKeptFundingAssets();
+        await resolveFundingAssets();
 
     const destinationTokenAddress =
         destination.contractAddress;

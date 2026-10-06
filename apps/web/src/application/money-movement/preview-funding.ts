@@ -9,7 +9,10 @@ import {
 import {
   createKeptFundingPlan,
 } from "@/application/money-movement/kept-funding-plan";
-import type { FundingAsset } from "@/application/money-movement/funding-assets";
+import type {
+  FundingAsset,
+  FundingAssetsResolver,
+} from "@/application/money-movement/funding-assets";
 
 type ExecutionRunner =
   ReturnType<
@@ -28,13 +31,17 @@ interface PreviewKeptFundingInput {
 
   readonly sourceAsset:
   FundingAsset;
+
+  readonly resolveFundingAssets:
+  FundingAssetsResolver;
 }
 
 export async function previewKeptFunding({
   runner,
   amount,
   walletAddress,
-  sourceAsset
+  sourceAsset,
+  resolveFundingAssets,
 }: PreviewKeptFundingInput) {
   try {
     const plan =
@@ -42,6 +49,7 @@ export async function previewKeptFunding({
         amount,
         walletAddress,
         sourceAsset,
+        resolveFundingAssets,
       });
 
     const preview =

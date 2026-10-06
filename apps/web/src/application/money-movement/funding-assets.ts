@@ -25,3 +25,6 @@ export interface KeptFundingAssets {
   readonly destination:
     FundingAsset;
 }
+
+export type FundingAssetsResolver =
+  () => Promise<KeptFundingAssets>;

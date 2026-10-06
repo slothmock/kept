@@ -21,10 +21,10 @@ import type {
 } from "@/application/ports/blockchain";
 import {
   executeCryptoWithdrawal,
-} from "@/application/money-movement/execute-crypto-withdrawal";
+} from "@/features/withdrawal/execute-crypto-withdrawal";
 import {
   previewCryptoWithdrawal,
-} from "@/application/money-movement/preview-crypto-withdrawal";
+} from "@/features/withdrawal/preview-crypto-withdrawal";
 import type {
   EthereumProvider,
 } from "@/chain/evm-wallet";

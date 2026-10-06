@@ -4,6 +4,7 @@ import type {
 
 import type {
     FundingAsset,
+    FundingAssetsResolver,
 } from "@/application/money-movement/funding-assets";
 
 import {
@@ -31,6 +32,9 @@ interface PreviewCryptoWithdrawalInput {
 
     readonly destinationAsset:
     FundingAsset;
+
+    readonly resolveFundingAssets:
+    FundingAssetsResolver;
 }
 
 export async function previewCryptoWithdrawal({
@@ -38,6 +42,7 @@ export async function previewCryptoWithdrawal({
     amount,
     recipient,
     destinationAsset,
+    resolveFundingAssets,
 }: PreviewCryptoWithdrawalInput) {
     try {
         const plan =
@@ -45,6 +50,7 @@ export async function previewCryptoWithdrawal({
                 amount,
                 recipient,
                 destinationAsset,
+                resolveFundingAssets,
             });
 
         const preview =

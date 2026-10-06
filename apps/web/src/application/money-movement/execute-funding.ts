@@ -8,7 +8,10 @@ import {
 import {
     createKeptFundingPlan,
 } from "@/application/money-movement/kept-funding-plan";
-import type { FundingAsset } from "@/application/money-movement/funding-assets";
+import type {
+    FundingAsset,
+    FundingAssetsResolver,
+} from "@/application/money-movement/funding-assets";
 
 type ExecutionRunner =
     ReturnType<
@@ -27,6 +30,9 @@ interface ExecuteKeptFundingInput {
 
     readonly sourceAsset:
     FundingAsset;
+
+    readonly resolveFundingAssets:
+    FundingAssetsResolver;
 }
 
 export async function executeKeptFunding({
@@ -34,6 +40,7 @@ export async function executeKeptFunding({
     amount,
     walletAddress,
     sourceAsset,
+    resolveFundingAssets,
 }: ExecuteKeptFundingInput) {
     try {
         const plan =
@@ -41,6 +48,7 @@ export async function executeKeptFunding({
                 amount,
                 walletAddress,
                 sourceAsset,
+                resolveFundingAssets,
             });
 
         const execution =
