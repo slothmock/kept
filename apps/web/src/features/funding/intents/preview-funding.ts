@@ -1,6 +1,6 @@
 import {
   previewKeptFunding as previewApplicationKeptFunding,
-} from "@/application/money-movement/preview-funding";
+} from "@/features/funding/intents/core/preview-funding";
 import {
   resolveKeptFundingAssets,
 } from "@/features/funding/intents/supported-tokens";

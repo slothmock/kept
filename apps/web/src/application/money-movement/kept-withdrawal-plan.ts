@@ -21,7 +21,7 @@ import {
 import type {
     FundingAsset,
     FundingAssetsResolver,
-} from "@/application/money-movement/funding-assets";
+} from "@/features/funding/intents/core/funding-assets";
 export interface KeptWithdrawalRecipeParams {
     readonly recipient:
     string;

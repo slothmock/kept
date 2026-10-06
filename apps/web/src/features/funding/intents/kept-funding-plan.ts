@@ -1,1 +1,1 @@
-export * from "@/application/money-movement/kept-funding-plan";
+export * from "@/features/funding/intents/core/kept-funding-plan";

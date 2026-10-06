@@ -36,12 +36,12 @@ const SUPPORTED_SOURCE_CHAINS =
 import type {
     FundingAsset,
     KeptFundingAssets,
-} from "@/application/money-movement/funding-assets";
+} from "@/features/funding/intents/core/funding-assets";
 
 export type {
     FundingAsset,
     KeptFundingAssets,
-} from "@/application/money-movement/funding-assets";
+} from "@/features/funding/intents/core/funding-assets";
 
 function toFundingAsset(
     token:

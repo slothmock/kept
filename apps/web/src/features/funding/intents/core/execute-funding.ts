@@ -7,11 +7,11 @@ import {
 } from "@/lib/diagnostics";
 import {
     createKeptFundingPlan,
-} from "@/application/money-movement/kept-funding-plan";
+} from "@/features/funding/intents/core/kept-funding-plan";
 import type {
     FundingAsset,
     FundingAssetsResolver,
-} from "@/application/money-movement/funding-assets";
+} from "@/features/funding/intents/core/funding-assets";
 
 type ExecutionRunner =
     ReturnType<

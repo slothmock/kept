@@ -1,6 +1,6 @@
 import {
   executeKeptFunding as executeApplicationKeptFunding,
-} from "@/application/money-movement/execute-funding";
+} from "@/features/funding/intents/core/execute-funding";
 import {
   resolveKeptFundingAssets,
 } from "@/features/funding/intents/supported-tokens";
