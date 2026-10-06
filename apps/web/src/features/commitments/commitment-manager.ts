@@ -8,7 +8,7 @@ import {
   type Hex,
 } from "viem";
 
-import type { UnsignedVaultTransaction } from "../vault/transactions.js";
+import type { UnsignedVaultTransaction } from "@/vault/transactions";
 
 const UINT256_MAX = (1n << 256n) - 1n;
 

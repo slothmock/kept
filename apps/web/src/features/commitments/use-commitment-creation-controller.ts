@@ -25,17 +25,17 @@ import {
   confirmCommitmentCreation,
   referenceIdForCommitment,
   timestampSeconds,
-} from "@/commitments/commitment-manager";
+} from "@/features/commitments/commitment-manager";
 import {
   runCommitmentCreation,
   type CommitmentCreationAttempt,
-} from "@/commitments/creation-flow";
+} from "@/features/commitments/creation-flow";
 import {
   clearPendingCommitmentAttempt,
   loadPendingCommitmentAttempt,
   reconcilePendingAttempt,
   savePendingCommitmentAttempt,
-} from "@/commitments/pending-attempt";
+} from "@/features/commitments/pending-attempt";
 import {
   consumerErrorMessage,
 } from "@/lib/consumer-error";

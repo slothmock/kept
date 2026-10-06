@@ -15,7 +15,7 @@ import type {
 } from "@/application/ports/blockchain";
 import {
   claimCommitmentReward,
-} from "@/commitments/reward-claim";
+} from "@/features/commitments/reward-claim";
 import {
   consumerErrorMessage,
 } from "@/lib/consumer-error";

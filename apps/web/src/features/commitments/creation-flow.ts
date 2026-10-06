@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import type {
   CommitmentDto,
   CreateCommitmentRequest,
-} from "../api/kept-api.js";
+} from "@/api/kept-api";
 import {
   CommitmentConfirmationError,
   type ConfirmedCommitmentCreation,
