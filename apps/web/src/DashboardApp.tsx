@@ -746,21 +746,52 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         onClaimStagingFaucet={() => void claimStagingFaucet()}
 
-        depositAmount={depositAmount}
+        savingsTransactions={{
+          deposit: {
+            amount:
+              depositAmount,
 
-        depositStatus={depositStatus}
+            status:
+              depositStatus,
 
-        depositError={depositError}
+            error:
+              depositError,
 
-        depositQuoteState={depositQuoteState}
+            quoteState:
+              depositQuoteState,
 
-        withdrawAmount={withdrawAmount}
+            onAmountChange:
+              setDepositAmount,
 
-        withdrawStatus={withdrawStatus}
+            onSubmit:
+              submitDeposit,
 
-        withdrawError={withdrawError}
+            onDismiss:
+              dismissDeposit,
+          },
 
-        pendingTransaction={pendingTransaction}
+          withdrawal: {
+            amount:
+              withdrawAmount,
+
+            status:
+              withdrawStatus,
+
+            error:
+              withdrawError,
+
+            onAmountChange:
+              setWithdrawAmount,
+
+            onSubmit:
+              submitWithdrawal,
+
+            onDismiss:
+              dismissWithdrawal,
+          },
+
+          pendingTransaction,
+        }}
 
         creatingGoal={creatingGoal}
 
@@ -787,18 +818,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         allocationStatus={allocationStatus}
 
         allocationError={allocationError}
-
-        onDepositAmountChange={setDepositAmount}
-
-        onSubmitDeposit={submitDeposit}
-
-        onDismissDeposit={dismissDeposit}
-
-        onWithdrawAmountChange={setWithdrawAmount}
-
-        onSubmitWithdrawal={submitWithdrawal}
-
-        onDismissWithdrawal={dismissWithdrawal}
 
         onRefreshPosition={refreshPosition}
 

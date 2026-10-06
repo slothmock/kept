@@ -82,21 +82,61 @@ interface DashboardPageProps {
 
   readonly productState: ProductDataState;
 
-  readonly depositAmount: string;
+  readonly savingsTransactions: {
 
-  readonly depositStatus: string | null;
+    readonly deposit: {
 
-  readonly depositError: string | null;
+      readonly amount:
+      string;
 
-  readonly depositQuoteState: DepositQuoteState;
+      readonly status:
+      string | null;
 
-  readonly withdrawAmount: string;
+      readonly error:
+      string | null;
 
-  readonly withdrawStatus: string | null;
+      readonly quoteState:
+      DepositQuoteState;
 
-  readonly withdrawError: string | null;
+      readonly onAmountChange: (
+        value: string,
+      ) => void;
 
-  readonly pendingTransaction: "deposit" | "withdraw" | "commitment" | null;
+      readonly onSubmit:
+      () => Promise<boolean>;
+
+      readonly onDismiss:
+      () => void;
+
+    };
+
+    readonly withdrawal: {
+
+      readonly amount:
+      string;
+
+      readonly status:
+      string | null;
+
+      readonly error:
+      string | null;
+
+      readonly onAmountChange: (
+        value: string,
+      ) => void;
+
+      readonly onSubmit:
+      () => Promise<boolean>;
+
+      readonly onDismiss:
+      () => void;
+
+    };
+
+    readonly pendingTransaction:
+    "deposit" | "withdraw" | "commitment" | null;
+
+  };
 
   readonly creatingGoal: boolean;
 
@@ -187,18 +227,6 @@ interface DashboardPageProps {
   readonly allocationStatus: string | null;
 
   readonly allocationError: string | null;
-
-  readonly onDepositAmountChange: (value: string) => void;
-
-  readonly onSubmitDeposit: () => Promise<boolean>;
-
-  readonly onDismissDeposit: () => void;
-
-  readonly onWithdrawAmountChange: (value: string) => void;
-
-  readonly onSubmitWithdrawal: () => Promise<boolean>;
-
-  readonly onDismissWithdrawal: () => void;
 
   readonly onRefreshPosition: () => Promise<void>;
 
@@ -403,21 +431,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
     productState,
 
-    depositAmount,
-
-    depositStatus,
-
-    depositError,
-
-    depositQuoteState,
-
-    withdrawAmount,
-
-    withdrawStatus,
-
-    withdrawError,
-
-    pendingTransaction,
+    savingsTransactions,
 
     creatingGoal,
 
@@ -452,18 +466,6 @@ export function DashboardPage(props: DashboardPageProps) {
     allocationStatus,
 
     allocationError,
-
-    onDepositAmountChange,
-
-    onSubmitDeposit,
-
-    onDismissDeposit,
-
-    onWithdrawAmountChange,
-
-    onSubmitWithdrawal,
-
-    onDismissWithdrawal,
 
     onRefreshPosition,
 
@@ -602,7 +604,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
         savingsPerformanceState={savingsPerformanceState}
 
-        transactionPending={pendingTransaction !== null}
+        transactionPending={savingsTransactions.pendingTransaction !== null}
 
         onAddMoney={() => {
 
@@ -886,13 +888,13 @@ export function DashboardPage(props: DashboardPageProps) {
 
         open={depositOpen}
 
-        amount={depositAmount}
+        amount={savingsTransactions.deposit.amount}
 
-        status={depositStatus}
+        status={savingsTransactions.deposit.status}
 
-        error={depositError}
+        error={savingsTransactions.deposit.error}
 
-        quoteState={depositQuoteState}
+        quoteState={savingsTransactions.deposit.quoteState}
 
         availableBalance={
 
@@ -906,21 +908,21 @@ export function DashboardPage(props: DashboardPageProps) {
 
         ready={positionState.kind === "ready" && Boolean(walletAddress)}
 
-        submitting={pendingTransaction === "deposit"}
+        submitting={savingsTransactions.pendingTransaction === "deposit"}
 
         onOpenChange={(open) =>
 
-          updateDialogOpenState(open, setDepositOpen, onDismissDeposit)
+          updateDialogOpenState(open, setDepositOpen, savingsTransactions.deposit.onDismiss)
 
         }
 
-        onAmountChange={onDepositAmountChange}
+        onAmountChange={savingsTransactions.deposit.onAmountChange}
 
         onSubmit={() => {
           void (
             async () => {
               const succeeded =
-                await onSubmitDeposit();
+                await savingsTransactions.deposit.onSubmit();
 
               if (succeeded) {
                 setDepositOpen(false);
@@ -945,15 +947,15 @@ export function DashboardPage(props: DashboardPageProps) {
 
         }
 
-        amount={withdrawAmount}
+        amount={savingsTransactions.withdrawal.amount}
 
-        status={withdrawStatus}
+        status={savingsTransactions.withdrawal.status}
 
-        error={withdrawError}
+        error={savingsTransactions.withdrawal.error}
 
         submitting={
 
-          pendingTransaction ===
+          savingsTransactions.pendingTransaction ===
 
           "withdraw"
 
@@ -1047,13 +1049,13 @@ export function DashboardPage(props: DashboardPageProps) {
           updateDialogOpenState(
             open,
             setWithdrawOpen,
-            onDismissWithdrawal,
+            savingsTransactions.withdrawal.onDismiss,
           );
         }}
 
         onAmountChange={
 
-          onWithdrawAmountChange
+          savingsTransactions.withdrawal.onAmountChange
 
         }
 
@@ -1061,7 +1063,7 @@ export function DashboardPage(props: DashboardPageProps) {
           void (
             async () => {
               const succeeded =
-                await onSubmitWithdrawal();
+                await savingsTransactions.withdrawal.onSubmit();
 
               if (succeeded) {
                 setWithdrawOpen(false);
