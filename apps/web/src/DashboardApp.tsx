@@ -793,59 +793,97 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           pendingTransaction,
         }}
 
-        creatingGoal={creatingGoal}
+        goalManagement={{
+          creation: {
+            creating:
+              creatingGoal,
 
-        deletingGoal={deletingGoal}
+            error:
+              goalError,
 
-        deleteGoalStatus={deleteGoalStatus}
+            onCreate:
+              createGoal,
 
-        deleteGoalError={deleteGoalError}
+            onDismiss:
+              dismissGoal,
+          },
 
-        onDeleteGoal={deleteGoal}
+          deletion: {
+            deleting:
+              deletingGoal,
 
-        onDismissGoalDeletion={dismissGoalDeletion}
+            status:
+              deleteGoalStatus,
 
-        goalError={goalError}
+            error:
+              deleteGoalError,
 
-        creatingCommitment={creatingCommitment}
+            onDelete:
+              deleteGoal,
 
-        commitmentStatus={commitmentStatus}
+            onDismiss:
+              dismissGoalDeletion,
+          },
 
-        commitmentError={commitmentError}
+          allocation: {
+            allocating:
+              allocatingGoal,
 
-        allocatingGoal={allocatingGoal}
+            status:
+              allocationStatus,
 
-        allocationStatus={allocationStatus}
+            error:
+              allocationError,
 
-        allocationError={allocationError}
+            onAdd:
+              addToGoal,
+
+            onRemove:
+              removeFromGoal,
+
+            onMove:
+              moveBetweenGoals,
+
+            onDismiss:
+              dismissAllocation,
+          },
+
+          commitment: {
+            creating:
+              creatingCommitment,
+
+            status:
+              commitmentStatus,
+
+            error:
+              commitmentError,
+
+            onCreate:
+              createCommitment,
+
+            onDismiss:
+              dismissCommitment,
+          },
+
+          rewards: {
+            states:
+              rewardStates,
+
+            claimingId:
+              claimingRewardId,
+
+            claimError:
+              rewardClaimError,
+
+            onClaim:
+              claimReward,
+          },
+        }}
 
         onRefreshPosition={refreshPosition}
 
         onRefreshProductData={refreshProductData}
 
-        onCreateGoal={createGoal}
-
-        onCreateCommitment={createCommitment}
-
-        onAddToGoal={addToGoal}
-
-        onDismissGoal={dismissGoal}
-
-        onDismissCommitment={dismissCommitment}
-
-        onDismissAllocation={dismissAllocation}
-
-        onRemoveFromGoal={removeFromGoal}
-
-        onMoveBetweenGoals={moveBetweenGoals}
-
-        rewardStates={rewardStates}
-
-        claimingRewardId={claimingRewardId}
-
-        rewardClaimError={rewardClaimError}
-
-        onClaimReward={claimReward}
         cryptoWithdrawal={{
           amount:
             cryptoWithdrawAmount,

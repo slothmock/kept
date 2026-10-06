@@ -138,145 +138,133 @@ interface DashboardPageProps {
 
   };
 
-  readonly creatingGoal: boolean;
+  readonly goalManagement: {
 
-  readonly deletingGoal: boolean;
+    readonly creation: {
 
-  readonly deleteGoalStatus: string | null;
+      readonly creating:
+      boolean;
 
-  readonly deleteGoalError: string | null;
+      readonly error:
+      string | null;
 
-  readonly rewardStates: Readonly<Record<string, RewardState>>;
+      readonly onCreate: (input: {
 
-  readonly claimingRewardId: string | null;
+        readonly name: string;
 
-  readonly rewardClaimError: {
+        readonly targetAmount: string;
 
-    readonly commitmentId: string;
+        readonly targetDate: string | null;
 
-    readonly message: string;
+      }) => Promise<boolean>;
 
-  } | null;
+      readonly onDismiss:
+      () => void;
 
-  readonly savingsPerformanceState:
+    };
 
-  | {
+    readonly deletion: {
 
-    readonly kind: "unavailable";
+      readonly deleting:
+      boolean;
 
-  }
+      readonly status:
+      string | null;
 
-  | {
+      readonly error:
+      string | null;
 
-    readonly kind: "loading";
+      readonly onDelete: (
+        goal: GoalDto,
+      ) => Promise<boolean>;
 
-  }
+      readonly onDismiss:
+      () => void;
 
-  | {
+    };
 
-    readonly kind: "ready";
+    readonly allocation: {
 
-    readonly earningsAssets: bigint;
+      readonly allocating:
+      boolean;
 
-  }
+      readonly status:
+      string | null;
 
-  | {
+      readonly error:
+      string | null;
 
-    readonly kind: "synchronizing";
+      readonly onAdd: (
+        goal: GoalDto,
+        amount: string,
+      ) => Promise<boolean>;
 
-    readonly progressPercent: number | null;
+      readonly onRemove: (
+        goal: GoalDto,
+        amount: string,
+      ) => Promise<boolean>;
 
-  }
+      readonly onMove: (
+        fromGoal: GoalDto,
+        toGoal: GoalDto,
+        amount: string,
+      ) => Promise<boolean>;
 
-  | {
+      readonly onDismiss:
+      () => void;
 
-    readonly kind: "error";
+    };
+
+    readonly commitment: {
+
+      readonly creating:
+      boolean;
+
+      readonly status:
+      string | null;
+
+      readonly error:
+      string | null;
+
+      readonly onCreate: (
+        goal: GoalDto,
+        input: CreateCommitmentInput,
+      ) => Promise<boolean>;
+
+      readonly onDismiss:
+      () => void;
+
+    };
+
+    readonly rewards: {
+
+      readonly states:
+      Readonly<Record<string, RewardState>>;
+
+      readonly claimingId:
+      string | null;
+
+      readonly claimError: {
+
+        readonly commitmentId:
+        string;
+
+        readonly message:
+        string;
+
+      } | null;
+
+      readonly onClaim: (
+        commitment: CommitmentDto,
+      ) => Promise<boolean>;
+
+    };
 
   };
-
-  readonly savingsMarketStatusState: SavingsMarketStatusState;
-
-  readonly onRefreshSavingsPerformance: () => Promise<void>;
-
-  readonly onRefreshSavingsMarketStatus: () => Promise<void>;
-
-  readonly stagingFaucetAvailable: boolean;
-
-  readonly stagingFaucetClaiming: boolean;
-
-  readonly stagingFaucetStatus: string | null;
-
-  readonly stagingFaucetError: string | null;
-
-  readonly onClaimStagingFaucet: () => void;
-
-  readonly onDeleteGoal: (goal: GoalDto) => Promise<boolean>;
-
-  readonly onDismissGoalDeletion: () => void;
-
-  readonly goalError: string | null;
-
-  readonly creatingCommitment: boolean;
-
-  readonly commitmentStatus: string | null;
-
-  readonly commitmentError: string | null;
-
-  readonly allocatingGoal: boolean;
-
-  readonly allocationStatus: string | null;
-
-  readonly allocationError: string | null;
 
   readonly onRefreshPosition: () => Promise<void>;
 
   readonly onRefreshProductData: () => Promise<void>;
-
-  readonly onCreateGoal: (input: {
-
-    readonly name: string;
-
-    readonly targetAmount: string;
-
-    readonly targetDate: string | null;
-
-  }) => Promise<boolean>;
-
-  readonly onCreateCommitment: (
-
-    goal: GoalDto,
-
-    input: CreateCommitmentInput,
-
-  ) => Promise<boolean>;
-
-  readonly onAddToGoal: (goal: GoalDto, amount: string) => Promise<boolean>;
-
-  readonly onRemoveFromGoal: (
-
-    goal: GoalDto,
-
-    amount: string,
-
-  ) => Promise<boolean>;
-
-  readonly onMoveBetweenGoals: (
-
-    fromGoal: GoalDto,
-
-    toGoal: GoalDto,
-
-    amount: string,
-
-  ) => Promise<boolean>;
-
-  readonly onDismissGoal: () => void;
-
-  readonly onDismissCommitment: () => void;
-
-  readonly onDismissAllocation: () => void;
-
-  readonly onClaimReward: (commitment: CommitmentDto) => Promise<boolean>;
 
   readonly cryptoWithdrawal: {
 
@@ -433,39 +421,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
     savingsTransactions,
 
-    creatingGoal,
-
-    deletingGoal,
-
-    deleteGoalStatus,
-
-    deleteGoalError,
-
-    onDeleteGoal,
-
-    onDismissGoalDeletion,
-
-    goalError,
-
-    creatingCommitment,
-
-    commitmentStatus,
-
-    commitmentError,
-
-    rewardStates,
-
-    claimingRewardId,
-
-    rewardClaimError,
-
-    onClaimReward,
-
-    allocatingGoal,
-
-    allocationStatus,
-
-    allocationError,
+    goalManagement,
 
     onRefreshPosition,
 
@@ -484,22 +440,6 @@ export function DashboardPage(props: DashboardPageProps) {
     stagingFaucetError,
 
     onClaimStagingFaucet,
-
-    onCreateGoal,
-
-    onCreateCommitment,
-
-    onAddToGoal,
-
-    onDismissGoal,
-
-    onRemoveFromGoal,
-
-    onMoveBetweenGoals,
-
-    onDismissCommitment,
-
-    onDismissAllocation,
 
     cryptoWithdrawal,
 
@@ -1169,17 +1109,17 @@ export function DashboardPage(props: DashboardPageProps) {
 
         open={createGoalOpen}
 
-        submitting={creatingGoal}
+        submitting={goalManagement.creation.creating}
 
-        error={goalError}
+        error={goalManagement.creation.error}
 
         onOpenChange={(open) =>
 
-          updateDialogOpenState(open, setCreateGoalOpen, onDismissGoal)
+          updateDialogOpenState(open, setCreateGoalOpen, goalManagement.creation.onDismiss)
 
         }
 
-        onSubmit={onCreateGoal}
+        onSubmit={goalManagement.creation.onCreate}
 
       />
 
@@ -1199,18 +1139,18 @@ export function DashboardPage(props: DashboardPageProps) {
             ? goalFundingState.funding.unallocatedAssets
             : null
         }
-        submitting={allocatingGoal}
-        status={allocationStatus}
-        error={allocationError}
+        submitting={goalManagement.allocation.allocating}
+        status={goalManagement.allocation.status}
+        error={goalManagement.allocation.error}
         onOpenChange={(open) => {
           if (!open) {
             setSavingsGoal(null);
-            onDismissAllocation();
+            goalManagement.allocation.onDismiss();
           }
         }}
-        onAdd={onAddToGoal}
-        onRemove={onRemoveFromGoal}
-        onMove={onMoveBetweenGoals}
+        onAdd={goalManagement.allocation.onAdd}
+        onRemove={goalManagement.allocation.onRemove}
+        onMove={goalManagement.allocation.onMove}
       />
       <CreateCommitmentDialog
         open={commitmentGoal !== null}
@@ -1218,16 +1158,16 @@ export function DashboardPage(props: DashboardPageProps) {
         draft={
           commitmentForDialog?.state === "DRAFT" ? commitmentForDialog : null
         }
-        submitting={creatingCommitment}
-        status={commitmentStatus}
-        error={commitmentError}
+        submitting={goalManagement.commitment.creating}
+        status={goalManagement.commitment.status}
+        error={goalManagement.commitment.error}
         onOpenChange={(open) => {
           if (!open) {
             setCommitmentGoal(null);
-            onDismissCommitment();
+            goalManagement.commitment.onDismiss();
           }
         }}
-        onSubmit={onCreateCommitment}
+        onSubmit={goalManagement.commitment.onCreate}
       />
       <GoalDetailsDialog
         open={detailGoal !== null}
@@ -1238,18 +1178,18 @@ export function DashboardPage(props: DashboardPageProps) {
             : null
         }
         commitments={detailCommitments}
-        rewardStates={rewardStates}
-        claimingRewardId={claimingRewardId}
-        rewardClaimError={rewardClaimError}
-        onClaimReward={onClaimReward}
-        deleting={deletingGoal}
-        deleteStatus={deleteGoalStatus}
-        deleteError={deleteGoalError}
-        onDelete={onDeleteGoal}
+        rewardStates={goalManagement.rewards.states}
+        claimingRewardId={goalManagement.rewards.claimingId}
+        rewardClaimError={goalManagement.rewards.claimError}
+        onClaimReward={goalManagement.rewards.onClaim}
+        deleting={goalManagement.deletion.deleting}
+        deleteStatus={goalManagement.deletion.status}
+        deleteError={goalManagement.deletion.error}
+        onDelete={goalManagement.deletion.onDelete}
         onOpenChange={(open) => {
           if (!open) {
             setDetailGoal(null);
-            onDismissGoalDeletion();
+            goalManagement.creation.onDismissDeletion();
           }
         }}
         onAddToSavings={() => {
