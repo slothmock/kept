@@ -126,6 +126,10 @@ import {
   useGoalAllocationController,
 } from "@/features/dashboard/use-goal-allocation-controller";
 
+import {
+  useGoalCreationController,
+} from "@/features/dashboard/use-goal-creation-controller";
+
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
@@ -133,10 +137,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     readFiatEnabled(
       import.meta.env,
     );
-
-  const [creatingGoal, setCreatingGoal] = useState(false);
-
-  const [goalError, setGoalError] = useState<string | null>(null);
 
   const [creatingCommitment, setCreatingCommitment] = useState(false);
 
@@ -562,6 +562,16 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     goalFundingState,
     readContract:
       goalAllocationReader,
+    refreshProductData,
+  });
+
+  const {
+    creatingGoal,
+    goalError,
+    createGoal,
+    dismissGoal,
+  } = useGoalCreationController({
+    api,
     refreshProductData,
   });
 
@@ -1194,70 +1204,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       ],
     );
 
-  const createGoal = useCallback(
-    async (input: {
-      readonly name: string;
-
-      readonly targetAmount: string;
-
-      readonly targetDate: string | null;
-    }) => {
-      if (!api) {
-        setGoalError("Kept's service is not configured.");
-
-        return false;
-      }
-
-      const name = input.name.trim();
-
-      if (!name) {
-        setGoalError("Give your goal a name.");
-
-        return false;
-      }
-
-      const parsed = parseUsdcDepositAmount(input.targetAmount);
-
-      if ("error" in parsed || parsed.assets <= 0n) {
-        setGoalError("Enter a valid target amount greater than zero.");
-
-        return false;
-      }
-
-      setCreatingGoal(true);
-
-      setGoalError(null);
-
-      try {
-        await api.createGoal({
-          name,
-
-          targetAmountAtomic: parsed.assets.toString(),
-
-          targetDate: input.targetDate,
-        });
-
-        await refreshProductData();
-
-        return true;
-      } catch (error) {
-        diagnostics.error("api.goal_create_failed", error);
-
-        setGoalError(
-          consumerErrorMessage(
-            error,
-            "We could not create your goal. Try again.",
-          ),
-        );
-
-        return false;
-      } finally {
-        setCreatingGoal(false);
-      }
-    },
-    [api, refreshProductData],
-  );
-
   const createCommitment = useCallback(
     async (goal: GoalDto, input: CreateCommitmentInput) => {
       if (
@@ -1536,8 +1482,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       transactionCoordinator,
     ],
   );
-
-  const dismissGoal = useCallback(() => setGoalError(null), []);
 
   const dismissCommitment = useCallback(() => {
     setCommitmentError(null);
