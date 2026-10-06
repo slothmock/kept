@@ -48,10 +48,6 @@ import {
 } from "@/features/funding/PrivyFundingButton";
 
 import {
-    diagnostics,
-} from "@/lib/diagnostics";
-
-import {
     FundingAssetPicker,
     FormatFundingChainName,
 } from "@/features/funding/FundingAssetPicker";
