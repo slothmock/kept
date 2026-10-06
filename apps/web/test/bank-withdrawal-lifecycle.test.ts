@@ -4,7 +4,7 @@ import {
   bankWithdrawalRefreshState,
   createBankWithdrawalOrderStore,
   deliverBankWithdrawal,
-} from "../src/features/withdrawal/bank-withdrawal-lifecycle.js";
+} from "../src/features/withdrawals/bank-withdrawal-lifecycle.js";
 
 describe("bank withdrawal lifecycle", () => {
   it("retries acknowledgement without executing the money movement twice", async () => {

@@ -25,17 +25,17 @@ import {
 } from "@/features/funding/intents/supported-tokens";
 import {
   previewCryptoWithdrawal,
-} from "@/features/withdrawal/preview-crypto-withdrawal";
+} from "@/features/withdrawals/preview-crypto-withdrawal";
 import {
   consumeMoonPayReturnUrl,
-} from "@/features/withdrawal/moonpay-return";
+} from "@/features/withdrawals/moonpay-return";
 import {
   bankWithdrawalRefreshState,
   createBankWithdrawalOrderStore,
   createBankWithdrawalTransferStore,
   type BankWithdrawalPhase,
   type BankWithdrawalTransferStore,
-} from "@/features/withdrawal/bank-withdrawal-lifecycle";
+} from "@/features/withdrawals/bank-withdrawal-lifecycle";
 import {
   formatUsdc,
 } from "@/features/savings/format";

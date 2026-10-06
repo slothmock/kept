@@ -30,7 +30,7 @@ import {
 } from "@/features/dashboard/use-bank-withdrawal-order-controller";
 import {
   executeCryptoWithdrawal,
-} from "@/features/withdrawal/execute-crypto-withdrawal";
+} from "@/features/withdrawals/execute-crypto-withdrawal";
 import {
   formatUsdc,
 } from "@/features/savings/format";

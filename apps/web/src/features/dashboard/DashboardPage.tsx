@@ -53,7 +53,7 @@ import { DepositDialog } from "@/features/savings/components/DepositDialog";
 
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 
-import { WithdrawFundsDialog } from "@/features/withdrawal/components/WithdrawFundsDialog";
+import { WithdrawFundsDialog } from "@/features/withdrawals/components/WithdrawFundsDialog";
 
 import type { RewardState } from "@/commitments/reward-claim";
 
