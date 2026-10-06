@@ -8,7 +8,7 @@ import {
   failProductRefresh as failDomainProductRefresh,
   initialProductDataState as initialDomainProductDataState,
   type ProductDataState as DomainProductDataState,
-} from "@/domain/product-data-state";
+} from "@/lib/product-data-state";
 
 export type ProductDataState =
   DomainProductDataState<

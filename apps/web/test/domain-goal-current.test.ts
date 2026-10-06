@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currentGoalItem } from "../src/domain/goals/current.js";
+import { currentGoalItem } from "../src/features/goals/current.js";
 
 describe("currentGoalItem", () => {
   it("prefers active items", () => {

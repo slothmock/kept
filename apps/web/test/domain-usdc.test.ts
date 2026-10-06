@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatUsdc } from "../src/domain/money/usdc.js";
+import { formatUsdc } from "../src/lib/usdc.js";
 
 describe("USDC formatting", () => {
   it("formats atomic values", () => {
