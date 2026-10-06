@@ -262,6 +262,66 @@ interface DashboardPageProps {
 
   };
 
+  readonly savingsPerformanceState:
+
+  | {
+
+    readonly kind: "unavailable";
+
+  }
+
+  | {
+
+    readonly kind: "loading";
+
+  }
+
+  | {
+
+    readonly kind: "ready";
+
+    readonly earningsAssets: bigint;
+
+  }
+
+  | {
+
+    readonly kind: "synchronizing";
+
+    readonly progressPercent: number | null;
+
+  }
+
+  | {
+
+    readonly kind: "error";
+
+  };
+
+  readonly savingsMarketStatusState:
+  SavingsMarketStatusState;
+
+  readonly onRefreshSavingsPerformance:
+  () => Promise<void>;
+
+  readonly onRefreshSavingsMarketStatus:
+  () => Promise<void>;
+
+  readonly stagingFaucetAvailable:
+  boolean;
+
+  readonly stagingFaucetClaiming:
+  boolean;
+
+  readonly stagingFaucetStatus:
+  string | null;
+
+  readonly stagingFaucetError:
+  string | null;
+
+  readonly onClaimStagingFaucet:
+  () => void;
+
   readonly onRefreshPosition: () => Promise<void>;
 
   readonly onRefreshProductData: () => Promise<void>;
@@ -1189,7 +1249,7 @@ export function DashboardPage(props: DashboardPageProps) {
         onOpenChange={(open) => {
           if (!open) {
             setDetailGoal(null);
-            goalManagement.creation.onDismissDeletion();
+            goalManagement.deletion.onDismiss();
           }
         }}
         onAddToSavings={() => {
