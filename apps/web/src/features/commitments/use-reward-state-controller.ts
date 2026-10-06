@@ -13,7 +13,7 @@ import type {
 import {
   readCommitmentRewardState,
   type CommitmentRewardState,
-} from "@/commitments/commitment-manager";
+} from "@/features/commitments/commitment-manager";
 import {
   diagnostics,
 } from "@/lib/diagnostics";

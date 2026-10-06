@@ -3,7 +3,7 @@ import { isHex, keccak256, toBytes, type Address, type Hex } from "viem";
 import type {
   CommitmentDto,
   CreateCommitmentRequest,
-} from "../api/kept-api.js";
+} from "@/api/kept-api";
 import type { CommitmentCreationAttempt } from "./creation-flow.js";
 
 interface StorageLike {

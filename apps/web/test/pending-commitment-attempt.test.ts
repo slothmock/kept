@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getAddress, type Hex } from "viem";
 
-import type { CommitmentCreationAttempt } from "../src/commitments/creation-flow.js";
+import type { CommitmentCreationAttempt } from "../src/features/commitments/creation-flow.js";
 import {
   clearPendingCommitmentAttempt,
   loadPendingCommitmentAttempt,
   pendingAttemptIsResolved,
   savePendingCommitmentAttempt,
-} from "../src/commitments/pending-attempt.js";
+} from "../src/features/commitments/pending-attempt.js";
 
 const account = getAddress("0x2222222222222222222222222222222222222222");
 const transactionHash = `0x${"a".repeat(64)}` as Hex;

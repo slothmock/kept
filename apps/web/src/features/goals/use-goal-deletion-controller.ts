@@ -18,7 +18,7 @@ import type {
 import {
   buildCancelCommitmentTransaction,
   commitmentManagerAbi,
-} from "@/commitments/commitment-manager";
+} from "@/features/commitments/commitment-manager";
 import {
   runGoalDeletion,
 } from "@/features/goals/delete-goal-flow";

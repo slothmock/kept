@@ -55,7 +55,7 @@ import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 
 import { WithdrawFundsDialog } from "@/features/withdrawals/components/WithdrawFundsDialog";
 
-import type { RewardState } from "@/commitments/reward-claim";
+import type { RewardState } from "@/features/commitments/reward-claim";
 
 import { formatUsdc } from "@/features/savings/format";
 

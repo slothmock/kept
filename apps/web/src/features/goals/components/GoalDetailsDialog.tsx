@@ -19,7 +19,7 @@ import {
 } from "@/features/goals/funding";
 import { formatUsdc } from "@/features/savings/format";
 
-import type { RewardState } from "@/commitments/reward-claim";
+import type { RewardState } from "@/features/commitments/reward-claim";
 
 function targetAmountAtomic(goal: GoalDto): bigint {
   try {

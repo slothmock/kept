@@ -4,9 +4,9 @@ import type { Address, Hex } from "viem";
 import {
   runCommitmentCreation,
   type CommitmentCreationAttempt,
-} from "../src/commitments/creation-flow.js";
+} from "../src/features/commitments/creation-flow.js";
 import type { CommitmentDto } from "../src/api/kept-api.js";
-import { CommitmentConfirmationError } from "../src/commitments/commitment-manager.js";
+import { CommitmentConfirmationError } from "../src/features/commitments/commitment-manager.js";
 
 const draft = {
   id: "00000000-0000-4000-8000-000000000001",
