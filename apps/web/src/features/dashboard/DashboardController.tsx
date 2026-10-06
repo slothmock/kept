@@ -89,7 +89,7 @@ import {
   useBankWithdrawalController,
 } from "@/features/withdrawals/use-bank-withdrawal-controller";
 
-export function DashboardApp({ session }: { readonly session: Session }) {
+export function DashboardController({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
   const fiatEnabled =

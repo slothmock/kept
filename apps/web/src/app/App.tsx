@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import type { Session } from "@/auth/session";
-import { DashboardApp } from "@/DashboardApp";
+import { DashboardController } from "@/features/dashboard/DashboardController";
 import { AccountPage } from "@/features/account/AccountPage";
 import { LandingPage } from "@/features/public/LandingPage";
 import { PublicInformationPage } from "@/features/public/PublicInformationPage";
@@ -35,7 +35,7 @@ export function App({ session }: { readonly session: Session }) {
         path="/dashboard"
         element={
           session.isAuthenticated ? (
-            <DashboardApp session={session} />
+            <DashboardController session={session} />
           ) : (
             <Navigate to="/" replace />
           )
