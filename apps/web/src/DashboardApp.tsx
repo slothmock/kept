@@ -503,7 +503,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     commitments:
       productState.kind === "ready"
         ? productState.commitments
-        : [],
+        : null,
     sender,
     transactionCoordinator,
     ensureTransactionNetwork,

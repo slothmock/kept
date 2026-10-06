@@ -81,7 +81,7 @@ interface UseCommitmentCreationControllerInput {
     number | null;
 
   readonly commitments:
-    readonly CommitmentDto[];
+    readonly CommitmentDto[] | null;
 
   readonly sender:
     TransactionSender;
@@ -207,6 +207,7 @@ export function useCommitmentCreationController({
     () => {
       if (
         !account
+        || commitments === null
       ) {
         return;
       }
@@ -323,7 +324,7 @@ export function useCommitmentCreationController({
         };
 
         const recoverableDraft =
-          commitments.find(
+          commitments?.find(
             (
               commitment,
             ) =>
