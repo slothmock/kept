@@ -13,7 +13,6 @@ import {
 
 import {
     formatUnits,
-    parseUnits,
 } from "viem";
 
 import {
@@ -47,10 +46,6 @@ import {
 import {
     BASE_USDC,
 } from "@/features/funding/intents/kept-funding-recipe";
-
-import {
-    previewKeptFunding,
-} from "@/features/funding/intents/preview-funding";
 
 import {
     createKeptIntentsRunner,
@@ -91,6 +86,11 @@ import {
     useFundingSourceController,
 } from "@/features/funding/use-funding-source-controller";
 
+import {
+    useFundingPreviewController,
+    type FundingPreviewDetails,
+} from "@/features/funding/use-funding-preview-controller";
+
 const BASE_CHAIN =
     "eip155:8453" as const;
 
@@ -106,29 +106,6 @@ import {
 type FundingView =
     | "choose"
     | "crypto";
-
-interface FundingPreviewDetails {
-    readonly amountIn:
-    string;
-
-    readonly amountOut:
-    string;
-
-    readonly minimumAmountOut:
-    string;
-
-    readonly networkFee:
-    string | null;
-
-    readonly estimatedTime:
-    string | null;
-
-    readonly depositAddress:
-    string;
-
-    readonly intermediaryAddress:
-    string;
-}
 
 interface AddFundsDialogProps {
     readonly open:
@@ -171,34 +148,6 @@ export function AddFundsDialog({
         useState<FundingView>(
             "choose",
         );
-
-    const [
-        cryptoAmount,
-        setCryptoAmount,
-    ] =
-        useState("");
-
-    const [
-        previewing,
-        setPreviewing,
-    ] =
-        useState(false);
-
-    const [
-        previewStatus,
-        setPreviewStatus,
-    ] =
-        useState<
-            string | null
-        >(null);
-
-    const [
-        previewError,
-        setPreviewError,
-    ] =
-        useState<
-            string | null
-        >(null);
 
     const [
         fiatStartingBalance,
@@ -246,22 +195,6 @@ export function AddFundsDialog({
             string | null
         >(null);
 
-    const [
-        previewedCryptoAmount,
-        setPreviewedCryptoAmount,
-    ] =
-        useState<
-            bigint | null
-        >(null);
-
-    const [
-        previewDetails,
-        setPreviewDetails,
-    ] =
-        useState<
-            FundingPreviewDetails | null
-        >(null);
-
     const wallet =
         useKeptEvmWallet();
 
@@ -269,25 +202,24 @@ export function AddFundsDialog({
         useExternalFundingWallet();
 
 
-    const invalidateCryptoPreview =
-        useCallback(
+    const {
+        amount: cryptoAmount,
+        previewing,
+        previewStatus,
+        previewError,
+        previewedAmount:
+            previewedCryptoAmount,
+        previewDetails,
+        setAmount:
+            setCryptoAmount,
+        invalidatePreview:
+            invalidateCryptoPreview,
+        preview:
+            previewFundingRoute,
+        resetPreview,
+    } = useFundingPreviewController({
+        clearExecutionFeedback:
             () => {
-                setPreviewedCryptoAmount(
-                    null,
-                );
-
-                setPreviewDetails(
-                    null,
-                );
-
-                setPreviewStatus(
-                    null,
-                );
-
-                setPreviewError(
-                    null,
-                );
-
                 setExecutionStatus(
                     null,
                 );
@@ -296,8 +228,7 @@ export function AddFundsDialog({
                     null,
                 );
             },
-            [],
-        );
+    });
 
     const {
         destinationAsset,
@@ -340,25 +271,7 @@ export function AddFundsDialog({
                     "choose",
                 );
 
-                setCryptoAmount(
-                    "",
-                );
-
-                setPreviewStatus(
-                    null,
-                );
-
-                setPreviewError(
-                    null,
-                );
-
-                setPreviewedCryptoAmount(
-                    null,
-                );
-
-                setPreviewDetails(
-                    null,
-                );
+                resetPreview();
 
                 setFiatStartingBalance(
                     null,
@@ -387,6 +300,7 @@ export function AddFundsDialog({
                 resetSource();
             },
             [
+                resetPreview,
                 resetSource,
             ],
         );
@@ -945,274 +859,6 @@ export function AddFundsDialog({
             ],
         );
 
-    const handlePreviewRoute =
-        useCallback(
-            async () => {
-                if (
-                    !walletAddress ||
-                    previewing
-                ) {
-                    return;
-                }
-
-                if (
-                    !externalWallet.address
-                ) {
-                    setPreviewError(
-                        "Connect a wallet to continue.",
-                    );
-
-                    return;
-                }
-
-                if (
-                    !sourceAsset
-                ) {
-                    setPreviewError(
-                        "Choose a funding option to continue.",
-                    );
-
-                    return;
-                }
-
-                let amount:
-                    bigint;
-
-                try {
-                    amount =
-                        parseUnits(
-                            cryptoAmount,
-                            sourceAsset.decimals,
-                        );
-                } catch {
-                    setPreviewError(
-                        `Enter a valid ${sourceAsset.symbol} amount.`,
-                    );
-
-                    return;
-                }
-
-                if (
-                    amount <=
-                    0n
-                ) {
-                    setPreviewError(
-                        "Enter an amount greater than zero.",
-                    );
-
-                    return;
-                }
-
-                setPreviewing(
-                    true,
-                );
-
-                setPreviewStatus(
-                    null,
-                );
-
-                setPreviewError(
-                    null,
-                );
-
-                setPreviewedCryptoAmount(
-                    null,
-                );
-
-                setPreviewDetails(
-                    null,
-                );
-
-                try {
-                    const family =
-                        externalWallet.family;
-
-                    if (
-                        !family
-                    ) {
-                        throw new Error(
-                            "Connected wallet provider is unavailable.",
-                        );
-                    }
-
-                    const evmProvider =
-                        family === "evm"
-                            ? await externalWallet
-                                .getEvmProvider()
-                            : null;
-
-                    const solanaProvider =
-                        family === "sol"
-                            ? await externalWallet
-                                .getSolanaProvider()
-                            : null;
-
-                    if (
-                        family === "evm" &&
-                        !evmProvider
-                    ) {
-                        throw new Error(
-                            "Connected wallet provider is unavailable.",
-                        );
-                    }
-
-                    if (
-                        family === "sol" &&
-                        !solanaProvider
-                    ) {
-                        throw new Error(
-                            "Connected Solana wallet provider is unavailable.",
-                        );
-                    }
-
-                    const previousChainId =
-                        evmProvider
-                            ? await readChainId(
-                                evmProvider,
-                            )
-                            : null;
-
-                    if (
-                        evmProvider
-                    ) {
-                        await switchToFundingChain(
-                            evmProvider,
-                            sourceAsset.blockchain,
-                        );
-                    }
-
-                    const runner =
-                        family === "sol"
-                            ? createKeptIntentsRunner({
-                                sourceAddress:
-                                    externalWallet.address,
-
-                                family:
-                                    "sol",
-
-                                provider:
-                                    solanaProvider!,
-                            })
-                            : createKeptIntentsRunner({
-                                sourceAddress:
-                                    externalWallet.address,
-
-                                family:
-                                    "evm",
-
-                                provider:
-                                    evmProvider!,
-                            });
-
-                    try {
-                        const {
-                            preview,
-                        } =
-                            await previewKeptFunding({
-                                runner,
-
-                                amount,
-
-                                walletAddress,
-
-                                sourceAsset,
-                            });
-
-                        setPreviewedCryptoAmount(
-                            amount,
-                        );
-
-                        setPreviewDetails({
-                            amountIn:
-                                preview.execution.quote.amountIn,
-
-                            amountOut:
-                                preview.execution.quote.amountOut,
-
-                            minimumAmountOut:
-                                preview.execution.quote.minAmountOut,
-
-                            networkFee:
-                                preview.execution.details.networkFee ??
-                                null,
-
-                            estimatedTime:
-                                preview.execution.details.estimatedTime ??
-                                null,
-
-                            depositAddress:
-                                preview.execution.quote.depositAddress,
-
-                            intermediaryAddress:
-                                preview.execution.details.intermediaryAddress,
-                        });
-
-                        setExecutionStatus(
-                            null,
-                        );
-
-                        setExecutionError(
-                            null,
-                        );
-
-
-                        setPreviewStatus(
-                            "Your transfer route is ready.",
-                        );
-                    } finally {
-                        runner.dispose();
-
-                        if (
-                            evmProvider &&
-                            previousChainId !== null
-                        ) {
-                            try {
-                                await restoreChain(
-                                    evmProvider,
-                                    previousChainId,
-                                );
-                            } catch (restoreError) {
-                                diagnostics.warn(
-                                    "funding.external_wallet_network_restore_failed",
-                                    restoreError,
-                                );
-                            }
-                        }
-                    }
-                } catch (
-                error
-                ) {
-
-                    setPreviewedCryptoAmount(
-                        null,
-                    );
-
-                    setPreviewDetails(
-                        null,
-                    );
-
-                    setPreviewError(
-                        fundingTransferErrorMessage(
-                            error,
-                            sourceAsset,
-                            "We couldn't complete your transfer.",
-                        ),
-                    );
-                } finally {
-                    setPreviewing(
-                        false,
-                    );
-                }
-            },
-            [
-                cryptoAmount,
-                externalWallet,
-                previewing,
-                sourceAsset,
-                walletAddress,
-            ],
-        );
-
     return (
         <Dialog
             open={
@@ -1452,7 +1098,11 @@ export function AddFundsDialog({
                         }}
 
                         onPreviewRoute={() => {
-                            void handlePreviewRoute();
+                            void previewFundingRoute({
+                                walletAddress,
+                                externalWallet,
+                                sourceAsset,
+                            });
                         }}
 
                         onExecute={() => {
