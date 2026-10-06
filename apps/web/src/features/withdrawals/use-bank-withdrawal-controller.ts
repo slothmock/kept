@@ -42,22 +42,22 @@ import {
 } from "@/lib/diagnostics";
 import type {
   VaultConfig,
-} from "@/vault/config";
+} from "@/features/savings/vault/config";
 import {
   parseUsdcDepositAmount,
-} from "@/vault/deposit-input";
+} from "@/features/savings/vault/deposit-input";
 import {
   submitVaultWithdrawal,
-} from "@/vault/executor";
+} from "@/features/savings/vault/executor";
 import type {
   VaultPosition,
-} from "@/vault/position";
+} from "@/features/savings/vault/position";
 import type {
   VaultTransactionCoordinator,
-} from "@/vault/transaction-lock";
+} from "@/features/savings/vault/transaction-lock";
 import {
   buildVaultWithdrawTransaction,
-} from "@/vault/transactions";
+} from "@/wallet/vault-transactions";
 
 interface UseBankWithdrawalControllerInput {
   readonly api:

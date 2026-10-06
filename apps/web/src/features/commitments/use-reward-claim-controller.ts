@@ -24,7 +24,7 @@ import {
 } from "@/lib/diagnostics";
 import type {
   VaultTransactionCoordinator,
-} from "@/vault/transaction-lock";
+} from "@/features/savings/vault/transaction-lock";
 
 interface UseRewardClaimControllerInput {
   readonly account:

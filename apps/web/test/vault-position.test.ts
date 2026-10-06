@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readVaultPosition } from "../src/vault/position.js";
+import { readVaultPosition } from "../src/features/savings/vault/position.js";
 
 const account = "0x1111111111111111111111111111111111111111";
 const usdc = "0x2222222222222222222222222222222222222222";

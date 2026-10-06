@@ -15,8 +15,8 @@ import { Label } from "@/components/ui/label";
 import {
   minimumUsdcDepositError,
   parseUsdcDepositAmount,
-} from "@/vault/deposit-input";
-import { formatBasisPoints } from "@/vault/fees";
+} from "@/features/savings/vault/deposit-input";
+import { formatBasisPoints } from "@/features/savings/vault/fees";
 import type { DepositQuoteState } from "../deposit-quote";
 import { formatUsdcPrecise } from "../format";
 

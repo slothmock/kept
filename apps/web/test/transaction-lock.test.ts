@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTransactionLock,
   getVaultTransactionCoordinator,
-} from "../src/vault/transaction-lock.js";
+} from "../src/features/savings/vault/transaction-lock.js";
 
 describe("createTransactionLock", () => {
   it("rejects a second operation while the first is pending", async () => {

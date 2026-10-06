@@ -1,6 +1,6 @@
 import type {
   VaultPosition,
-} from "@/vault/position";
+} from "@/features/savings/vault/position";
 
 export type PositionState =
   | {

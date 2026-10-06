@@ -2,7 +2,7 @@ import type { Hex } from "viem";
 
 import type {
   UnsignedVaultTransaction,
-} from "@/vault/transactions";
+} from "@/wallet/vault-transactions";
 
 export interface TransactionSender {
   sendTransaction(

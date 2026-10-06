@@ -44,10 +44,10 @@ import {
 } from "@/lib/diagnostics";
 import {
   parseUsdcDepositAmount,
-} from "@/vault/deposit-input";
+} from "@/features/savings/vault/deposit-input";
 import type {
   VaultTransactionCoordinator,
-} from "@/vault/transaction-lock";
+} from "@/features/savings/vault/transaction-lock";
 
 interface CommitmentReceipt {
   readonly status:

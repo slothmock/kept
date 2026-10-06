@@ -23,10 +23,10 @@ import {
 import {
   minimumUsdcDepositError,
   parseUsdcDepositAmount,
-} from "@/vault/deposit-input";
+} from "@/features/savings/vault/deposit-input";
 import {
   readVaultDepositQuote,
-} from "@/vault/fees";
+} from "@/features/savings/vault/fees";
 
 interface ContractReader {
   readContract(

@@ -4,7 +4,7 @@ import { readApiBaseUrl } from "../src/api/kept-api.js";
 import {
   readCommitmentManagerConfig,
   readVaultConfig,
-} from "../src/vault/config.js";
+} from "../src/features/savings/vault/config.js";
 
 const vault = "0x1111111111111111111111111111111111111111";
 const usdc = "0x2222222222222222222222222222222222222222";

@@ -1,5 +1,5 @@
-import { minimumUsdcDepositError, parseUsdcDepositAmount } from "../../vault/deposit-input.js";
-import type { VaultDepositQuote } from "../../vault/fees.js";
+import { minimumUsdcDepositError, parseUsdcDepositAmount } from "@/features/savings/vault/deposit-input";
+import type { VaultDepositQuote } from "@/features/savings/vault/fees";
 
 export type DepositQuoteState =
   | { readonly kind: "idle" }

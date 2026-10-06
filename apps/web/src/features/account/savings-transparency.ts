@@ -5,7 +5,7 @@ import {
 
 import {
     readVaultConfig,
-} from "@/vault/config";
+} from "@/features/savings/vault/config";
 
 const vaultTransparencyAbi = [
     {

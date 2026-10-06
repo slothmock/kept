@@ -41,9 +41,9 @@ import { diagnostics } from "@/lib/diagnostics";
 
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 
-import { readCommitmentManagerConfig, readVaultConfig } from "@/vault/config";
+import { readCommitmentManagerConfig, readVaultConfig } from "@/features/savings/vault/config";
 
-import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
+import { getVaultTransactionCoordinator } from "@/features/savings/vault/transaction-lock";
 
 import {
   useCryptoWithdrawalController,
