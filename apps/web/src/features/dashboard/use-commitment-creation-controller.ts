@@ -19,7 +19,7 @@ import type {
 } from "@/application/ports/blockchain";
 import type {
   CreateCommitmentInput,
-} from "@/features/commitments/CreateCommitmentDialog";
+} from "@/features/commitments/components/CreateCommitmentDialog";
 import {
   buildCreateCommitmentTransaction,
   confirmCommitmentCreation,
