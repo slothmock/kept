@@ -79,18 +79,11 @@ import {
 
 import { runGoalDeletion } from "@/features/goals/delete-goal-flow";
 
-import {
-  currentDepositQuote,
-  type DepositQuoteState,
-} from "@/features/savings/deposit-quote";
-
 import { ConsumerError, consumerErrorMessage } from "@/lib/consumer-error";
 
 import { readFiatEnabled } from "@/config/feature-flags";
 
 import { diagnostics } from "@/lib/diagnostics";
-
-import { createLatestRequestGate } from "@/lib/latest-request";
 
 import { DashboardPage } from "@/pages/DashboardPage";
 
@@ -102,8 +95,6 @@ import {
 } from "@/vault/deposit-input";
 
 import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
-
-import { readVaultDepositQuote } from "@/vault/fees";
 
 import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 
@@ -137,6 +128,10 @@ import {
   useSavingsPositionController,
 } from "@/features/dashboard/use-savings-position-controller";
 
+import {
+  useDepositQuoteController,
+} from "@/features/dashboard/use-deposit-quote-controller";
+
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
@@ -150,9 +145,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [depositStatus, setDepositStatus] = useState<string | null>(null);
 
   const [depositError, setDepositError] = useState<string | null>(null);
-
-  const [storedDepositQuote, setStoredDepositQuote] =
-    useState<DepositQuoteState>({ kind: "idle" });
 
   const [withdrawAmount, setWithdrawAmount] = useState("");
 
@@ -260,8 +252,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     bankActionActive,
     setBankActionActive,
   ] = useState(false);
-
-  const depositQuoteRequestGate = useMemo(() => createLatestRequestGate(), []);
 
   const config = useMemo(() => {
     const result = readVaultConfig(import.meta.env);
@@ -421,11 +411,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
   const [stagingFaucetError, setStagingFaucetError] =
     useState<string | null>(null);
 
-  const depositQuoteState = currentDepositQuote(
-    storedDepositQuote,
-    depositAmount,
-  );
-
   const getCurrentWalletChainId = wallet.getCurrentChainId;
 
   const {
@@ -448,6 +433,26 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           }
         : null,
     getCurrentWalletChainId,
+  });
+
+  const {
+    depositQuoteState,
+  } = useDepositQuoteController({
+    amount:
+      depositAmount,
+    vault:
+      config?.vault ?? null,
+    publicClient:
+      publicClient
+        ? {
+            readContract: (input) =>
+              publicClient.readContract(
+                input as never,
+              ),
+          }
+        : null,
+    positionReady:
+      positionState.kind === "ready",
   });
 
   const ensureTransactionNetwork = useCallback(async () => {
@@ -680,68 +685,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     [commitmentManagerConfig, publicClient],
   );
-
-  useEffect(() => {
-    const requestId = depositQuoteRequestGate.begin();
-
-    const parsedAmount = parseUsdcDepositAmount(depositAmount);
-
-    if (
-      "error" in parsedAmount ||
-      minimumUsdcDepositError(parsedAmount.assets) ||
-      !config ||
-      !publicClient ||
-      positionState.kind !== "ready"
-    ) {
-      queueMicrotask(() => {
-        setStoredDepositQuote({ kind: "idle" });
-      });
-
-      return;
-    }
-
-    queueMicrotask(() => {
-      setStoredDepositQuote({ kind: "loading" });
-    });
-
-    void readVaultDepositQuote({
-      assets: parsedAmount.assets,
-
-      vault: config.vault,
-
-      publicClient: {
-        readContract: (input) =>
-          publicClient.readContract(input as never) as Promise<bigint>,
-      },
-    })
-      .then((quote) => {
-        if (depositQuoteRequestGate.isCurrent(requestId)) {
-          setStoredDepositQuote({ kind: "ready", quote });
-        }
-      })
-      .catch((error) => {
-        if (depositQuoteRequestGate.isCurrent(requestId)) {
-          diagnostics.error("vault.deposit_quote_failed", error);
-
-          setStoredDepositQuote({
-            kind: "error",
-
-            assets: parsedAmount.assets,
-
-            message: consumerErrorMessage(
-              error,
-              "We could not calculate the fees. Try again.",
-            ),
-          });
-        }
-      });
-  }, [
-    config,
-    depositAmount,
-    depositQuoteRequestGate,
-    positionState.kind,
-    publicClient,
-  ]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -3016,7 +2959,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
     setDepositError(null);
 
-    setStoredDepositQuote({ kind: "idle" });
   }, []);
 
   const dismissWithdrawal = useCallback(() => {
