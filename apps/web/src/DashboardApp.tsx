@@ -39,7 +39,7 @@ import { ConsumerError } from "@/lib/consumer-error";
 
 import { diagnostics } from "@/lib/diagnostics";
 
-import { DashboardPage } from "@/pages/DashboardPage";
+import { DashboardPage } from "@/features/dashboard/DashboardPage";
 
 import { readCommitmentManagerConfig, readVaultConfig } from "@/vault/config";
 

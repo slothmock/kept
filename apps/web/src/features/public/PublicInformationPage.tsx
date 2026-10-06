@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-type PublicInformationPage = "privacy" | "terms" | "verification";
+type PublicInformationPageKind = "privacy" | "terms" | "verification";
 
 interface InformationSection {
   readonly title: string;
@@ -14,7 +14,7 @@ interface PublicInformationContent {
   readonly sections: readonly InformationSection[];
 }
 
-const pageContent: Record<PublicInformationPage, PublicInformationContent> = {
+const pageContent: Record<PublicInformationPageKind, PublicInformationContent> = {
   privacy: {
     title: "Privacy",
     eyebrow: "How Kept handles information",
@@ -106,7 +106,7 @@ const pageContent: Record<PublicInformationPage, PublicInformationContent> = {
   },
 };
 
-export function PublicInformationScreen({ page }: { readonly page: PublicInformationPage }) {
+export function PublicInformationPage({ page }: { readonly page: PublicInformationPageKind }) {
   const content = pageContent[page];
 
   return (

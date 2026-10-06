@@ -2,9 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import type { Session } from "@/auth/session";
 import { DashboardApp } from "@/DashboardApp";
-import { AccountPage } from "@/pages/AccountPage";
-import { LandingPage } from "@/pages/LandingPage";
-import { PublicInformationScreen } from "@/pages/PublicInformationScreen";
+import { AccountPage } from "@/features/account/AccountPage";
+import { LandingPage } from "@/features/public/LandingPage";
+import { PublicInformationPage } from "@/features/public/PublicInformationPage";
 
 export function App({ session }: { readonly session: Session }) {
   if (!session.isReady) {
@@ -21,14 +21,14 @@ export function App({ session }: { readonly session: Session }) {
 
       <Route
         path="/privacy"
-        element={<PublicInformationScreen page="privacy" />}
+        element={<PublicInformationPage page="privacy" />}
       />
 
-      <Route path="/terms" element={<PublicInformationScreen page="terms" />} />
+      <Route path="/terms" element={<PublicInformationPage page="terms" />} />
 
       <Route
         path="/verification"
-        element={<PublicInformationScreen page="verification" />}
+        element={<PublicInformationPage page="verification" />}
       />
 
       <Route
