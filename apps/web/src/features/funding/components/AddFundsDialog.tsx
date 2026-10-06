@@ -9,11 +9,11 @@ import {
 
 import {
     AddFundsChoiceView,
-} from "@/features/funding/AddFundsChoiceView";
+} from "@/features/funding/components/AddFundsChoiceView";
 
 import {
     AddFundsCryptoView,
-} from "@/features/funding/AddFundsCryptoView";
+} from "@/features/funding/components/AddFundsCryptoView";
 
 import {
     Dialog,

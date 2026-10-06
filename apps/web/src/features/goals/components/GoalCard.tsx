@@ -4,9 +4,9 @@ import { ArrowRight, Plus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CommitmentCard } from "@/features/commitments/CommitmentCard";
+import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 import { formatUsdc } from "@/features/savings/format";
-import { goalFundingPercent, type GoalFundingEntry } from "./funding";
+import { goalFundingPercent, type GoalFundingEntry } from "../funding";
 
 function targetAmountAtomic(goal: GoalDto): bigint {
   try {

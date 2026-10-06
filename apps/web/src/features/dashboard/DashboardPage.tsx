@@ -15,33 +15,33 @@ import {
 
   type CreateCommitmentInput,
 
-} from "@/features/commitments/CreateCommitmentDialog";
+} from "@/features/commitments/components/CreateCommitmentDialog";
 
 import {
 
   AddFundsDialog,
 
-} from "@/features/funding/AddFundsDialog";
+} from "@/features/funding/components/AddFundsDialog";
 
 import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
 
-import { ManageGoalSavingsDialog } from "@/features/goals/ManageGoalSavingsDialog";
+import { ManageGoalSavingsDialog } from "@/features/goals/components/ManageGoalSavingsDialog";
 
-import { CreateGoalDialog } from "@/features/goals/CreateGoalDialog";
+import { CreateGoalDialog } from "@/features/goals/components/CreateGoalDialog";
 
-import { GoalCard } from "@/features/goals/GoalCard";
+import { GoalCard } from "@/features/goals/components/GoalCard";
 
-import { GoalDetailsDialog } from "@/features/goals/GoalDetailsDialog";
+import { GoalDetailsDialog } from "@/features/goals/components/GoalDetailsDialog";
 
 import type { GoalFundingState } from "@/features/goals/funding";
 
 import {
   BalanceCard,
-} from "@/features/savings/BalanceCard";
+} from "@/features/savings/components/BalanceCard";
 
 import {
   SavingsMarketStatus,
-} from "@/features/savings/SavingsMarketStatus";
+} from "@/features/savings/components/SavingsMarketStatus";
 
 import type {
   PositionState,
@@ -49,11 +49,11 @@ import type {
   SavingsPerformanceState,
 } from "@/features/savings/state";
 
-import { DepositDialog } from "@/features/savings/DepositDialog";
+import { DepositDialog } from "@/features/savings/components/DepositDialog";
 
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 
-import { WithdrawFundsDialog } from "@/features/withdrawal/WithdrawFundsDialog";
+import { WithdrawFundsDialog } from "@/features/withdrawal/components/WithdrawFundsDialog";
 
 import type { RewardState } from "@/commitments/reward-claim";
 

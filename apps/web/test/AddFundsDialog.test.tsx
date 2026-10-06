@@ -16,7 +16,7 @@ import {
     vi,
 } from "vitest";
 
-import { AddFundsDialog } from "../src/features/funding/AddFundsDialog.js";
+import { AddFundsDialog } from "../src/features/funding/components/AddFundsDialog.js";
 
 const {
     getProvider,
@@ -158,7 +158,7 @@ vi.mock(
 );
 
 vi.mock(
-    "../src/features/funding/PrivyFundingButton.js",
+    "../src/features/funding/components/PrivyFundingButton.js",
     () => ({
         PrivyFundingButton:
             () => (

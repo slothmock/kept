@@ -2,7 +2,7 @@ import type { CommitmentDto } from "@/api/kept-api";
 import { Activity, PiggyBank } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { commitmentStatus, commitmentTitle } from "./display";
+import { commitmentStatus, commitmentTitle } from "../display";
 
 interface CommitmentCardProps {
   readonly commitment: CommitmentDto;

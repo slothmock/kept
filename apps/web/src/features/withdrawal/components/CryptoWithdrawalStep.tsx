@@ -25,7 +25,7 @@ import {
 import {
     FundingAssetPicker,
     FormatFundingChainName
-} from "@/features/funding/FundingAssetPicker";
+} from "@/features/funding/components/FundingAssetPicker";
 
 interface CryptoWithdrawalStepProps {
     readonly availableAssets:

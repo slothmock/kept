@@ -24,7 +24,7 @@ import {
 
 import {
     PrivyFundingButton,
-} from "@/features/funding/PrivyFundingButton";
+} from "@/features/funding/components/PrivyFundingButton";
 
 const BASE_CHAIN =
     "eip155:8453" as const;

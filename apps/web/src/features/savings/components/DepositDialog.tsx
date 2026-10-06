@@ -17,8 +17,8 @@ import {
   parseUsdcDepositAmount,
 } from "@/vault/deposit-input";
 import { formatBasisPoints } from "@/vault/fees";
-import type { DepositQuoteState } from "./deposit-quote";
-import { formatUsdcPrecise } from "./format";
+import type { DepositQuoteState } from "../deposit-quote";
+import { formatUsdcPrecise } from "../format";
 
 interface DepositDialogProps {
   readonly open: boolean;

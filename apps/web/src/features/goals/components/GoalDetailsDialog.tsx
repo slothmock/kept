@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { CommitmentCard } from "@/features/commitments/CommitmentCard";
+import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 import {
   goalFundingPercent,
   type GoalFundingEntry,

@@ -16,9 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-import { COMMITMENT_OPTIONS } from "./options";
-import { commitmentSchedule } from "./commitment-schedule";
-import { formatUsdcPrecise } from "../savings/format";
+import { COMMITMENT_OPTIONS } from "../options";
+import { commitmentSchedule } from "../commitment-schedule";
+import { formatUsdcPrecise } from "@/features/savings/format";
 
 export interface CreateCommitmentInput {
   readonly code: "WEEKLY_SAVINGS_V1";
