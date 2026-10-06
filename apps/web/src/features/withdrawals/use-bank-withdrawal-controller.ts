@@ -27,7 +27,7 @@ import {
 } from "@/features/funding/intents/runner";
 import {
   useBankWithdrawalOrderController,
-} from "@/features/dashboard/use-bank-withdrawal-order-controller";
+} from "@/features/withdrawals/use-bank-withdrawal-order-controller";
 import {
   executeCryptoWithdrawal,
 } from "@/features/withdrawals/execute-crypto-withdrawal";

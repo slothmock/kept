@@ -34,7 +34,7 @@ import {
 import {
   useCryptoWithdrawalUiController,
   type CryptoWithdrawalUiController,
-} from "@/features/dashboard/use-crypto-withdrawal-ui-controller";
+} from "@/features/withdrawals/use-crypto-withdrawal-ui-controller";
 import {
   consumerErrorMessage,
 } from "@/lib/consumer-error";

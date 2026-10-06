@@ -54,7 +54,7 @@ vi.mock(
 
 import {
   useCryptoWithdrawalUiController,
-} from "../src/features/dashboard/use-crypto-withdrawal-ui-controller.js";
+} from "../src/features/withdrawals/use-crypto-withdrawal-ui-controller.js";
 
 describe(
   "useCryptoWithdrawalUiController",

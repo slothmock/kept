@@ -47,7 +47,7 @@ import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 
 import {
   useCryptoWithdrawalController,
-} from "@/features/dashboard/use-crypto-withdrawal-controller";
+} from "@/features/withdrawals/use-crypto-withdrawal-controller";
 
 import {
   useSavingsPositionController,
@@ -87,7 +87,7 @@ import {
 
 import {
   useBankWithdrawalController,
-} from "@/features/dashboard/use-bank-withdrawal-controller";
+} from "@/features/withdrawals/use-bank-withdrawal-controller";
 
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
