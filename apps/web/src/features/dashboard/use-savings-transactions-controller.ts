@@ -15,7 +15,7 @@ import type {
 } from "@/application/ports/blockchain";
 import {
   useDepositQuoteController,
-} from "@/features/dashboard/use-deposit-quote-controller";
+} from "@/features/savings/use-deposit-quote-controller";
 import type {
   DepositQuoteState,
 } from "@/features/savings/deposit-quote";
