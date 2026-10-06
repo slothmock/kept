@@ -88,16 +88,14 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { readCommitmentManagerConfig, readVaultConfig } from "@/vault/config";
 
 import {
-  minimumUsdcDepositError,
   parseUsdcDepositAmount,
 } from "@/vault/deposit-input";
 
-import { submitVaultDeposit, submitVaultWithdrawal } from "@/vault/executor";
+import { submitVaultWithdrawal } from "@/vault/executor";
 
 import { getVaultTransactionCoordinator } from "@/vault/transaction-lock";
 
 import {
-  buildVaultDepositTransactions,
   buildVaultWithdrawTransaction,
 } from "@/vault/transactions";
 
@@ -127,8 +125,8 @@ import {
 } from "@/features/dashboard/use-savings-position-controller";
 
 import {
-  useDepositQuoteController,
-} from "@/features/dashboard/use-deposit-quote-controller";
+  useSavingsTransactionsController,
+} from "@/features/dashboard/use-savings-transactions-controller";
 
 import {
   useStagingFaucetController,
@@ -145,19 +143,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     readFiatEnabled(
       import.meta.env,
     );
-
-  const [depositAmount, setDepositAmount] = useState("");
-
-  const [depositStatus, setDepositStatus] = useState<string | null>(null);
-
-  const [depositError, setDepositError] = useState<string | null>(null);
-
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-
-  const [withdrawStatus, setWithdrawStatus] = useState<string | null>(null);
-
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
-
 
   const {
     amount: cryptoWithdrawAmount,
@@ -475,26 +460,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       rewardContractReader,
   });
 
-  const {
-    depositQuoteState,
-  } = useDepositQuoteController({
-    amount:
-      depositAmount,
-    vault:
-      config?.vault ?? null,
-    publicClient:
-      publicClient
-        ? {
-            readContract: (input) =>
-              publicClient.readContract(
-                input as never,
-              ),
-          }
-        : null,
-    positionReady:
-      positionState.kind === "ready",
-  });
-
   const ensureTransactionNetwork = useCallback(async () => {
     if (!config || !publicClient) {
       throw new ConsumerError(
@@ -521,6 +486,84 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       });
     }
   }, [config, getCurrentWalletChainId, publicClient]);
+
+  const depositQuoteReader =
+    useMemo(
+      () =>
+        publicClient
+          ? {
+              readContract: (input: unknown) =>
+                publicClient.readContract(
+                  input as never,
+                ),
+            }
+          : null,
+      [
+        publicClient,
+      ],
+    );
+
+  const waitForSavingsTransactionReceipt =
+    useCallback(
+      async (hash: `0x${string}`) => {
+        if (!publicClient) {
+          throw new Error(
+            "Savings are unavailable because Kept is not configured.",
+          );
+        }
+
+        const receipt =
+          await publicClient.waitForTransactionReceipt({
+            hash,
+          });
+
+        return {
+          status:
+            receipt.status === "success"
+              ? "success" as const
+              : "reverted" as const,
+        };
+      },
+      [
+        publicClient,
+      ],
+    );
+
+  const {
+    depositAmount,
+    depositStatus,
+    depositError,
+    depositQuoteState,
+    withdrawAmount,
+    withdrawStatus,
+    withdrawError,
+    setDepositAmount,
+    setWithdrawAmount,
+    submitDeposit,
+    submitWithdrawal,
+    dismissDeposit,
+    dismissWithdrawal,
+  } = useSavingsTransactionsController({
+    api,
+    account,
+    config,
+    position:
+      positionState.kind === "ready"
+        ? positionState.position
+        : null,
+    depositQuoteReader,
+    sender,
+    transactionCoordinator,
+    ensureTransactionNetwork,
+    waitForTransactionReceipt:
+      publicClient
+        ? waitForSavingsTransactionReceipt
+        : null,
+    refreshPosition,
+    refreshProductData,
+    refreshSavingsPerformance,
+    refreshSavingsMarketStatus,
+  });
 
   const bankWithdrawal =
     useBankWithdrawalOrderController({
@@ -593,312 +636,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     refreshSavingsMarketStatus,
   ]);
 
-  const submitDeposit = useCallback(async (): Promise<boolean> => {
-    if (
-      !config ||
-      !publicClient ||
-      !account ||
-      positionState.kind !== "ready"
-    ) {
-      setDepositError("Your Kept account is not ready yet.");
-
-      return false;
-    }
-
-    const parsedAmount = parseUsdcDepositAmount(depositAmount);
-
-    if ("error" in parsedAmount) {
-      setDepositError(parsedAmount.error);
-
-      return false;
-    }
-
-    const minimumError = minimumUsdcDepositError(parsedAmount.assets);
-
-    if (minimumError) {
-      setDepositError(minimumError);
-
-      return false;
-    }
-
-    if (
-      depositQuoteState.kind !== "ready" ||
-      depositQuoteState.quote.assets !== parsedAmount.assets
-    ) {
-      setDepositError("Wait for the fee details before adding money.");
-
-      return false;
-    }
-
-    if (parsedAmount.assets > positionState.position.usdcBalance) {
-      setDepositError("Enter an amount no greater than your available cash.");
-
-      return false;
-    }
-
-    const [approval, deposit] = buildVaultDepositTransactions({
-      usdc: config.usdc,
-      vault: config.vault,
-      receiver: account,
-      assets: parsedAmount.assets,
-      chainId: config.chainId,
-    });
-
-    let succeeded = false;
-
-    const acquired = await transactionCoordinator.run("deposit", async () => {
-      setDepositError(null);
-
-      setDepositStatus("Adding money to your savings…");
-
-      try {
-        const result =
-          await submitVaultDeposit({
-            allowance: positionState.position.allowance,
-
-            assets: parsedAmount.assets,
-
-            approval,
-
-            deposit,
-
-            beforeSend: async () => ensureTransactionNetwork(),
-
-            sender,
-
-            receipts: {
-              waitForTransactionReceipt: async ({ hash }) => {
-                const receipt = await publicClient.waitForTransactionReceipt({
-                  hash,
-                });
-
-                return {
-                  status: receipt.status === "success" ? "success" : "reverted",
-                };
-              },
-            },
-          });
-
-        setDepositAmount("");
-
-        if (api) {
-          await api.recordTransaction(
-            {
-              type:
-                "SAVINGS_DEPOSIT",
-
-              amountAtomic:
-                parsedAmount.assets
-                  .toString(),
-
-              asset:
-                "USDC",
-
-              description:
-                "Added to savings",
-
-              chainId:
-                config.chainId
-                  .toString(),
-
-              transactionHash:
-                result.depositHash,
-
-              externalReference:
-                result.depositHash,
-            },
-            result.depositHash,
-          );
-        }
-
-        setDepositStatus("Money added to your savings.");
-
-        succeeded = true;
-
-        void Promise.allSettled([
-          refreshPosition(),
-
-          refreshProductData(),
-
-          refreshSavingsPerformance(),
-
-          refreshSavingsMarketStatus(),
-        ]);
-      } catch (error) {
-        diagnostics.warn("vault.deposit_failed", error);
-
-        setDepositStatus(null);
-
-        setDepositError(
-          consumerErrorMessage(
-            error,
-            "We could not add your money. Try again.",
-          ),
-        );
-      }
-    });
-
-    return acquired && succeeded;
-  }, [
-    account,
-    api,
-    config,
-    depositAmount,
-    depositQuoteState,
-    ensureTransactionNetwork,
-    positionState,
-    publicClient,
-    refreshPosition,
-    refreshProductData,
-    refreshSavingsMarketStatus,
-    refreshSavingsPerformance,
-    sender,
-    transactionCoordinator,
-  ]);
-  const submitWithdrawal = useCallback(async (): Promise<boolean> => {
-    if (
-      !config ||
-      !publicClient ||
-      !account ||
-      positionState.kind !== "ready"
-    ) {
-      setWithdrawError("Your Kept account is not ready yet.");
-
-      return false;
-    }
-
-    const parsedAmount = parseUsdcDepositAmount(withdrawAmount);
-
-    if ("error" in parsedAmount) {
-      setWithdrawError(parsedAmount.error);
-
-      return false;
-    }
-
-    if (parsedAmount.assets > positionState.position.withdrawableAssets) {
-      setWithdrawError(
-        "Enter an amount no greater than the amount currently available to withdraw.",
-      );
-
-      return false;
-    }
-
-    const withdrawal = buildVaultWithdrawTransaction({
-      vault: config.vault,
-
-      receiver: account,
-
-      owner: account,
-
-      assets: parsedAmount.assets,
-
-      chainId: config.chainId,
-    });
-
-    let succeeded = false;
-
-    const acquired = await transactionCoordinator.run("withdraw", async () => {
-      setWithdrawError(null);
-
-      setWithdrawStatus("Withdrawing...");
-
-      try {
-        const result =
-          await submitVaultWithdrawal({
-            withdrawal,
-
-            beforeSend: async () => ensureTransactionNetwork(),
-
-            sender,
-
-            receipts: {
-              waitForTransactionReceipt: async ({ hash }) => {
-                const receipt = await publicClient.waitForTransactionReceipt({
-                  hash,
-                });
-
-                return {
-                  status: receipt.status === "success" ? "success" : "reverted",
-                };
-              },
-            },
-          });
-
-        setWithdrawAmount("");
-
-        if (api) {
-          await api.recordTransaction(
-            {
-              type:
-                "SAVINGS_WITHDRAWAL",
-
-              amountAtomic:
-                parsedAmount.assets
-                  .toString(),
-
-              asset:
-                "USDC",
-
-              description:
-                "Moved to available cash",
-
-              chainId:
-                config.chainId
-                  .toString(),
-
-              transactionHash:
-                result.withdrawalHash,
-
-              externalReference:
-                result.withdrawalHash,
-            },
-            result.withdrawalHash,
-          );
-        }
-
-        setWithdrawStatus("Withdrawal complete.");
-
-        succeeded = true;
-
-        void Promise.allSettled([
-          refreshPosition(),
-
-          refreshProductData(),
-
-          refreshSavingsPerformance(),
-
-          refreshSavingsMarketStatus(),
-        ]);
-      } catch (error) {
-        diagnostics.warn("vault.withdrawal_failed", error);
-
-        setWithdrawStatus(null);
-
-        setWithdrawError(
-          consumerErrorMessage(
-            error,
-            "We could not complete your withdrawal. Try again.",
-          ),
-        );
-      }
-    });
-
-    return acquired && succeeded;
-  }, [
-    account,
-    api,
-    config,
-    ensureTransactionNetwork,
-    positionState,
-    publicClient,
-    refreshPosition,
-    refreshProductData,
-    refreshSavingsMarketStatus,
-    refreshSavingsPerformance,
-    sender,
-    transactionCoordinator,
-    withdrawAmount,
-  ]);
   const previewCryptoTransfer =
     useCallback(
       async () => {
@@ -2826,23 +2563,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
       transactionCoordinator,
     ],
   );
-
-  const dismissDeposit = useCallback(() => {
-    setDepositAmount("");
-
-    setDepositStatus(null);
-
-    setDepositError(null);
-
-  }, []);
-
-  const dismissWithdrawal = useCallback(() => {
-    setWithdrawAmount("");
-
-    setWithdrawStatus(null);
-
-    setWithdrawError(null);
-  }, []);
 
   const dismissGoal = useCallback(() => setGoalError(null), []);
 
