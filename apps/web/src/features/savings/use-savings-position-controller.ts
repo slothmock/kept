@@ -17,7 +17,7 @@ import {
 import {
   currentPositionState,
   type BoundPositionState,
-} from "@/features/dashboard/position-context";
+} from "@/features/savings/position-context";
 import type {
   PositionState,
 } from "@/features/savings/state";

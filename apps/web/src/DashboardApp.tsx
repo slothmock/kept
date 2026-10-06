@@ -59,7 +59,7 @@ import {
 
 import {
   useStagingFaucetController,
-} from "@/features/dashboard/use-staging-faucet-controller";
+} from "@/features/savings/use-staging-faucet-controller";
 
 import {
   useRewardStateController,
