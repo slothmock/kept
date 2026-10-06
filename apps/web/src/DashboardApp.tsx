@@ -132,6 +132,10 @@ import {
   useDepositQuoteController,
 } from "@/features/dashboard/use-deposit-quote-controller";
 
+import {
+  useStagingFaucetController,
+} from "@/features/dashboard/use-staging-faucet-controller";
+
 export function DashboardApp({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
 
@@ -402,15 +406,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     }
   }, [account, productState]);
 
-  const [stagingFaucetClaiming, setStagingFaucetClaiming] =
-    useState(false);
-
-  const [stagingFaucetStatus, setStagingFaucetStatus] =
-    useState<string | null>(null);
-
-  const [stagingFaucetError, setStagingFaucetError] =
-    useState<string | null>(null);
-
   const getCurrentWalletChainId = wallet.getCurrentChainId;
 
   const {
@@ -433,6 +428,20 @@ export function DashboardApp({ session }: { readonly session: Session }) {
           }
         : null,
     getCurrentWalletChainId,
+  });
+
+  const {
+    available: stagingFaucetAvailable,
+    claiming: stagingFaucetClaiming,
+    status: stagingFaucetStatus,
+    error: stagingFaucetError,
+    claim: claimStagingFaucet,
+  } = useStagingFaucetController({
+    api,
+    account,
+    chainId:
+      config?.chainId ?? null,
+    refreshPosition,
   });
 
   const {
@@ -521,61 +530,6 @@ export function DashboardApp({ session }: { readonly session: Session }) {
     bankActionActive,
     bankActionPhase,
     bankWithdrawal.phase,
-  ]);
-
-  const claimStagingFaucet = useCallback(async () => {
-    if (
-      !api
-      || !account
-      || config?.chainId !== 10_143
-    ) {
-      setStagingFaucetError(
-        "Test funds are unavailable right now.",
-      );
-
-      return;
-    }
-
-    setStagingFaucetClaiming(true);
-    setStagingFaucetStatus(
-      "Adding test funds to your Kept wallet…",
-    );
-    setStagingFaucetError(null);
-
-    try {
-      const result =
-        await api.claimStagingFaucet();
-
-      setStagingFaucetStatus(
-        `Added ${(
-          BigInt(result.amountAtomic)
-          / 1_000_000n
-        ).toString()} test USDC.`,
-      );
-
-      await refreshPosition();
-    } catch (error) {
-      diagnostics.error(
-        "staging.faucet_claim_failed",
-        error,
-      );
-
-      setStagingFaucetStatus(null);
-
-      setStagingFaucetError(
-        consumerErrorMessage(
-          error,
-          "We could not add test funds. Try again.",
-        ),
-      );
-    } finally {
-      setStagingFaucetClaiming(false);
-    }
-  }, [
-    account,
-    api,
-    config,
-    refreshPosition,
   ]);
 
   type RewardState =
@@ -3165,7 +3119,7 @@ export function DashboardApp({ session }: { readonly session: Session }) {
 
         onRefreshSavingsMarketStatus={refreshSavingsMarketStatus}
 
-        stagingFaucetAvailable={config?.chainId === 10_143}
+        stagingFaucetAvailable={stagingFaucetAvailable}
 
         stagingFaucetClaiming={stagingFaucetClaiming}
 
