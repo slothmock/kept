@@ -827,120 +827,96 @@ export function DashboardApp({ session }: { readonly session: Session }) {
         rewardClaimError={rewardClaimError}
 
         onClaimReward={claimReward}
-        cryptoAmount={
-          cryptoWithdrawAmount
-        }
+        cryptoWithdrawal={{
+          amount:
+            cryptoWithdrawAmount,
 
-        cryptoRecipient={
-          cryptoRecipient
-        }
+          recipient:
+            cryptoRecipient,
 
-        cryptoDestinationAssets={
-          cryptoDestinationAssets
-        }
+          destinationAssets:
+            cryptoDestinationAssets,
 
-        cryptoDestinationAssetId={
-          cryptoDestinationAssetId
-        }
+          destinationAssetId:
+            cryptoDestinationAssetId,
 
-        cryptoPreviewing={
-          cryptoPreviewing
-        }
+          previewing:
+            cryptoPreviewing,
 
-        cryptoPreviewReady={
-          cryptoPreviewReady
-        }
+          previewReady:
+            cryptoPreviewReady,
 
-        cryptoPreviewStatus={
-          cryptoPreviewStatus
-        }
+          previewStatus:
+            cryptoPreviewStatus,
 
-        cryptoPreviewError={
-          cryptoPreviewError
-        }
+          previewError:
+            cryptoPreviewError,
 
-        cryptoExecuting={
-          cryptoExecuting
-        }
+          executing:
+            cryptoExecuting,
 
-        cryptoExecutionStatus={
-          cryptoExecutionStatus
-        }
+          executionStatus:
+            cryptoExecutionStatus,
 
-        cryptoExecutionError={
-          cryptoExecutionError
-        }
+          executionError:
+            cryptoExecutionError,
 
-        cryptoEstimatedReceive={
-          null
-        }
+          estimatedReceive:
+            null,
 
-        onCryptoAmountChange={
-          handleCryptoWithdrawAmountChange
-        }
+          onAmountChange:
+            handleCryptoWithdrawAmountChange,
 
-        onCryptoRecipientChange={
-          handleCryptoRecipientChange
-        }
+          onRecipientChange:
+            handleCryptoRecipientChange,
 
-        onCryptoDestinationAssetChange={
-          handleCryptoDestinationAssetChange
-        }
+          onDestinationAssetChange:
+            handleCryptoDestinationAssetChange,
 
-        onPreviewCryptoWithdrawal={() =>
-          void previewCryptoTransfer()
-        }
-        onExecuteCryptoWithdrawal={() =>
-          void executeCryptoTransfer()
-        }
+          onPreview: () =>
+            void previewCryptoTransfer(),
 
-        bankAmount={
-          bankWithdrawAmount
-        }
+          onExecute: () =>
+            void executeCryptoTransfer(),
+        }}
 
-        bankSubmitting={
-          bankWithdrawSubmitting
-        }
+        bankWithdrawal={{
+          amount:
+            bankWithdrawAmount,
 
-        bankStatus={
-          bankWithdrawStatus
-        }
+          submitting:
+            bankWithdrawSubmitting,
 
-        bankError={
-          bankWithdrawError
-        }
+          status:
+            bankWithdrawStatus,
 
-        bankOrderId={
-          bankWithdrawOrderId
-        }
+          error:
+            bankWithdrawError,
 
-        bankPhase={
-          bankWithdrawPhase
-        }
+          orderId:
+            bankWithdrawOrderId,
 
-        bankReviewAmount={
-          bankWithdrawReviewAmount
-        }
+          phase:
+            bankWithdrawPhase,
 
-        bankMinimumReceive={
-          bankWithdrawMinimumReceive
-        }
+          reviewAmount:
+            bankWithdrawReviewAmount,
 
-        onBankAmountChange={
-          setBankWithdrawAmount
-        }
+          minimumReceive:
+            bankWithdrawMinimumReceive,
 
-        onStartBankWithdrawal={() =>
-          void startBankWithdrawal()
-        }
+          onAmountChange:
+            setBankWithdrawAmount,
 
-        onRefreshBankWithdrawal={() =>
-          void refreshBankWithdrawal()
-        }
+          onStart: () =>
+            void startBankWithdrawal(),
 
-        onConfirmBankWithdrawal={() =>
-          void confirmBankWithdrawal()
-        }
+          onRefresh: () =>
+            void refreshBankWithdrawal(),
+
+          onConfirm: () =>
+            void confirmBankWithdrawal(),
+        }}
       />
     </AppShell>
   );

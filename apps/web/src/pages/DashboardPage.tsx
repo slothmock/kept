@@ -250,130 +250,111 @@ interface DashboardPageProps {
 
   readonly onClaimReward: (commitment: CommitmentDto) => Promise<boolean>;
 
-  readonly cryptoAmount:
+  readonly cryptoWithdrawal: {
 
-  string;
+    readonly amount:
+    string;
 
-  readonly cryptoRecipient:
+    readonly recipient:
+    string;
 
-  string;
+    readonly destinationAssets:
+    readonly FundingAsset[];
 
-  readonly cryptoDestinationAssets:
+    readonly destinationAssetId:
+    string | null;
 
-  readonly FundingAsset[];
+    readonly previewing:
+    boolean;
 
-  readonly cryptoDestinationAssetId:
+    readonly previewReady:
+    boolean;
 
-  string | null;
+    readonly previewStatus:
+    string | null;
 
-  readonly cryptoPreviewing:
+    readonly previewError:
+    string | null;
 
-  boolean;
+    readonly executing:
+    boolean;
 
-  readonly cryptoPreviewReady:
+    readonly executionStatus:
+    string | null;
 
-  boolean;
+    readonly executionError:
+    string | null;
 
-  readonly cryptoPreviewStatus:
+    readonly estimatedReceive:
+    string | null;
 
-  string | null;
+    readonly onAmountChange: (
+      value: string,
+    ) => void;
 
-  readonly cryptoPreviewError:
+    readonly onRecipientChange: (
+      value: string,
+    ) => void;
 
-  string | null;
+    readonly onDestinationAssetChange: (
+      assetId: string,
+    ) => void;
 
-  readonly cryptoExecuting:
+    readonly onPreview:
+    () => void;
 
-  boolean;
+    readonly onExecute:
+    () => void;
 
-  readonly cryptoExecutionStatus:
+  };
 
-  string | null;
+  readonly bankWithdrawal: {
 
-  readonly cryptoExecutionError:
+    readonly amount:
+    string;
 
-  string | null;
+    readonly submitting:
+    boolean;
 
-  readonly cryptoEstimatedReceive:
+    readonly status:
+    string | null;
 
-  string | null;
+    readonly error:
+    string | null;
 
-  readonly onCryptoAmountChange: (
+    readonly orderId:
+    string | null;
 
-    value: string,
+    readonly phase:
+    | "setup"
+    | "moonpay"
+    | "waiting"
+    | "review"
+    | "sending"
+    | "processing"
+    | "complete"
+    | "failed";
 
-  ) => void;
+    readonly reviewAmount:
+    string | null;
 
-  readonly onCryptoRecipientChange: (
+    readonly minimumReceive:
+    string | null;
 
-    value: string,
+    readonly onAmountChange: (
+      value: string,
+    ) => void;
 
-  ) => void;
+    readonly onStart:
+    () => void;
 
-  readonly onCryptoDestinationAssetChange: (
+    readonly onRefresh:
+    () => void;
 
-    assetId: string,
+    readonly onConfirm:
+    () => void;
 
-  ) => void;
-
-  readonly onPreviewCryptoWithdrawal:
-
-  () => void;
-
-  readonly onExecuteCryptoWithdrawal:
-
-  () => void;
-
-  readonly bankAmount:
-
-  string;
-
-  readonly bankSubmitting:
-
-  boolean;
-
-  readonly bankStatus:
-
-  string | null;
-
-  readonly bankError:
-
-  string | null;
-
-  readonly bankOrderId:
-  string | null;
-
-  readonly bankPhase:
-  | "setup"
-  | "moonpay"
-  | "waiting"
-  | "review"
-  | "sending"
-  | "processing"
-  | "complete"
-  | "failed";
-
-  readonly bankReviewAmount:
-  string | null;
-
-  readonly bankMinimumReceive:
-  string | null;
-
-  readonly onBankAmountChange: (
-
-    value: string,
-
-  ) => void;
-
-  readonly onStartBankWithdrawal:
-
-  () => void;
-
-  readonly onRefreshBankWithdrawal:
-  () => void;
-
-  readonly onConfirmBankWithdrawal:
-  () => void;
+  };
 
 }
 
@@ -518,63 +499,9 @@ export function DashboardPage(props: DashboardPageProps) {
 
     onDismissAllocation,
 
-    cryptoAmount,
+    cryptoWithdrawal,
 
-    cryptoRecipient,
-
-    cryptoDestinationAssets,
-
-    cryptoDestinationAssetId,
-
-    cryptoPreviewing,
-
-    cryptoPreviewReady,
-
-    cryptoPreviewStatus,
-
-    cryptoPreviewError,
-
-    cryptoExecuting,
-
-    cryptoExecutionStatus,
-
-    cryptoExecutionError,
-
-    cryptoEstimatedReceive,
-
-    onCryptoAmountChange,
-
-    onCryptoRecipientChange,
-
-    onCryptoDestinationAssetChange,
-
-    onPreviewCryptoWithdrawal,
-
-    onExecuteCryptoWithdrawal,
-
-    bankAmount,
-
-    bankSubmitting,
-
-    bankStatus,
-
-    bankError,
-
-    bankOrderId,
-
-    bankPhase,
-
-    bankReviewAmount,
-
-    bankMinimumReceive,
-
-    onBankAmountChange,
-
-    onStartBankWithdrawal,
-
-    onRefreshBankWithdrawal,
-
-    onConfirmBankWithdrawal,
+    bankWithdrawal,
 
   } = props;
 
@@ -596,9 +523,9 @@ export function DashboardPage(props: DashboardPageProps) {
   const [detailGoal, setDetailGoal] = useState<GoalDto | null>(null);
 
   const bankFlowNeedsAttention =
-    bankPhase !== "setup"
-    && bankOrderId !== null
-    && dismissedBankOrderId !== bankOrderId;
+    bankWithdrawal.phase !== "setup"
+    && bankWithdrawal.orderId !== null
+    && dismissedBankOrderId !== bankWithdrawal.orderId;
 
   const withdrawDialogOpen =
     withdrawOpen || bankFlowNeedsAttention;
@@ -1034,87 +961,87 @@ export function DashboardPage(props: DashboardPageProps) {
 
         cryptoAvailable={
 
-          cryptoDestinationAssets.length >
+          cryptoWithdrawal.destinationAssets.length >
 
           0
 
         }
 
-        cryptoAmount={
+        cryptoWithdrawal.amount={
 
-          cryptoAmount
-
-        }
-
-        cryptoRecipient={
-
-          cryptoRecipient
+          cryptoWithdrawal.amount
 
         }
 
-        cryptoDestinationAssets={
+        cryptoWithdrawal.recipient={
 
-          cryptoDestinationAssets
-
-        }
-
-        cryptoDestinationAssetId={
-
-          cryptoDestinationAssetId
+          cryptoWithdrawal.recipient
 
         }
 
-        cryptoPreviewing={
+        cryptoWithdrawal.destinationAssets={
 
-          cryptoPreviewing
-
-        }
-
-        cryptoPreviewReady={
-
-          cryptoPreviewReady
+          cryptoWithdrawal.destinationAssets
 
         }
 
-        cryptoPreviewStatus={
+        cryptoWithdrawal.destinationAssetId={
 
-          cryptoPreviewStatus
-
-        }
-
-        cryptoPreviewError={
-
-          cryptoPreviewError
+          cryptoWithdrawal.destinationAssetId
 
         }
 
-        cryptoExecuting={
+        cryptoWithdrawal.previewing={
 
-          cryptoExecuting
-
-        }
-
-        cryptoExecutionStatus={
-
-          cryptoExecutionStatus
+          cryptoWithdrawal.previewing
 
         }
 
-        cryptoExecutionError={
+        cryptoWithdrawal.previewReady={
 
-          cryptoExecutionError
+          cryptoWithdrawal.previewReady
 
         }
 
-        cryptoEstimatedReceive={
+        cryptoWithdrawal.previewStatus={
 
-          cryptoEstimatedReceive
+          cryptoWithdrawal.previewStatus
+
+        }
+
+        cryptoWithdrawal.previewError={
+
+          cryptoWithdrawal.previewError
+
+        }
+
+        cryptoWithdrawal.executing={
+
+          cryptoWithdrawal.executing
+
+        }
+
+        cryptoWithdrawal.executionStatus={
+
+          cryptoWithdrawal.executionStatus
+
+        }
+
+        cryptoWithdrawal.executionError={
+
+          cryptoWithdrawal.executionError
+
+        }
+
+        cryptoWithdrawal.estimatedReceive={
+
+          cryptoWithdrawal.estimatedReceive
 
         }
 
         onOpenChange={(open) => {
           if (!open && bankFlowNeedsAttention) {
-            setDismissedBankOrderId(bankOrderId);
+            setDismissedBankOrderId(bankWithdrawal.orderId);
           }
 
           updateDialogOpenState(
@@ -1144,33 +1071,33 @@ export function DashboardPage(props: DashboardPageProps) {
         }}
         
 
-        onCryptoAmountChange={
+        cryptoWithdrawal.onAmountChange={
 
-          onCryptoAmountChange
-
-        }
-
-        onCryptoRecipientChange={
-
-          onCryptoRecipientChange
+          cryptoWithdrawal.onAmountChange
 
         }
 
-        onCryptoDestinationAssetChange={
+        cryptoWithdrawal.onRecipientChange={
 
-          onCryptoDestinationAssetChange
-
-        }
-
-        onPreviewCryptoWithdrawal={
-
-          onPreviewCryptoWithdrawal
+          cryptoWithdrawal.onRecipientChange
 
         }
 
-        onExecuteCryptoWithdrawal={
+        cryptoWithdrawal.onDestinationAssetChange={
 
-          onExecuteCryptoWithdrawal
+          cryptoWithdrawal.onDestinationAssetChange
+
+        }
+
+        cryptoWithdrawal.onPreview={
+
+          cryptoWithdrawal.onPreview
+
+        }
+
+        cryptoWithdrawal.onExecute={
+
+          cryptoWithdrawal.onExecute
 
         }
 
@@ -1178,60 +1105,60 @@ export function DashboardPage(props: DashboardPageProps) {
 
         bankEnabled={fiatEnabled}
 
-        bankAmount={
+        bankWithdrawal.amount={
 
-          bankAmount
-
-        }
-
-        bankSubmitting={
-
-          bankSubmitting
+          bankWithdrawal.amount
 
         }
 
-        bankStatus={
+        bankWithdrawal.submitting={
 
-          bankStatus
-
-        }
-
-        bankError={
-
-          bankError
+          bankWithdrawal.submitting
 
         }
 
-        bankPhase={
-          bankPhase
-        }
+        bankWithdrawal.status={
 
-        bankReviewAmount={
-          bankReviewAmount
-        }
-
-        bankMinimumReceive={
-          bankMinimumReceive
-        }
-
-        onBankAmountChange={
-
-          onBankAmountChange
+          bankWithdrawal.status
 
         }
 
-        onStartBankWithdrawal={
+        bankWithdrawal.error={
 
-          onStartBankWithdrawal
+          bankWithdrawal.error
 
         }
 
-        onRefreshBankWithdrawal={
-          onRefreshBankWithdrawal
+        bankWithdrawal.phase={
+          bankWithdrawal.phase
         }
 
-        onConfirmBankWithdrawal={
-          onConfirmBankWithdrawal
+        bankWithdrawal.reviewAmount={
+          bankWithdrawal.reviewAmount
+        }
+
+        bankWithdrawal.minimumReceive={
+          bankWithdrawal.minimumReceive
+        }
+
+        bankWithdrawal.onAmountChange={
+
+          bankWithdrawal.onAmountChange
+
+        }
+
+        bankWithdrawal.onStart={
+
+          bankWithdrawal.onStart
+
+        }
+
+        bankWithdrawal.onRefresh={
+          bankWithdrawal.onRefresh
+        }
+
+        bankWithdrawal.onConfirm={
+          bankWithdrawal.onConfirm
         }
 
       />
