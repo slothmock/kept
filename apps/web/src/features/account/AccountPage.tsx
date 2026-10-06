@@ -37,7 +37,7 @@ import {
 } from "@/chain/evm-wallet";
 import {
     AccountMenu,
-} from "@/components/AccountMenu";
+} from "@/features/account/components/AccountMenu";
 import {
     AppShell,
 } from "@/app/layout/AppShell";

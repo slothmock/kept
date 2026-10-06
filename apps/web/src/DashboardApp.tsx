@@ -20,7 +20,7 @@ import { type Session } from "@/auth/session";
 import { useKeptEvmWallet } from "@/chain/evm-wallet";
 import { checkNetworkReadiness } from "@/chain/network-readiness";
 import { useKeptTransactionSender } from "@/chain/transaction-sender";
-import { AccountMenu } from "@/components/AccountMenu";
+import { AccountMenu } from "@/features/account/components/AccountMenu";
 
 import { AppShell } from "@/app/layout/AppShell";
 
