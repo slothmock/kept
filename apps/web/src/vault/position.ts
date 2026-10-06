@@ -2,7 +2,7 @@ import { erc20Abi, type Address } from "viem";
 
 import type {
   ContractReader,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 
 const vaultPositionAbi = [
   {

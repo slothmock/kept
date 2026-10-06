@@ -2,7 +2,7 @@ import type { Hex } from "viem";
 
 import type {
   TransactionSender,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 import { ConsumerError } from "@/lib/consumer-error";
 import type {
   UnsignedVaultTransaction,

@@ -1,1 +1,1 @@
-export * from "@/application/blockchain/network-readiness";
+export * from "@/wallet/network-readiness-core";

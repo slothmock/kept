@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 
-import type { TransactionSender } from "@/application/ports/blockchain";
+import type { TransactionSender } from "@/wallet/blockchain";
 import {
     buildClaimRewardTransaction,
     readCommitmentRewardState,

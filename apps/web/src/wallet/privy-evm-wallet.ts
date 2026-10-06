@@ -5,7 +5,7 @@ import {
 } from "@privy-io/react-auth";
 
 import { diagnostics } from "@/lib/diagnostics";
-import { parseEvmChainId, parseProviderChainId } from "@/application/blockchain/network-readiness";
+import { parseEvmChainId, parseProviderChainId } from "@/wallet/network-readiness-core";
 
 export type EthereumProvider = EIP1193Provider;
 

@@ -12,7 +12,7 @@ import type {
 } from "@/api/kept-api";
 import type {
   TransactionSender,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 import {
   claimCommitmentReward,
 } from "@/features/commitments/reward-claim";

@@ -5,7 +5,7 @@ import {
 
 import type {
   TransactionSender,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 import {
   createPrivyTransactionSender,
   type PrivySendTransaction,

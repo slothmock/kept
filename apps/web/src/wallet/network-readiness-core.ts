@@ -1,4 +1,4 @@
-import type { ChainIdReader } from "@/application/ports/blockchain";
+import type { ChainIdReader } from "@/wallet/blockchain";
 
 export type NetworkReadiness =
   | { readonly ready: true }

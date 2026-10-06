@@ -16,7 +16,7 @@ import type {
 } from "@/api/kept-api";
 import type {
   TransactionSender,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 import type {
   CreateCommitmentInput,
 } from "@/features/commitments/components/CreateCommitmentDialog";

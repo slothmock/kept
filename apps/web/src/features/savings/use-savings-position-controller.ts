@@ -10,10 +10,10 @@ import type {
 import type {
   ChainIdReader,
   ContractReader,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 import {
   checkNetworkReadiness,
-} from "@/application/blockchain/network-readiness";
+} from "@/wallet/network-readiness-core";
 import {
   currentPositionState,
   type BoundPositionState,

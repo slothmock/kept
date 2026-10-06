@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import type {
   TransactionReceiptReader,
   TransactionSender,
-} from "@/application/ports/blockchain";
+} from "@/wallet/blockchain";
 
 import { ConsumerError } from "@/lib/consumer-error";
 import type { UnsignedVaultTransaction } from "@/vault/transactions";
