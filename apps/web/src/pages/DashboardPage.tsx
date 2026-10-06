@@ -36,20 +36,18 @@ import { GoalDetailsDialog } from "@/features/goals/GoalDetailsDialog";
 import type { GoalFundingState } from "@/features/goals/funding";
 
 import {
-
   BalanceCard,
-
-  type PositionState,
-
 } from "@/features/savings/BalanceCard";
 
 import {
-
   SavingsMarketStatus,
-
-  type SavingsMarketStatusState,
-
 } from "@/features/savings/SavingsMarketStatus";
+
+import type {
+  PositionState,
+  SavingsMarketStatusState,
+  SavingsPerformanceState,
+} from "@/features/savings/state";
 
 import { DepositDialog } from "@/features/savings/DepositDialog";
 
@@ -266,40 +264,7 @@ interface DashboardPageProps {
     PositionState;
 
     readonly performanceState:
-
-    | {
-
-      readonly kind: "unavailable";
-
-    }
-
-    | {
-
-      readonly kind: "loading";
-
-    }
-
-    | {
-
-      readonly kind: "ready";
-
-      readonly earningsAssets: bigint;
-
-    }
-
-    | {
-
-      readonly kind: "synchronizing";
-
-      readonly progressPercent: number | null;
-
-    }
-
-    | {
-
-      readonly kind: "error";
-
-    };
+    SavingsPerformanceState;
 
     readonly marketStatusState:
     SavingsMarketStatusState;

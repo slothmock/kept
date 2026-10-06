@@ -1,19 +1,12 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export type SavingsMarketStatusState =
-  | { readonly kind: "unavailable" }
-  | { readonly kind: "loading" }
-  | {
-      readonly kind: "ready";
-      readonly availableToDepositAssets: bigint | null;
-      readonly availableToWithdrawAssets: bigint;
-      readonly tvlAssets: bigint;
-      readonly suppliedAssets: bigint | null;
-      readonly supplyCapAssets: bigint | null;
-      readonly grossApyBps: number;
-      readonly netApyBps: number;
-    }
-  | { readonly kind: "error" };
+import type {
+  SavingsMarketStatusState,
+} from "@/features/savings/state";
+
+export type {
+  SavingsMarketStatusState,
+} from "@/features/savings/state";
 
 interface SavingsMarketStatusProps {
   readonly state: SavingsMarketStatusState;

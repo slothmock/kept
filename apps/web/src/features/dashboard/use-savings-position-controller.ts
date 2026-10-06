@@ -20,7 +20,7 @@ import {
 } from "@/features/dashboard/position-context";
 import type {
   PositionState,
-} from "@/features/savings/BalanceCard";
+} from "@/features/savings/state";
 import {
   consumerErrorMessage,
 } from "@/lib/consumer-error";

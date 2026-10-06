@@ -14,33 +14,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { VaultPosition } from "@/vault/position";
 import { formatUsdc } from "./format";
 
-export type PositionState =
-  | { readonly kind: "unavailable" }
-  | { readonly kind: "loading" }
-  | {
-      readonly kind: "ready";
-      readonly position: VaultPosition;
-    }
-  | {
-      readonly kind: "error";
-      readonly message: string;
-    };
+import type {
+  PositionState,
+  SavingsPerformanceState,
+} from "@/features/savings/state";
 
-type SavingsPerformanceState =
-  | { readonly kind: "unavailable" }
-  | { readonly kind: "loading" }
-  | {
-      readonly kind: "ready";
-      readonly earningsAssets: bigint;
-    }
-  | {
-      readonly kind: "synchronizing";
-      readonly progressPercent: number | null;
-    }
-  | { readonly kind: "error" };
+export type {
+  PositionState,
+  SavingsPerformanceState,
+} from "@/features/savings/state";
 
 interface BalanceCardProps {
   readonly positionState: PositionState;

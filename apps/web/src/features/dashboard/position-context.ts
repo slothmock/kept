@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 
-import type { PositionState } from "@/features/savings/BalanceCard";
+import type { PositionState } from "@/features/savings/state";
 import type { VaultPosition } from "@/vault/position";
 
 export type BoundPositionState =

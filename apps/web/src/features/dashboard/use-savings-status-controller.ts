@@ -9,7 +9,8 @@ import type {
 } from "@/api/kept-api";
 import type {
   SavingsMarketStatusState,
-} from "@/features/savings/SavingsMarketStatus";
+  SavingsPerformanceState,
+} from "@/features/savings/state";
 import {
   ConsumerError,
 } from "@/lib/consumer-error";
@@ -17,33 +18,9 @@ import {
   diagnostics,
 } from "@/lib/diagnostics";
 
-export type SavingsPerformanceState =
-  | {
-      readonly kind:
-        "unavailable";
-    }
-  | {
-      readonly kind:
-        "loading";
-    }
-  | {
-      readonly kind:
-        "ready";
-
-      readonly earningsAssets:
-        bigint;
-    }
-  | {
-      readonly kind:
-        "synchronizing";
-
-      readonly progressPercent:
-        number | null;
-    }
-  | {
-      readonly kind:
-        "error";
-    };
+export type {
+  SavingsPerformanceState,
+} from "@/features/savings/state";
 
 interface UseSavingsStatusControllerInput {
   readonly api:
