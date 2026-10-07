@@ -1,7 +1,9 @@
 import {
   ArrowLeft,
   ArrowRight,
+  CheckCircle2,
   Landmark,
+  ShieldCheck,
   WalletCards,
 } from "lucide-react";
 import {
@@ -171,22 +173,19 @@ export function WithdrawView({
         </Button>
 
         <div className="mt-4">
-          <p className="text-caption font-medium text-primary">
+          <h1 className="text-h1 font-semibold tracking-tight">
             Withdraw
-          </p>
-
-          <h1 className="mt-2 text-h1 font-semibold tracking-tight">
-            Withdraw from Kept.
           </h1>
 
           <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-            Move money to available cash, send it to a crypto wallet, or cash out through a supported payment route.
+            Choose where you want to move money from your Kept account.
           </p>
         </div>
       </div>
 
-      <Card className="mx-auto w-full max-w-2xl shadow-none">
-        <CardContent className="p-5 sm:p-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] xl:items-start">
+        <Card className="shadow-none">
+          <CardContent className="p-5 sm:p-6">
           {activeView === "choose" ? (
             <div className="space-y-6">
               <div>
@@ -510,8 +509,77 @@ export function WithdrawView({
               ) : null}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <aside className="space-y-4 xl:sticky xl:top-8">
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <p className="text-caption font-medium text-muted-foreground">
+                Available to withdraw
+              </p>
+
+              <p className="mt-2 text-h2 font-semibold tabular-nums">
+                {formatUsdc(totalAvailableAssets)} USDC
+              </p>
+
+              <div className="mt-5 space-y-3 border-t border-border pt-4">
+                <DetailRow
+                  label="Available cash"
+                  value={`${formatUsdc(availableCash)} USDC`}
+                />
+
+                <DetailRow
+                  label="Available from savings"
+                  value={`${formatUsdc(withdrawableAssets)} USDC`}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-none">
+            <CardContent className="space-y-5 p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <CheckCircle2 className="size-4" />
+                </div>
+
+                <div>
+                  <p className="text-label font-medium">
+                    Review before sending
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    Crypto and bank withdrawals show a review step before funds leave Kept.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <ShieldCheck className="size-4" />
+                </div>
+
+                <div>
+                  <p className="text-label font-medium">
+                    Destination matters
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    Check the destination network and address carefully before confirming a crypto withdrawal.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <p className="px-1 text-caption text-muted-foreground">
+            {bankEnabled
+              ? "Bank withdrawals are handled through Kept's payment partner."
+              : "Bank withdrawals are currently unavailable."}
+          </p>
+        </aside>
+      </div>
     </div>
   );
 }
