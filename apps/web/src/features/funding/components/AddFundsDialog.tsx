@@ -252,6 +252,10 @@ export function AddFundsDialog({
                             fiatEnabled
                         }
 
+                        availableCashReady={
+                            true
+                        }
+
                         fiatStatus={
                             fiatStatus
                         }
