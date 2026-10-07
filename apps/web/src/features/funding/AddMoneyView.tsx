@@ -19,6 +19,7 @@ type FundingView =
 interface AddMoneyViewProps {
   readonly walletAddress: string | null;
   readonly fiatEnabled: boolean;
+  readonly availableCashReady: boolean;
   readonly readSolanaFundingBalances: (
     owner: string,
   ) => Promise<{
@@ -32,6 +33,7 @@ interface AddMoneyViewProps {
 export function AddMoneyView({
   walletAddress,
   fiatEnabled,
+  availableCashReady,
   readSolanaFundingBalances,
   onBack,
   onUseAvailableCash,
@@ -165,6 +167,7 @@ export function AddMoneyView({
             <AddFundsChoiceView
               walletAddress={walletAddress}
               fiatEnabled={fiatEnabled}
+              availableCashReady={availableCashReady}
               fiatStatus={fiatStatus}
               fiatError={fiatError}
               executionStatus={executionStatus}
