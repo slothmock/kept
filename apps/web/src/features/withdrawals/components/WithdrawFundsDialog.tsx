@@ -311,12 +311,12 @@ export function WithdrawFundsDialog({
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="rounded-lg border bg-muted/20 px-4 py-3">
-                            <p className="text-sm text-muted-foreground">
+                        <div className="rounded-lg border border-border bg-surface px-4 py-3">
+                            <p className="text-caption text-muted-foreground">
                                 Available to withdraw
                             </p>
 
-                            <p className="mt-1 text-lg font-semibold tabular-nums">
+                            <p className="mt-1 text-h3 font-semibold tabular-nums">
                                 {formatUsdc(
                                     totalAvailableAssets,
                                 )}{" "}
@@ -330,7 +330,7 @@ export function WithdrawFundsDialog({
                                     <WalletCards className="size-5" />
                                 }
                                 title="Available cash"
-                                description="Move money out of savings and keep it ready to use in Kept."
+                                description="Move money out of savings while keeping it inside your Kept account."
                                 onClick={
                                     chooseAvailableCash
                                 }
@@ -342,7 +342,7 @@ export function WithdrawFundsDialog({
                                         <WalletCards className="size-5" />
                                     }
                                     title="Crypto wallet"
-                                    description="Send money to another wallet or network."
+                                    description="Send USDC to a supported asset and network outside Kept."
                                     onClick={() =>
                                         setView(
                                             "crypto",
@@ -361,7 +361,7 @@ export function WithdrawFundsDialog({
                                             ? "Bank account"
                                             : "Bank account — Coming Soon"
                                     }
-                                    description="Withdraw money to your bank account."
+                                    description="Cash out through Kept&apos;s payment partner."
                                     disabled={
                                         !bankEnabled
                                     }
@@ -383,7 +383,7 @@ export function WithdrawFundsDialog({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="-ml-2"
+                                    className="-ml-3 text-muted-foreground"
                                     disabled={
                                         submitting
                                     }
@@ -413,7 +413,7 @@ export function WithdrawFundsDialog({
                             <div className="space-y-2">
                                 <label
                                     htmlFor="withdraw-available-cash-amount"
-                                    className="text-sm font-medium"
+                                    className="text-label font-medium"
                                 >
                                     Amount
                                 </label>
@@ -430,7 +430,7 @@ export function WithdrawFundsDialog({
                                             submitting
                                         }
                                         placeholder="0.00"
-                                        className="pr-16"
+                                        className="h-12 pr-16 text-body font-medium tabular-nums"
                                         onChange={
                                             (
                                                 event,
@@ -443,12 +443,12 @@ export function WithdrawFundsDialog({
                                         }
                                     />
 
-                                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-caption text-muted-foreground">
                                         USDC
                                     </span>
                                 </div>
 
-                                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                                <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
                                     <span>
                                         Available from savings
                                     </span>
@@ -480,7 +480,7 @@ export function WithdrawFundsDialog({
                             {error && (
                                 <p
                                     role="alert"
-                                    className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                                    className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-caption text-destructive"
                                 >
                                     {error}
                                 </p>
@@ -489,7 +489,7 @@ export function WithdrawFundsDialog({
                             {status && (
                                 <p
                                     role="status"
-                                    className="rounded-lg border bg-muted/20 px-4 py-3 text-sm"
+                                    className="rounded-lg border border-border bg-surface px-4 py-3 text-caption"
                                 >
                                     {status}
                                 </p>
@@ -588,7 +588,7 @@ export function WithdrawFundsDialog({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="-ml-2"
+                                    className="-ml-3 text-muted-foreground"
                                     disabled={
                                         bankSubmitting
                                         || bankPhase === "sending"
@@ -620,7 +620,7 @@ export function WithdrawFundsDialog({
                                 <div className="space-y-2">
                                     <label
                                         htmlFor="withdraw-bank-amount"
-                                        className="text-sm font-medium"
+                                        className="text-label font-medium"
                                     >
                                         Amount
                                     </label>
@@ -633,18 +633,18 @@ export function WithdrawFundsDialog({
                                             value={bankAmount}
                                             disabled={bankSubmitting}
                                             placeholder="0.00"
-                                            className="pr-16"
+                                            className="h-12 pr-16 text-body font-medium tabular-nums"
                                             onChange={(event) =>
                                                 onBankAmountChange(event.target.value)
                                             }
                                         />
 
-                                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-caption text-muted-foreground">
                                             USDC
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                                    <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
                                         <span>Available to withdraw</span>
 
                                         <button
@@ -665,9 +665,9 @@ export function WithdrawFundsDialog({
                                     </div>
                                 </div>
                             ) : bankPhase === "review" ? (
-                                <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                                <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
                                     <div className="flex items-center justify-between gap-4">
-                                        <span className="text-sm text-muted-foreground">
+                                        <span className="text-caption text-muted-foreground">
                                             Withdrawal amount
                                         </span>
                                         <span className="text-sm font-medium tabular-nums">
@@ -677,7 +677,7 @@ export function WithdrawFundsDialog({
 
                                     {bankMinimumReceive && (
                                         <div className="flex items-center justify-between gap-4">
-                                            <span className="text-sm text-muted-foreground">
+                                            <span className="text-caption text-muted-foreground">
                                                 Kept transfer minimum
                                             </span>
                                             <span className="text-sm font-medium tabular-nums">
@@ -695,7 +695,7 @@ export function WithdrawFundsDialog({
                             {bankError && (
                                 <p
                                     role="alert"
-                                    className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                                    className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-caption text-destructive"
                                 >
                                     {bankError}
                                 </p>
@@ -704,7 +704,7 @@ export function WithdrawFundsDialog({
                             {bankStatus && (
                                 <p
                                     role="status"
-                                    className="rounded-lg border bg-muted/20 px-4 py-3 text-sm"
+                                    className="rounded-lg border border-border bg-surface px-4 py-3 text-caption"
                                 >
                                     {bankStatus}
                                 </p>
@@ -802,32 +802,31 @@ function WithdrawalMethod({
                 onClick
             }
             className="
-                group flex w-full items-center gap-4 rounded-xl
-                border bg-background p-4 text-left transition
-                hover:border-primary/30 hover:bg-accent/30
+                group flex w-full items-center gap-4 rounded-lg
+                border border-border bg-surface p-4 text-left transition-colors
+                hover:border-primary/40 hover:bg-accent/30
                 focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-ring focus-visible:ring-offset-2
+                focus-visible:ring-ring/40
                 disabled:cursor-not-allowed disabled:opacity-50
-                disabled:hover:border-border disabled:hover:bg-background
+                disabled:hover:border-border disabled:hover:bg-surface
             "
         >
             <div
                 className="
-                    grid size-11 shrink-0 place-items-center
-                    rounded-full border bg-muted/30
-                    text-muted-foreground transition
-                    group-hover:text-primary
+                    grid size-9 shrink-0 place-items-center
+                    rounded-md bg-accent
+                    text-accent-foreground
                 "
             >
                 {icon}
             </div>
 
             <div className="min-w-0 flex-1">
-                <p className="font-medium">
+                <p className="text-label font-medium">
                     {title}
                 </p>
 
-                <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                <p className="mt-1 text-caption text-muted-foreground">
                     {description}
                 </p>
             </div>
