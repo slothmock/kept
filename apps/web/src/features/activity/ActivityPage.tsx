@@ -23,7 +23,7 @@ import type { Session } from "@/app/providers/session";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AccountMenu } from "@/features/account/components/AccountMenu";
+import { SignOutAction } from "@/features/account/components/SignOutAction";
 import { consumerErrorMessage } from "@/lib/consumer-error";
 import { diagnostics } from "@/lib/diagnostics";
 
@@ -326,7 +326,7 @@ export function ActivityPage({
   return (
     <AppShell
       headerAction={
-        <AccountMenu
+        <SignOutAction
 onSignOut={session.logout}
         />
       }
