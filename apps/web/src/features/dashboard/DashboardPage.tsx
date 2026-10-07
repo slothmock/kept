@@ -14,6 +14,8 @@ import { CommitmentCard } from "@/features/commitments/components/CommitmentCard
 
 import { CommitmentsView } from "@/features/commitments/CommitmentsView";
 
+import { CommitmentDetailView } from "@/features/commitments/CommitmentDetailView";
+
 import {
 
   CreateCommitmentDialog,
@@ -439,11 +441,13 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const navigate = useNavigate();
 
-  const { goalId } = useParams<{ goalId: string }>();
+  const { goalId, commitmentId } = useParams<{ goalId?: string; commitmentId?: string }>();
 
   const goalDetailView = location.pathname.startsWith("/goals/");
 
   const goalsView = location.pathname === "/goals";
+
+  const commitmentDetailView = location.pathname.startsWith("/commitments/");
 
   const commitmentsView = location.pathname === "/commitments";
 
@@ -518,6 +522,16 @@ export function DashboardPage(props: DashboardPageProps) {
       )
       : [];
 
+  const selectedCommitment =
+    commitmentDetailView && commitmentId
+      ? commitments.find((commitment) => commitment.id === commitmentId) ?? null
+      : null;
+
+  const selectedCommitmentGoal =
+    selectedCommitment
+      ? goals.find((goal) => goal.id === selectedCommitment.savingsGoalId) ?? null
+      : null;
+
   const initialLoading = productState.kind === "loading" && goals.length === 0;
 
   const activeCommitments = commitments.filter(
@@ -556,12 +570,60 @@ export function DashboardPage(props: DashboardPageProps) {
 
     <div className="space-y-8">
 
+      {commitmentDetailView ? (
+        selectedCommitment ? (
+          <CommitmentDetailView
+            commitment={selectedCommitment}
+            goal={selectedCommitmentGoal}
+            rewardState={goalManagement.rewards.states[selectedCommitment.id]}
+            claiming={goalManagement.rewards.claimingId === selectedCommitment.id}
+            claimError={
+              goalManagement.rewards.claimError?.commitmentId === selectedCommitment.id
+                ? goalManagement.rewards.claimError.message
+                : null
+            }
+            onBack={() => navigate("/commitments")}
+            onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
+            onClaimReward={goalManagement.rewards.onClaim}
+            onAddToSavings={() => setDepositOpen(true)}
+          />
+        ) : initialLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-48 rounded-md" />
+            <Skeleton className="h-28 w-full rounded-lg" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <Skeleton className="h-56 rounded-lg" />
+              <Skeleton className="h-56 rounded-lg" />
+            </div>
+          </div>
+        ) : (
+          <Card className="border-dashed shadow-none">
+            <CardContent className="p-6">
+              <p className="text-label font-medium">Commitment not found</p>
+              <p className="mt-2 text-caption text-muted-foreground">
+                This commitment may no longer be available.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate("/commitments")}
+              >
+                Back to commitments
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      ) : null}
+
       {commitmentsView ? (
         <CommitmentsView
           commitments={commitments}
           goals={goals}
           onAddCommitment={(goal) => setCommitmentGoal(goal)}
           onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
+          onOpenCommitment={(commitment) =>
+            navigate(`/commitments/${commitment.id}`)
+          }
         />
       ) : null}
 
@@ -621,7 +683,7 @@ export function DashboardPage(props: DashboardPageProps) {
       ) : null}
 
 
-      {!goalDetailView && !commitmentsView ? (
+      {!goalDetailView && !commitmentDetailView && !commitmentsView ? (
       <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
         <div>
@@ -658,7 +720,7 @@ export function DashboardPage(props: DashboardPageProps) {
       </section>
       ) : null}
 
-      {goalsView && !commitmentsView ? (
+      {goalsView && !commitmentDetailView && !commitmentsView ? (
         <section
           className="grid gap-4 sm:grid-cols-3"
           aria-label="Goals summary"
@@ -711,7 +773,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView && !goalDetailView && !commitmentsView ? (
+      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
@@ -987,7 +1049,7 @@ export function DashboardPage(props: DashboardPageProps) {
                 <Button
                   variant="ghost"
                   className="w-full justify-between"
-                  disabled
+                  onClick={() => navigate(`/commitments/${featuredCommitment.id}`)}
                 >
 
                   View commitment
