@@ -409,6 +409,59 @@ interface DashboardPageProps {
 
 }
 
+function DetailPageSkeleton() {
+  return (
+    <div className="space-y-8" aria-label="Loading details" aria-live="polite">
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-36 rounded-md" />
+        <Skeleton className="h-10 w-64 max-w-full rounded-md" />
+        <Skeleton className="h-5 w-40 rounded-md" />
+      </div>
+
+      <Skeleton className="h-40 w-full rounded-xl" />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]">
+        <div className="space-y-4">
+          <Skeleton className="h-7 w-48 rounded-md" />
+          <Skeleton className="h-72 rounded-lg" />
+        </div>
+
+        <div className="space-y-4">
+          <Skeleton className="h-44 rounded-lg" />
+          <Skeleton className="h-44 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommitmentsPageSkeleton() {
+  return (
+    <div className="space-y-8" aria-label="Loading commitments" aria-live="polite">
+      <div className="flex items-center justify-between gap-4">
+        <Skeleton className="h-10 w-48 rounded-md" />
+        <Skeleton className="h-10 w-36 rounded-md" />
+      </div>
+
+      <Skeleton className="h-11 w-48 rounded-lg" />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Skeleton className="h-32 rounded-lg" />
+        <Skeleton className="h-32 rounded-lg" />
+        <Skeleton className="h-32 rounded-lg" />
+      </div>
+
+      <div className="space-y-4">
+        <Skeleton className="h-7 w-52 rounded-md" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-48 rounded-lg" />
+          <Skeleton className="h-48 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function currentCommitment(
 
   goalId: string,
@@ -560,6 +613,7 @@ export function DashboardPage(props: DashboardPageProps) {
         <AddMoneyView
           walletAddress={walletAddress}
           fiatEnabled={fiatEnabled}
+          availableCashReady={savingsOverview.positionState.kind === "ready"}
           readSolanaFundingBalances={readSolanaFundingBalances}
           onBack={() => navigate("/dashboard")}
           onUseAvailableCash={() => setDepositOpen(true)}
@@ -573,6 +627,7 @@ export function DashboardPage(props: DashboardPageProps) {
               ? savingsOverview.positionState.position
               : null
           }
+          positionLoading={savingsOverview.positionState.kind === "loading"}
           amount={savingsTransactions.withdrawal.amount}
           status={savingsTransactions.withdrawal.status}
           error={savingsTransactions.withdrawal.error}
@@ -634,14 +689,7 @@ export function DashboardPage(props: DashboardPageProps) {
             onAddToSavings={() => setDepositOpen(true)}
           />
         ) : productState.kind === "loading" ? (
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-48 rounded-md" />
-            <Skeleton className="h-28 w-full rounded-lg" />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Skeleton className="h-56 rounded-lg" />
-              <Skeleton className="h-56 rounded-lg" />
-            </div>
-          </div>
+          <DetailPageSkeleton />
         ) : (
           <Card className="border-dashed shadow-none">
             <CardContent className="p-6">
@@ -662,15 +710,19 @@ export function DashboardPage(props: DashboardPageProps) {
       ) : null}
 
       {commitmentsView ? (
-        <CommitmentsView
-          commitments={commitments}
-          goals={goals}
-          onAddCommitment={(goal) => setCommitmentGoal(goal)}
-          onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
-          onOpenCommitment={(commitment) =>
-            navigate(`/commitments/${commitment.id}`)
-          }
-        />
+        initialLoading ? (
+          <CommitmentsPageSkeleton />
+        ) : (
+          <CommitmentsView
+            commitments={commitments}
+            goals={goals}
+            onAddCommitment={(goal) => setCommitmentGoal(goal)}
+            onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
+            onOpenCommitment={(commitment) =>
+              navigate(`/commitments/${commitment.id}`)
+            }
+          />
+        )
       ) : null}
 
 
@@ -707,14 +759,7 @@ export function DashboardPage(props: DashboardPageProps) {
             onAddToSavings={() => setDepositOpen(true)}
           />
         ) : initialLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-40 rounded-md" />
-            <Skeleton className="h-28 w-full rounded-lg" />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Skeleton className="h-64 rounded-lg" />
-              <Skeleton className="h-64 rounded-lg" />
-            </div>
-          </div>
+          <DetailPageSkeleton />
         ) : (
           <Card className="border-dashed shadow-none">
             <CardContent className="p-6">
@@ -790,9 +835,11 @@ export function DashboardPage(props: DashboardPageProps) {
                 </h2>
 
                 <p className="mt-1 text-caption text-muted-foreground">
-                  {allocatedGoalSavings === null
-                    ? `${activeGoals.length} active ${activeGoals.length === 1 ? "goal" : "goals"}`
-                    : `${formatUsdc(allocatedGoalSavings)} USDC saved across ${activeGoals.length} ${activeGoals.length === 1 ? "goal" : "goals"}`}
+                  {initialLoading
+                    ? "Loading goals…"
+                    : allocatedGoalSavings === null
+                      ? `${activeGoals.length} active ${activeGoals.length === 1 ? "goal" : "goals"}`
+                      : `${formatUsdc(allocatedGoalSavings)} USDC saved across ${activeGoals.length} ${activeGoals.length === 1 ? "goal" : "goals"}`}
                 </p>
               </div>
 
@@ -884,7 +931,9 @@ export function DashboardPage(props: DashboardPageProps) {
                 </Button>
               </div>
 
-              {featuredCommitment ? (
+              {initialLoading ? (
+                <Skeleton className="h-32 rounded-lg" />
+              ) : featuredCommitment ? (
                 <Card className="shadow-none">
                   <CardContent className="p-5">
                     <CommitmentCard
@@ -979,7 +1028,9 @@ export function DashboardPage(props: DashboardPageProps) {
                 </p>
 
                 <p className="mt-1 text-caption text-muted-foreground">
-                  Across {activeGoals.length} active {activeGoals.length === 1 ? "goal" : "goals"}
+                  {initialLoading
+                    ? "Loading goals…"
+                    : `Across ${activeGoals.length} active ${activeGoals.length === 1 ? "goal" : "goals"}`}
                 </p>
               </CardContent>
             </Card>
@@ -991,7 +1042,7 @@ export function DashboardPage(props: DashboardPageProps) {
                 </p>
 
                 <p className="mt-2 text-h2 font-semibold tabular-nums">
-                  {activeGoals.length}
+                  {initialLoading ? "—" : activeGoals.length}
                 </p>
 
                 <p className="mt-1 text-caption text-muted-foreground">
@@ -1030,7 +1081,9 @@ export function DashboardPage(props: DashboardPageProps) {
                 </h2>
 
                 <p className="mt-1 text-caption text-muted-foreground">
-                  {activeGoals.length} {activeGoals.length === 1 ? "goal" : "goals"} currently growing
+                  {initialLoading
+                    ? "Loading goals…"
+                    : `${activeGoals.length} ${activeGoals.length === 1 ? "goal" : "goals"} currently growing`}
                 </p>
               </div>
 
