@@ -15,6 +15,7 @@ import { formatUsdc } from "../format";
 
 import type {
   PositionState,
+  SavingsMarketStatusState,
   SavingsPerformanceState,
 } from "@/features/savings/state";
 
@@ -27,6 +28,9 @@ interface BalanceCardProps {
   readonly positionState: PositionState;
   readonly transactionPending: boolean;
   readonly savingsPerformanceState: SavingsPerformanceState;
+  readonly marketStatusState?: SavingsMarketStatusState;
+  readonly allocatedGoalSavings?: bigint | null;
+  readonly showActions?: boolean;
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
   readonly onRefresh: () => Promise<void>;
@@ -41,6 +45,9 @@ export function BalanceCard({
   positionState,
   transactionPending,
   savingsPerformanceState,
+  marketStatusState,
+  allocatedGoalSavings = null,
+  showActions = true,
   onAddMoney,
   onWithdraw,
   onRefresh,
@@ -99,6 +106,16 @@ export function BalanceCard({
       ? savingsPerformanceState.earningsAssets
       : null;
 
+  const totalBalance =
+    ready
+      ? positionState.position.assets + positionState.position.usdcBalance
+      : null;
+
+  const netApy =
+    marketStatusState?.kind === "ready"
+      ? (marketStatusState.netApyBps / 100).toFixed(2)
+      : null;
+
   return (
     <section
       className="overflow-hidden rounded-xl bg-balance-surface text-balance-foreground"
@@ -141,32 +158,42 @@ export function BalanceCard({
               <Skeleton className="mt-3 h-12 w-52 bg-white/15" />
             ) : (
               <p className="mt-2 text-balance font-semibold tracking-tight tabular-nums">
-                {ready
-                  ? `${formatUsdc(positionState.position.assets)} USDC`
+                {totalBalance !== null
+                  ? `${formatUsdc(totalBalance)} USDC`
                   : "—"}
               </p>
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={!ready || transactionPending}
-              onClick={onAddMoney}
-              className="bg-surface text-foreground hover:bg-accent disabled:bg-white/10 disabled:text-white/45"
-            >
-              <ArrowDownToLine className="size-4" />
-              Add money
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {netApy ? (
+              <span className="rounded-full bg-success-surface px-3 py-1.5 text-caption font-medium text-success">
+                Earning {netApy}% APY
+              </span>
+            ) : null}
 
-            <Button
-              variant="outline"
-              disabled={!canWithdraw || transactionPending}
-              onClick={onWithdraw}
-              className="border-white/25 bg-transparent text-balance-foreground hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-white/35"
-            >
-              <ArrowUpFromLine className="size-4" />
-              Withdraw
-            </Button>
+            {showActions ? (
+              <>
+                <Button
+                  disabled={!ready || transactionPending}
+                  onClick={onAddMoney}
+                  className="bg-surface text-foreground hover:bg-accent disabled:bg-white/10 disabled:text-white/45"
+                >
+                  <ArrowDownToLine className="size-4" />
+                  Add money
+                </Button>
+
+                <Button
+                  variant="outline"
+                  disabled={!canWithdraw || transactionPending}
+                  onClick={onWithdraw}
+                  className="border-white/25 bg-transparent text-balance-foreground hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-white/35"
+                >
+                  <ArrowUpFromLine className="size-4" />
+                  Withdraw
+                </Button>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -187,12 +214,9 @@ export function BalanceCard({
               Saving toward goals
             </p>
             <p className="mt-1 text-body font-semibold tabular-nums">
-              {ready
-                ? `${formatUsdc(
-                  positionState.position.assets
-                  - positionState.position.usdcBalance,
-                )} USDC`
-                : "—"}
+              {allocatedGoalSavings === null
+                ? "—"
+                : `${formatUsdc(allocatedGoalSavings)} USDC`}
             </p>
           </div>
 
