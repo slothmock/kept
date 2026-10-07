@@ -30,7 +30,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AccountMenu } from "@/features/account/components/AccountMenu";
+import { SignOutAction } from "@/features/account/components/SignOutAction";
 import {
   readSavingsTransparency,
   type SavingsTransparency,
@@ -261,7 +261,7 @@ export function AccountPage({
   return (
     <AppShell
       headerAction={
-        <AccountMenu
+        <SignOutAction
 onSignOut={session.logout}
         />
       }
