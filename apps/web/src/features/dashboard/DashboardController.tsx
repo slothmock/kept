@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useSyncExternalStore,
 } from "react";
 import { useNavigate } from "react-router-dom";
@@ -144,11 +145,15 @@ export function DashboardController({ session }: { readonly session: Session }) 
         ? createKeptApi({
           baseUrl: apiBaseUrl,
 
-          getAccessToken: session.getAccessToken,
+          getAccessToken:
+            session.getAccessToken,
         })
         : null,
 
-    [apiBaseUrl, session.getAccessToken],
+    [
+      apiBaseUrl,
+      session.getAccessToken,
+    ],
   );
 
   const publicClient = useMemo(
@@ -195,6 +200,10 @@ export function DashboardController({ session }: { readonly session: Session }) 
                 publicClient.readContract(
                   input as never,
                 ) as Promise<bigint>,
+              multicall: (input: unknown) =>
+                publicClient.multicall(
+                  input as never,
+                ) as Promise<readonly unknown[]>,
             }
           : null,
       [
@@ -238,6 +247,8 @@ export function DashboardController({ session }: { readonly session: Session }) 
       config?.vault ?? null,
     publicClient:
       productDataReader,
+    chainId:
+      config?.chainId ?? null,
   });
 
   const getCurrentWalletChainId = wallet.getCurrentChainId;
@@ -676,21 +687,93 @@ export function DashboardController({ session }: { readonly session: Session }) 
     refreshProductData: refreshDashboardData,
   });
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      void refreshPosition();
-    });
-  }, [
-    refreshPosition,
-  ]);
+  const dashboardStartupKey =
+    account?.toLowerCase()
+    ?? null;
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      void refreshDashboardData();
-    });
-  }, [
-    refreshDashboardData,
-  ]);
+  const positionStartupKey =
+    account
+    && wallet.liveChainId !== null
+      ? `${account.toLowerCase()}:${wallet.liveChainId}`
+      : null;
+
+  const loadedDashboardKeyRef =
+    useRef<string | null>(
+      null,
+    );
+
+  const loadedPositionKeyRef =
+    useRef<string | null>(
+      null,
+    );
+
+  useEffect(
+    () => {
+      if (
+        dashboardStartupKey
+        === null
+      ) {
+        loadedDashboardKeyRef.current =
+          null;
+
+        return;
+      }
+
+      if (
+        loadedDashboardKeyRef.current
+        === dashboardStartupKey
+      ) {
+        return;
+      }
+
+      loadedDashboardKeyRef.current =
+        dashboardStartupKey;
+
+      queueMicrotask(
+        () => {
+          void refreshDashboardData();
+        },
+      );
+    },
+    [
+      dashboardStartupKey,
+      refreshDashboardData,
+    ],
+  );
+
+  useEffect(
+    () => {
+      if (
+        positionStartupKey
+        === null
+      ) {
+        loadedPositionKeyRef.current =
+          null;
+
+        return;
+      }
+
+      if (
+        loadedPositionKeyRef.current
+        === positionStartupKey
+      ) {
+        return;
+      }
+
+      loadedPositionKeyRef.current =
+        positionStartupKey;
+
+      queueMicrotask(
+        () => {
+          void refreshPosition();
+        },
+      );
+    },
+    [
+      positionStartupKey,
+      refreshPosition,
+    ],
+  );
 
   if (!session.isReady) {
     return (

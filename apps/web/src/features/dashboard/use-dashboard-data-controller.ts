@@ -11,6 +11,9 @@ import type {
 import type {
   KeptApi,
 } from "@/api/kept-api";
+import type {
+  MulticallReader,
+} from "@/wallet/blockchain";
 import {
   readGoalFunding,
   type GoalFundingState,
@@ -53,7 +56,10 @@ interface UseDashboardDataControllerInput {
     Address | null;
 
   readonly publicClient:
-    ContractReader | null;
+    (ContractReader & MulticallReader) | null;
+
+  readonly chainId:
+    number | null;
 }
 
 function fundingRefreshError(
@@ -82,6 +88,7 @@ export function useDashboardDataController({
   enabled,
   vault,
   publicClient,
+  chainId,
 }: UseDashboardDataControllerInput): {
   readonly productState:
     ProductDataState;
@@ -311,6 +318,7 @@ export function useDashboardDataController({
           if (
             !vault
             || !publicClient
+            || chainId === null
           ) {
             setGoalFundingState({
               kind:
@@ -332,6 +340,7 @@ export function useDashboardDataController({
                   ),
                 publicClient,
                 vault,
+                chainId,
               });
 
             if (
@@ -424,6 +433,7 @@ export function useDashboardDataController({
       },
       [
         api,
+        chainId,
         enabled,
         publicClient,
         requestGate,

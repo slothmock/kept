@@ -23,6 +23,9 @@ import {
 import {
   createLatestRequestGate,
 } from "@/lib/latest-request";
+import type {
+  MulticallReader,
+} from "@/wallet/blockchain";
 
 import {
   beginProductRefresh,
@@ -48,7 +51,10 @@ interface UseProductDataControllerInput {
     Address | null;
 
   readonly publicClient:
-    ContractReader | null;
+    (ContractReader & MulticallReader) | null;
+
+  readonly chainId:
+    number | null;
 }
 
 function fundingRefreshError(
@@ -77,6 +83,7 @@ export function useProductDataController({
   account,
   vault,
   publicClient,
+  chainId,
 }: UseProductDataControllerInput): {
   readonly productState:
     ProductDataState;
@@ -179,6 +186,7 @@ export function useProductDataController({
           if (
             !vault
             || !publicClient
+            || chainId === null
           ) {
             if (
               requestGate.isCurrent(
@@ -227,6 +235,7 @@ export function useProductDataController({
                 allocations,
                 publicClient,
                 vault,
+                chainId,
               });
 
             if (
@@ -297,6 +306,7 @@ export function useProductDataController({
       [
         account,
         api,
+        chainId,
         publicClient,
         requestGate,
         vault,
