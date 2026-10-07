@@ -56,7 +56,7 @@ import { DepositDialog } from "@/features/savings/components/DepositDialog";
 
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 
-import { WithdrawFundsDialog } from "@/features/withdrawals/components/WithdrawFundsDialog";
+import { WithdrawView } from "@/features/withdrawals/WithdrawView";
 
 import type { RewardState } from "@/features/commitments/reward-claim";
 
@@ -449,6 +449,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const addMoneyView = location.pathname === "/add-money";
 
+  const withdrawView = location.pathname === "/withdraw";
+
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
@@ -480,25 +482,12 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const [depositOpen, setDepositOpen] = useState(false);
 
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-
-  const [dismissedBankOrderId, setDismissedBankOrderId] =
-    useState<string | null>(null);
-
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
 
   const [commitmentGoal, setCommitmentGoal] = useState<GoalDto | null>(null);
 
   const [savingsGoal, setSavingsGoal] = useState<GoalDto | null>(null);
 
-
-  const bankFlowNeedsAttention =
-    bankWithdrawal.phase !== "setup"
-    && bankWithdrawal.orderId !== null
-    && dismissedBankOrderId !== bankWithdrawal.orderId;
-
-  const withdrawDialogOpen =
-    withdrawOpen || bankFlowNeedsAttention;
 
   const goals = productState.goals;
 
@@ -573,6 +562,56 @@ export function DashboardPage(props: DashboardPageProps) {
           readSolanaFundingBalances={readSolanaFundingBalances}
           onBack={() => navigate("/dashboard")}
           onUseAvailableCash={() => setDepositOpen(true)}
+        />
+      ) : null}
+
+      {withdrawView ? (
+        <WithdrawView
+          position={
+            savingsOverview.positionState.kind === "ready"
+              ? savingsOverview.positionState.position
+              : null
+          }
+          amount={savingsTransactions.withdrawal.amount}
+          status={savingsTransactions.withdrawal.status}
+          error={savingsTransactions.withdrawal.error}
+          submitting={savingsTransactions.pendingTransaction === "withdraw"}
+          cryptoAvailable={cryptoWithdrawal.destinationAssets.length > 0}
+          cryptoAmount={cryptoWithdrawal.amount}
+          cryptoRecipient={cryptoWithdrawal.recipient}
+          cryptoDestinationAssets={cryptoWithdrawal.destinationAssets}
+          cryptoDestinationAssetId={cryptoWithdrawal.destinationAssetId}
+          cryptoPreviewing={cryptoWithdrawal.previewing}
+          cryptoPreviewReady={cryptoWithdrawal.previewReady}
+          cryptoPreviewStatus={cryptoWithdrawal.previewStatus}
+          cryptoPreviewError={cryptoWithdrawal.previewError}
+          cryptoExecuting={cryptoWithdrawal.executing}
+          cryptoExecutionStatus={cryptoWithdrawal.executionStatus}
+          cryptoExecutionError={cryptoWithdrawal.executionError}
+          cryptoEstimatedReceive={cryptoWithdrawal.estimatedReceive}
+          onBack={() => navigate("/dashboard")}
+          onAmountChange={savingsTransactions.withdrawal.onAmountChange}
+          onSubmitAvailableCash={() => {
+            void savingsTransactions.withdrawal.onSubmit();
+          }}
+          onCryptoAmountChange={cryptoWithdrawal.onAmountChange}
+          onCryptoRecipientChange={cryptoWithdrawal.onRecipientChange}
+          onCryptoDestinationAssetChange={cryptoWithdrawal.onDestinationAssetChange}
+          onPreviewCryptoWithdrawal={cryptoWithdrawal.onPreview}
+          onExecuteCryptoWithdrawal={cryptoWithdrawal.onExecute}
+          bankAvailable={true}
+          bankEnabled={fiatEnabled}
+          bankAmount={bankWithdrawal.amount}
+          bankSubmitting={bankWithdrawal.submitting}
+          bankStatus={bankWithdrawal.status}
+          bankError={bankWithdrawal.error}
+          bankPhase={bankWithdrawal.phase}
+          bankReviewAmount={bankWithdrawal.reviewAmount}
+          bankMinimumReceive={bankWithdrawal.minimumReceive}
+          onBankAmountChange={bankWithdrawal.onAmountChange}
+          onStartBankWithdrawal={bankWithdrawal.onStart}
+          onRefreshBankWithdrawal={bankWithdrawal.onRefresh}
+          onConfirmBankWithdrawal={bankWithdrawal.onConfirm}
         />
       ) : null}
 
@@ -689,7 +728,7 @@ export function DashboardPage(props: DashboardPageProps) {
       ) : null}
 
 
-      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
+      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
       <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
         <div>
@@ -726,7 +765,7 @@ export function DashboardPage(props: DashboardPageProps) {
       </section>
       ) : null}
 
-      {goalsView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
+      {goalsView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
         <section
           className="grid gap-4 sm:grid-cols-3"
           aria-label="Goals summary"
@@ -779,7 +818,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
+      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView && !withdrawView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
@@ -790,7 +829,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
         onAddMoney={() => navigate("/add-money")}
 
-        onWithdraw={() => setWithdrawOpen(true)}
+        onWithdraw={() => navigate("/withdraw")}
 
         onRefresh={async () => {
           await Promise.all([
@@ -812,7 +851,7 @@ export function DashboardPage(props: DashboardPageProps) {
         />
       ) : null}
 
-      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
+      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
       <div
         className={
           goalsView
@@ -1135,238 +1174,6 @@ export function DashboardPage(props: DashboardPageProps) {
             }
           )();
         }}
-
-      />
-
-      <WithdrawFundsDialog
-
-        open={withdrawDialogOpen}
-
-        position={
-
-          savingsOverview.positionState.kind === "ready"
-
-            ? savingsOverview.positionState.position
-
-            : null
-
-        }
-
-        amount={savingsTransactions.withdrawal.amount}
-
-        status={savingsTransactions.withdrawal.status}
-
-        error={savingsTransactions.withdrawal.error}
-
-        submitting={
-
-          savingsTransactions.pendingTransaction ===
-
-          "withdraw"
-
-        }
-
-        cryptoAvailable={
-
-          cryptoWithdrawal.destinationAssets.length >
-
-          0
-
-        }
-
-        cryptoAmount={
-
-          cryptoWithdrawal.amount
-
-        }
-
-        cryptoRecipient={
-
-          cryptoWithdrawal.recipient
-
-        }
-
-        cryptoDestinationAssets={
-
-          cryptoWithdrawal.destinationAssets
-
-        }
-
-        cryptoDestinationAssetId={
-
-          cryptoWithdrawal.destinationAssetId
-
-        }
-
-        cryptoPreviewing={
-
-          cryptoWithdrawal.previewing
-
-        }
-
-        cryptoPreviewReady={
-
-          cryptoWithdrawal.previewReady
-
-        }
-
-        cryptoPreviewStatus={
-
-          cryptoWithdrawal.previewStatus
-
-        }
-
-        cryptoPreviewError={
-
-          cryptoWithdrawal.previewError
-
-        }
-
-        cryptoExecuting={
-
-          cryptoWithdrawal.executing
-
-        }
-
-        cryptoExecutionStatus={
-
-          cryptoWithdrawal.executionStatus
-
-        }
-
-        cryptoExecutionError={
-
-          cryptoWithdrawal.executionError
-
-        }
-
-        cryptoEstimatedReceive={
-
-          cryptoWithdrawal.estimatedReceive
-
-        }
-
-        onOpenChange={(open) => {
-          if (!open && bankFlowNeedsAttention) {
-            setDismissedBankOrderId(bankWithdrawal.orderId);
-          }
-
-          updateDialogOpenState(
-            open,
-            setWithdrawOpen,
-            savingsTransactions.withdrawal.onDismiss,
-          );
-        }}
-
-        onAmountChange={
-
-          savingsTransactions.withdrawal.onAmountChange
-
-        }
-
-        onSubmitAvailableCash={() => {
-          void (
-            async () => {
-              const succeeded =
-                await savingsTransactions.withdrawal.onSubmit();
-
-              if (succeeded) {
-                setWithdrawOpen(false);
-              }
-            }
-          )();
-        }}
-        
-
-        onCryptoAmountChange={
-
-          cryptoWithdrawal.onAmountChange
-
-        }
-
-        onCryptoRecipientChange={
-
-          cryptoWithdrawal.onRecipientChange
-
-        }
-
-        onCryptoDestinationAssetChange={
-
-          cryptoWithdrawal.onDestinationAssetChange
-
-        }
-
-        onPreviewCryptoWithdrawal={
-
-          cryptoWithdrawal.onPreview
-
-        }
-
-        onExecuteCryptoWithdrawal={
-
-          cryptoWithdrawal.onExecute
-
-        }
-
-        bankAvailable={true}
-
-        bankEnabled={fiatEnabled}
-
-        bankAmount={
-
-          bankWithdrawal.amount
-
-        }
-
-        bankSubmitting={
-
-          bankWithdrawal.submitting
-
-        }
-
-        bankStatus={
-
-          bankWithdrawal.status
-
-        }
-
-        bankError={
-
-          bankWithdrawal.error
-
-        }
-
-        bankPhase={
-          bankWithdrawal.phase
-        }
-
-        bankReviewAmount={
-          bankWithdrawal.reviewAmount
-        }
-
-        bankMinimumReceive={
-          bankWithdrawal.minimumReceive
-        }
-
-        onBankAmountChange={
-
-          bankWithdrawal.onAmountChange
-
-        }
-
-        onStartBankWithdrawal={
-
-          bankWithdrawal.onStart
-
-        }
-
-        onRefreshBankWithdrawal={
-          bankWithdrawal.onRefresh
-        }
-
-        onConfirmBankWithdrawal={
-          bankWithdrawal.onConfirm
-        }
 
       />
 
