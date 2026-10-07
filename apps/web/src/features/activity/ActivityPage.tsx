@@ -159,13 +159,8 @@ export function ActivityPage({
     let cancelled = false;
 
     if (!api) {
-      setLoading(false);
-      setError("Activity is unavailable because Kept is not configured.");
       return;
     }
-
-    setLoading(true);
-    setError(null);
 
     void api
       .listTransactions()
@@ -200,6 +195,14 @@ export function ActivityPage({
       cancelled = true;
     };
   }, [api]);
+
+  const effectiveLoading =
+    api !== null && loading;
+
+  const effectiveError =
+    api === null
+      ? "Activity is unavailable because Kept is not configured."
+      : error;
 
   return (
     <AppShell
@@ -244,7 +247,7 @@ export function ActivityPage({
             </p>
           </div>
 
-          {loading ? (
+          {effectiveLoading ? (
             <Card className="shadow-none">
               <CardContent className="space-y-3 p-5">
                 <Skeleton className="h-16 w-full rounded-md" />
@@ -252,11 +255,11 @@ export function ActivityPage({
                 <Skeleton className="h-16 w-full rounded-md" />
               </CardContent>
             </Card>
-          ) : error ? (
+          ) : effectiveError ? (
             <Card className="border-destructive/25 shadow-none">
               <CardContent className="p-5">
                 <p className="text-caption text-destructive" role="alert">
-                  {error}
+                  {effectiveError}
                 </p>
               </CardContent>
             </Card>
