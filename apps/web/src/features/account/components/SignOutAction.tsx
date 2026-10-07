@@ -50,7 +50,7 @@ export function SignOutAction({
         onClick={() => {
           void signOut();
         }}
-        className="justify-center text-muted-foreground hover:text-foreground"
+        className="justify-center text-destructive hover:bg-danger-surface hover:text-destructive"
       >
         <LogOut className="size-4" />
         {signOutPending
