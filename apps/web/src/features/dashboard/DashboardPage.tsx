@@ -818,7 +818,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView && !withdrawView ? (
+      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
