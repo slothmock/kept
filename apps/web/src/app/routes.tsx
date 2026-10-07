@@ -190,6 +190,26 @@ export function AppRoutes({
       />
 
       <Route
+        path="/withdraw"
+        element={
+          session.isAuthenticated
+            ? (
+              <DashboardController
+                session={
+                  session
+                }
+              />
+            )
+            : (
+              <Navigate
+                to="/"
+                replace
+              />
+            )
+        }
+      />
+
+      <Route
         path="/activity"
         element={
           session.isAuthenticated
