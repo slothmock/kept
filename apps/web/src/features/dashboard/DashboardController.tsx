@@ -25,12 +25,8 @@ import { AccountMenu } from "@/features/account/components/AccountMenu";
 import { AppShell } from "@/app/layout/AppShell";
 
 import {
-  useProductDataController,
-} from "@/features/dashboard/use-product-data-controller";
-
-import {
-  useSavingsStatusController,
-} from "@/features/savings/use-savings-status-controller";
+  useDashboardDataController,
+} from "@/features/dashboard/use-dashboard-data-controller";
 
 
 import { readFiatEnabled } from "@/app/feature-flags";
@@ -227,24 +223,17 @@ export function DashboardController({ session }: { readonly session: Session }) 
   const {
     productState,
     goalFundingState,
-    refreshProductData,
-  } = useProductDataController({
+    savingsPerformanceState,
+    savingsMarketStatusState,
+    refreshDashboardData,
+  } = useDashboardDataController({
     api,
-    account,
+    enabled:
+      account !== null,
     vault:
       config?.vault ?? null,
     publicClient:
       productDataReader,
-  });
-
-  const {
-    savingsPerformanceState,
-    savingsMarketStatusState,
-    refreshSavingsPerformance,
-    refreshSavingsMarketStatus,
-  } = useSavingsStatusController({
-    api,
-    account,
   });
 
   const getCurrentWalletChainId = wallet.getCurrentChainId;
@@ -421,7 +410,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
       publicClient
         ? waitForRewardClaimReceipt
         : null,
-    refreshProductData,
+    refreshProductData: refreshDashboardData,
   });
 
   const goalAllocationReader =
@@ -456,7 +445,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
     goalFundingState,
     readContract:
       goalAllocationReader,
-    refreshProductData,
+    refreshProductData: refreshDashboardData,
   });
 
   const {
@@ -466,7 +455,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
     dismissGoal,
   } = useGoalCreationController({
     api,
-    refreshProductData,
+    refreshProductData: refreshDashboardData,
   });
 
   const waitForCommitmentReceipt =
@@ -531,7 +520,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
       publicClient
         ? waitForCommitmentReceipt
         : null,
-    refreshProductData,
+    refreshProductData: refreshDashboardData,
   });
 
   const depositQuoteReader =
@@ -607,9 +596,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
         ? waitForSavingsTransactionReceipt
         : null,
     refreshPosition,
-    refreshProductData,
-    refreshSavingsPerformance,
-    refreshSavingsMarketStatus,
+    refreshDashboardData,
   });
 
   const {
@@ -647,7 +634,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
     getProvider:
       wallet.getProvider,
     refreshPosition,
-    refreshProductData,
+    refreshProductData: refreshDashboardData,
   });
 
   const {
@@ -682,7 +669,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
     getProvider:
       wallet.getProvider,
     refreshPosition,
-    refreshProductData,
+    refreshProductData: refreshDashboardData,
   });
 
   useEffect(() => {
@@ -695,16 +682,10 @@ export function DashboardController({ session }: { readonly session: Session }) 
 
   useEffect(() => {
     queueMicrotask(() => {
-      void refreshProductData();
-
-      void refreshSavingsPerformance();
-
-      void refreshSavingsMarketStatus();
+      void refreshDashboardData();
     });
   }, [
-    refreshProductData,
-    refreshSavingsPerformance,
-    refreshSavingsMarketStatus,
+    refreshDashboardData,
   ]);
 
   if (!session.isReady) {
@@ -752,11 +733,8 @@ export function DashboardController({ session }: { readonly session: Session }) 
           onRefreshPosition:
             refreshPosition,
 
-          onRefreshPerformance:
-            refreshSavingsPerformance,
-
-          onRefreshMarketStatus:
-            refreshSavingsMarketStatus,
+          onRefreshDashboardData:
+            refreshDashboardData,
 
           stagingFaucet: {
             available:
@@ -914,7 +892,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
           },
         }}
 
-        onRefreshProductData={refreshProductData}
+        onRefreshProductData={refreshDashboardData}
 
         cryptoWithdrawal={{
           amount:

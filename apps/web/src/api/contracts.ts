@@ -54,6 +54,38 @@ export interface SavingsMarketStatusDto {
   readonly netApyBps: string;
 }
 
+export type DashboardSavingsPerformanceResult =
+  | {
+      readonly kind: "ready";
+      readonly data: SavingsPerformanceDto;
+    }
+  | {
+      readonly kind: "synchronizing";
+      readonly progressPercent: number | null;
+    }
+  | {
+      readonly kind: "error";
+    };
+
+export type DashboardSavingsMarketStatusResult =
+  | {
+      readonly kind: "ready";
+      readonly data: SavingsMarketStatusDto;
+    }
+  | {
+      readonly kind: "error";
+    };
+
+export interface DashboardDto {
+  readonly goals: readonly GoalDto[];
+  readonly commitments: readonly CommitmentDto[];
+  readonly allocations: Readonly<Record<string, GoalAllocationDto>>;
+  readonly savings: {
+    readonly performance: DashboardSavingsPerformanceResult;
+    readonly marketStatus: DashboardSavingsMarketStatusResult;
+  };
+}
+
 export interface CreateCommitmentRequest {
   readonly goalId: string;
   readonly definition: { readonly code: string; readonly version: number };
@@ -160,6 +192,7 @@ export interface SolanaFundingBalancesDto {
 }
 
 export interface KeptApi {
+  getDashboard(): Promise<DashboardDto>;
   getSavingsPerformance(): Promise<SavingsPerformanceDto>;
   getSavingsMarketStatus(): Promise<SavingsMarketStatusDto>;
   claimStagingFaucet(): Promise<StagingFaucetDto>;

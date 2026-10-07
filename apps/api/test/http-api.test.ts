@@ -371,20 +371,26 @@ describe("Kept HTTP API", () => {
       },
       savings: {
         performance: {
-          depositedAssetsAtomic: "0",
-          withdrawnAssetsAtomic: "0",
-          netContributionsAtomic: "0",
-          currentAssetsAtomic: "0",
-          earningsAssetsAtomic: "0",
+          kind: "ready",
+          data: {
+            depositedAssetsAtomic: "0",
+            withdrawnAssetsAtomic: "0",
+            netContributionsAtomic: "0",
+            currentAssetsAtomic: "0",
+            earningsAssetsAtomic: "0",
+          },
         },
         marketStatus: {
-          tvlAssetsAtomic: "0",
-          suppliedAssetsAtomic: "0",
-          supplyCapAssetsAtomic: null,
-          availableToDepositAtomic: null,
-          availableToWithdrawAtomic: "0",
-          grossApyBps: "0",
-          netApyBps: "0",
+          kind: "ready",
+          data: {
+            tvlAssetsAtomic: "0",
+            suppliedAssetsAtomic: "0",
+            supplyCapAssetsAtomic: null,
+            availableToDepositAtomic: null,
+            availableToWithdrawAtomic: "0",
+            grossApyBps: "0",
+            netApyBps: "0",
+          },
         },
       },
     });

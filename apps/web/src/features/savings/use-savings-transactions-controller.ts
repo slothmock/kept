@@ -90,13 +90,7 @@ interface UseSavingsTransactionsControllerInput {
   readonly refreshPosition:
     () => Promise<void>;
 
-  readonly refreshProductData:
-    () => Promise<void>;
-
-  readonly refreshSavingsPerformance:
-    () => Promise<void>;
-
-  readonly refreshSavingsMarketStatus:
+  readonly refreshDashboardData:
     () => Promise<void>;
 }
 
@@ -111,9 +105,7 @@ export function useSavingsTransactionsController({
   ensureTransactionNetwork,
   waitForTransactionReceipt,
   refreshPosition,
-  refreshProductData,
-  refreshSavingsPerformance,
-  refreshSavingsMarketStatus,
+  refreshDashboardData,
 }: UseSavingsTransactionsControllerInput): {
   readonly depositAmount:
     string;
@@ -216,16 +208,12 @@ export function useSavingsTransactionsController({
       () => {
         void Promise.allSettled([
           refreshPosition(),
-          refreshProductData(),
-          refreshSavingsPerformance(),
-          refreshSavingsMarketStatus(),
+          refreshDashboardData(),
         ]);
       },
       [
+        refreshDashboardData,
         refreshPosition,
-        refreshProductData,
-        refreshSavingsMarketStatus,
-        refreshSavingsPerformance,
       ],
     );
 

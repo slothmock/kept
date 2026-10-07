@@ -6,6 +6,7 @@ import {
 
 import type {
   CommitmentDto,
+  DashboardDto,
   GoalAllocationDto,
   GoalDto,
   KeptApi,
@@ -97,6 +98,8 @@ export function createKeptApi(input: {
     client;
 
   return {
+    getDashboard: () =>
+      request<DashboardDto>("/v1/dashboard"),
     getSavingsPerformance: () =>
       request<SavingsPerformanceDto>("/v1/savings/performance"),
     getSavingsMarketStatus: () =>

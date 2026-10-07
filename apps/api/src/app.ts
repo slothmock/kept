@@ -1851,6 +1851,83 @@ export function buildApp(
             );
           }
 
+          const performancePromise =
+            readSavingsPerformanceFor(
+              auth,
+            )
+              .then(
+                (
+                  performance,
+                ) => ({
+                  kind:
+                    "ready" as const,
+                  data:
+                    performance,
+                }),
+              )
+              .catch(
+                (
+                  error,
+                ) => {
+                  if (
+                    error
+                    instanceof SavingsHistorySynchronizingError
+                  ) {
+                    return {
+                      kind:
+                        "synchronizing" as const,
+                      progressPercent:
+                        error
+                          .progressPercent,
+                    };
+                  }
+
+                  request.log.warn(
+                    {
+                      err:
+                        error,
+                    },
+                    "dashboard savings performance unavailable",
+                  );
+
+                  return {
+                    kind:
+                      "error" as const,
+                  };
+                },
+              );
+
+          const marketStatusPromise =
+            readSavingsMarketStatus()
+              .then(
+                (
+                  marketStatus,
+                ) => ({
+                  kind:
+                    "ready" as const,
+                  data:
+                    marketStatus,
+                }),
+              )
+              .catch(
+                (
+                  error,
+                ) => {
+                  request.log.warn(
+                    {
+                      err:
+                        error,
+                    },
+                    "dashboard savings market status unavailable",
+                  );
+
+                  return {
+                    kind:
+                      "error" as const,
+                  };
+                },
+              );
+
           const [
             goals,
             commitments,
@@ -1868,11 +1945,9 @@ export function buildApp(
                 auth.user.id,
               ),
 
-              readSavingsPerformanceFor(
-                auth,
-              ),
+              performancePromise,
 
-              readSavingsMarketStatus(),
+              marketStatusPromise,
             ]);
 
           const allocationEntries =

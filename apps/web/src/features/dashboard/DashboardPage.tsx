@@ -272,10 +272,7 @@ interface DashboardPageProps {
     readonly onRefreshPosition:
     () => Promise<void>;
 
-    readonly onRefreshPerformance:
-    () => Promise<void>;
-
-    readonly onRefreshMarketStatus:
+    readonly onRefreshDashboardData:
     () => Promise<void>;
 
     readonly stagingFaucet: {
@@ -570,13 +567,10 @@ export function DashboardPage(props: DashboardPageProps) {
         onWithdraw={() => setWithdrawOpen(true)}
 
         onRefresh={async () => {
-          await savingsOverview.onRefreshPosition();
-
-          await onRefreshProductData();
-
-          await savingsOverview.onRefreshPerformance();
-
-          await savingsOverview.onRefreshMarketStatus();
+          await Promise.all([
+            savingsOverview.onRefreshPosition(),
+            savingsOverview.onRefreshDashboardData(),
+          ]);
         }}
 
         stagingFaucetAvailable={savingsOverview.stagingFaucet.available}
