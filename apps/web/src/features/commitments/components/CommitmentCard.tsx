@@ -41,13 +41,11 @@ export function CommitmentCard({
               variant={
                 commitment.state === "COMPLETED"
                   ? "success"
-                  : commitment.state === "EXPIRED"
-                    ? "muted"
-                    : commitment.state === "NOT_QUALIFIED"
-                      ? "destructive"
-                      : commitment.state === "QUALIFIED"
-                        ? "success"
-                        : "secondary"
+                  : commitment.state === "FAILED"
+                    ? "destructive"
+                    : commitment.state === "CANCELLED"
+                      ? "muted"
+                      : "secondary"
               }
             >
               {commitmentStatus(commitment.state)}
