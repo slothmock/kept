@@ -1,9 +1,22 @@
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarCheck2,
+  CheckCircle2,
+  Clock3,
+  Info,
+  Target,
+} from "lucide-react";
 
-import type { CommitmentDto, GoalDto } from "@/api/kept-api";
+import type {
+  CommitmentDto,
+  GoalDto,
+} from "@/api/kept-api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
 import { commitmentStatus, commitmentTitle } from "@/features/commitments/display";
 import type { RewardState } from "@/features/commitments/reward-claim";
 import { formatUsdc } from "@/features/savings/format";
@@ -28,18 +41,6 @@ function goalTargetAmount(goal: GoalDto): string {
   }
 }
 
-function commitmentTypeLabel(commitment: CommitmentDto): string {
-  if (commitment.definition.code === "WEEKLY_SAVINGS_V1") {
-    return "Weekly savings";
-  }
-
-  if (commitment.definition.code === "ACTIVITY_COUNT_V1") {
-    return "Activity target";
-  }
-
-  return "Commitment";
-}
-
 function formatDate(value: string): string {
   const date = new Date(value);
 
@@ -51,6 +52,19 @@ function formatDate(value: string): string {
     day: "numeric",
     month: "long",
     year: "numeric",
+  }).format(date);
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
   }).format(date);
 }
 
@@ -72,6 +86,43 @@ function badgeVariant(
   return "secondary";
 }
 
+function commitmentProgress(
+  commitment: CommitmentDto,
+): number {
+  if (commitment.state === "COMPLETED") {
+    return 100;
+  }
+
+  if (
+    commitment.state === "FAILED"
+    || commitment.state === "CANCELLED"
+  ) {
+    return 0;
+  }
+
+  const start = new Date(commitment.epochStart).getTime();
+  const end = new Date(commitment.epochEnd).getTime();
+  const now = Date.now();
+
+  if (
+    !Number.isFinite(start)
+    || !Number.isFinite(end)
+    || end <= start
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        (now - start) / (end - start) * 100,
+      ),
+    ),
+  );
+}
+
 export function CommitmentDetailView({
   commitment,
   goal,
@@ -88,6 +139,9 @@ export function CommitmentDetailView({
       ? rewardState.reward
       : null;
 
+  const progress =
+    commitmentProgress(commitment);
+
   return (
     <div className="space-y-8">
       <div>
@@ -101,19 +155,25 @@ export function CommitmentDetailView({
           Commitments
         </Button>
 
-        <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-caption font-medium text-primary">
+            <p className="text-caption font-medium text-muted-foreground">
               Commitment
             </p>
 
-            <h1 className="mt-2 text-h1 font-semibold tracking-tight">
+            <h1 className="mt-1 text-h1 font-semibold tracking-tight">
               {commitmentTitle(commitment)}
             </h1>
 
-            <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-              A simple action tied to one of your savings goals.
-            </p>
+            {goal ? (
+              <button
+                type="button"
+                className="mt-2 text-body text-muted-foreground hover:text-foreground hover:underline"
+                onClick={() => onOpenGoal(goal)}
+              >
+                For {goal.name}
+              </button>
+            ) : null}
           </div>
 
           <Badge variant={badgeVariant(commitment.state)}>
@@ -122,183 +182,305 @@ export function CommitmentDetailView({
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
+      <Card className="shadow-none">
+        <CardContent className="p-6 sm:p-8">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
+            <div>
+              <p className="text-caption text-muted-foreground">
+                Commitment progress
+              </p>
+
+              <p className="mt-2 text-h2 font-semibold tabular-nums">
+                {progress}%
+              </p>
+
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-disabled">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width]"
+                  style={{ width: `${progress}%` }}
+                  aria-hidden="true"
+                />
+              </div>
+
+              <p className="mt-3 text-caption text-muted-foreground">
+                Runs from {formatShortDate(commitment.epochStart)} to {formatShortDate(commitment.epochEnd)}.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+              <SummaryItem
+                label="Started"
+                value={formatShortDate(commitment.epochStart)}
+              />
+
+              <SummaryItem
+                label="Ends"
+                value={formatShortDate(commitment.epochEnd)}
+              />
+
+              <SummaryItem
+                label="Verification by"
+                value={formatShortDate(commitment.verificationDeadline)}
+              />
+
+              <SummaryItem
+                label="State"
+                value={commitmentStatus(commitment.state)}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]">
         <section className="space-y-4">
+          <div>
+            <h2 className="text-h3 font-semibold tracking-tight">
+              Verification timeline
+            </h2>
+
+            <p className="mt-1 text-caption text-muted-foreground">
+              The real milestones Kept uses for this commitment.
+            </p>
+          </div>
+
           <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>Commitment details</CardTitle>
-            </CardHeader>
+            <CardContent className="p-5">
+              <TimelineItem
+                icon={CalendarCheck2}
+                title="Commitment started"
+                detail={formatDate(commitment.epochStart)}
+                complete
+              />
 
-            <CardContent className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <p className="text-caption text-muted-foreground">
-                  Starts
-                </p>
-                <p className="mt-1 text-label font-medium">
-                  {formatDate(commitment.epochStart)}
-                </p>
-              </div>
+              <TimelineItem
+                icon={Clock3}
+                title="Commitment period ends"
+                detail={formatDate(commitment.epochEnd)}
+                complete={
+                  commitment.state === "COMPLETED"
+                  || commitment.state === "FAILED"
+                  || commitment.state === "CANCELLED"
+                }
+              />
 
-              <div>
-                <p className="text-caption text-muted-foreground">
-                  Ends
-                </p>
-                <p className="mt-1 text-label font-medium">
-                  {formatDate(commitment.epochEnd)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-caption text-muted-foreground">
-                  Verification deadline
-                </p>
-                <p className="mt-1 text-label font-medium">
-                  {formatDate(commitment.verificationDeadline)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-caption text-muted-foreground">
-                  Status
-                </p>
-                <p className="mt-1 text-label font-medium">
-                  {commitmentStatus(commitment.state)}
-                </p>
-              </div>
+              <TimelineItem
+                icon={CheckCircle2}
+                title="Verification deadline"
+                detail={formatDate(commitment.verificationDeadline)}
+                complete={
+                  commitment.state === "COMPLETED"
+                  || commitment.state === "FAILED"
+                }
+                last
+              />
             </CardContent>
           </Card>
 
-          {commitment.state === "COMPLETED" ? (
-            <Card className="shadow-none">
-              <CardHeader>
-                <CardTitle>Reward</CardTitle>
-              </CardHeader>
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <Info className="size-4" />
+                </div>
 
-              <CardContent>
-                {!rewardState || rewardState.kind === "loading" ? (
-                  <p className="text-caption text-muted-foreground">
-                    Checking reward…
-                  </p>
-                ) : rewardState.kind === "error" ? (
-                  <p className="text-caption text-muted-foreground">
-                    {rewardState.message}
-                  </p>
-                ) : reward && reward.rewardClaimed ? (
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-label font-medium text-success">
-                        Reward claimed
-                      </p>
-                      <p className="mt-1 text-caption text-muted-foreground">
-                        {formatUsdc(reward.rewardAssets)} USDC was added to your available cash.
-                      </p>
-                    </div>
+                <div>
+                  <h2 className="text-label font-semibold">
+                    How verification works
+                  </h2>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={onAddToSavings}
-                    >
-                      Add to savings
-                    </Button>
-                  </div>
-                ) : reward && reward.rewardAssets > 0n ? (
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-label font-medium text-success">
-                        {formatUsdc(reward.rewardAssets)} USDC available
-                      </p>
-                      <p className="mt-1 text-caption text-muted-foreground">
-                        This commitment has been verified.
-                      </p>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      disabled={claiming}
-                      onClick={() => {
-                        void onClaimReward(commitment);
-                      }}
-                    >
-                      {claiming ? "Claiming…" : "Claim reward"}
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-caption text-muted-foreground">
-                    Verified with no reward available.
+                  <p className="mt-2 text-caption text-muted-foreground">
+                    Kept checks whether the commitment&apos;s defined condition was met within the commitment window. Once verification finishes, the commitment is marked verified or not completed. Eligible verified commitments can then expose a claimable reward.
                   </p>
-                )}
-
-                {claimError ? (
-                  <p className="mt-3 text-caption text-destructive" role="alert">
-                    {claimError}
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : null}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         <aside className="space-y-4">
           <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>Goal</CardTitle>
-            </CardHeader>
+            <CardContent className="p-5">
+              <p className="text-caption text-muted-foreground">
+                Reward
+              </p>
 
-            <CardContent>
-              {goal ? (
+              {!rewardState || rewardState.kind === "loading" ? (
+                <p className="mt-2 text-label font-medium text-muted-foreground">
+                  Checking reward…
+                </p>
+              ) : rewardState.kind === "error" ? (
+                <p className="mt-2 text-caption text-muted-foreground">
+                  {rewardState.message}
+                </p>
+              ) : reward && reward.rewardClaimed ? (
                 <>
-                  <p className="text-label font-medium">
-                    {goal.name}
+                  <p className="mt-2 text-h3 font-semibold text-success tabular-nums">
+                    {formatUsdc(reward.rewardAssets)} USDC
                   </p>
 
                   <p className="mt-1 text-caption text-muted-foreground">
-                    {goalTargetAmount(goal)} {goal.targetAsset} target
+                    Reward claimed and added to available cash.
                   </p>
 
                   <Button
                     variant="outline"
                     size="sm"
                     className="mt-4"
-                    onClick={() => onOpenGoal(goal)}
+                    onClick={onAddToSavings}
                   >
-                    View goal
+                    Add to savings
+                  </Button>
+                </>
+              ) : reward && reward.rewardAssets > 0n ? (
+                <>
+                  <p className="mt-2 text-h3 font-semibold text-success tabular-nums">
+                    {formatUsdc(reward.rewardAssets)} USDC
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    Available after successful verification.
+                  </p>
+
+                  <Button
+                    size="sm"
+                    className="mt-4"
+                    disabled={claiming}
+                    onClick={() => {
+                      void onClaimReward(commitment);
+                    }}
+                  >
+                    {claiming ? "Claiming…" : "Claim reward"}
                   </Button>
                 </>
               ) : (
-                <p className="text-caption text-muted-foreground">
-                  Goal unavailable.
-                </p>
+                <>
+                  <p className="mt-2 text-h3 font-semibold">
+                    —
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    {commitment.state === "COMPLETED"
+                      ? "Verified with no reward available."
+                      : "Reward details become available after verification."}
+                  </p>
+                </>
               )}
+
+              {claimError ? (
+                <p
+                  className="mt-3 text-caption text-destructive"
+                  role="alert"
+                >
+                  {claimError}
+                </p>
+              ) : null}
             </CardContent>
           </Card>
 
           <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>Definition</CardTitle>
-            </CardHeader>
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <Target className="size-4" />
+                </div>
 
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-caption text-muted-foreground">
-                  Type
-                </p>
-                <p className="mt-1 text-label font-medium">
-                  {commitmentTypeLabel(commitment)}
-                </p>
-              </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-caption text-muted-foreground">
+                    Linked goal
+                  </p>
 
-              <div>
-                <p className="text-caption text-muted-foreground">
-                  Version
-                </p>
-                <p className="mt-1 text-label font-medium tabular-nums">
-                  {commitment.definition.version}
-                </p>
+                  {goal ? (
+                    <>
+                      <p className="mt-1 truncate text-label font-semibold">
+                        {goal.name}
+                      </p>
+
+                      <p className="mt-1 text-caption text-muted-foreground">
+                        {goalTargetAmount(goal)} {goal.targetAsset} target
+                      </p>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-4"
+                        onClick={() => onOpenGoal(goal)}
+                      >
+                        View goal
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Goal unavailable.
+                    </p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+}: {
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <div>
+      <p className="text-caption text-muted-foreground">
+        {label}
+      </p>
+
+      <p className="mt-1 text-label font-semibold">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function TimelineItem({
+  icon: Icon,
+  title,
+  detail,
+  complete,
+  last = false,
+}: {
+  readonly icon: typeof CalendarCheck2;
+  readonly title: string;
+  readonly detail: string;
+  readonly complete: boolean;
+  readonly last?: boolean;
+}) {
+  return (
+    <div className="relative flex gap-4 pb-6 last:pb-0">
+      {!last ? (
+        <div className="absolute left-[17px] top-9 h-[calc(100%-1rem)] w-px bg-border" />
+      ) : null}
+
+      <div
+        className={
+          complete
+            ? "relative z-10 grid size-9 shrink-0 place-items-center rounded-full bg-success-surface text-success"
+            : "relative z-10 grid size-9 shrink-0 place-items-center rounded-full bg-disabled text-muted-foreground"
+        }
+      >
+        <Icon className="size-4" />
+      </div>
+
+      <div className="pt-1">
+        <p className="text-label font-medium">
+          {title}
+        </p>
+
+        <p className="mt-1 text-caption text-muted-foreground">
+          {detail}
+        </p>
       </div>
     </div>
   );
