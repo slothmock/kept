@@ -42,6 +42,7 @@ const navigationItems: readonly NavigationItem[] = [
   {
     label: "Activity",
     icon: Activity,
+    to: "/activity",
   },
   {
     label: "Account",
@@ -173,6 +174,18 @@ export function AppShell({ children, headerAction }: AppShellProps) {
           </NavLink>
 
           <NavLink
+            to="/activity"
+            className={({ isActive }) =>
+              cn(
+                "shrink-0 rounded-md px-3 py-2 text-label text-muted-foreground transition-colors",
+                isActive && "bg-accent text-accent-foreground",
+              )
+            }
+          >
+            Activity
+          </NavLink>
+
+          <NavLink
             to="/account"
             className={({ isActive }) =>
               cn(
@@ -187,7 +200,7 @@ export function AppShell({ children, headerAction }: AppShellProps) {
       </header>
 
       <div className="md:pl-52">
-        <main className="mx-auto w-full max-w-[72rem] px-4 py-8 sm:px-6 md:px-8 md:py-10 lg:px-10">
+        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:px-8 md:py-10 lg:px-10">
           {children}
         </main>
       </div>
