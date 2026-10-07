@@ -13,12 +13,6 @@ import {
 } from "@/components/ui/button";
 
 import {
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-import {
   BASE_USDC,
 } from "@/features/funding/intents/kept-funding-recipe";
 
@@ -89,13 +83,15 @@ export function AddFundsChoiceView({
 }) {
   return (
     <div className="space-y-6">
-      <DialogHeader>
-        <DialogTitle>Add money</DialogTitle>
+      <div>
+        <h2 className="text-h2 font-semibold tracking-tight">
+          Add money
+        </h2>
 
-        <DialogDescription>
+        <p className="mt-2 text-caption text-muted-foreground">
           Choose where the money is coming from.
-        </DialogDescription>
-      </DialogHeader>
+        </p>
+      </div>
 
       <div className="space-y-3">
         <FundingOption
