@@ -278,15 +278,15 @@ export function AddFundsCryptoView({
                     Back
                 </Button>
 
-                <DialogHeader>
-                    <DialogTitle>
+                <div>
+                    <h2 className="text-h2 font-semibold tracking-tight">
                         Review transfer
-                    </DialogTitle>
+                    </h2>
 
-                    <DialogDescription>
+                    <p className="mt-2 text-caption text-muted-foreground">
                         Confirm the route and minimum amount before the transfer begins.
-                    </DialogDescription>
-                </DialogHeader>
+                    </p>
+                </div>
 
                 <div className="overflow-hidden rounded-lg border border-border bg-surface">
                     <div
@@ -539,15 +539,15 @@ export function AddFundsCryptoView({
                 Back
             </Button>
 
-            <DialogHeader>
-                <DialogTitle>
+            <div>
+                <h2 className="text-h2 font-semibold tracking-tight">
                     Transfer crypto
-                </DialogTitle>
+                </h2>
 
-                <DialogDescription>
+                <p className="mt-2 text-caption text-muted-foreground">
                     Choose a wallet, network, asset, and amount. Kept will show the route before anything moves.
-                </DialogDescription>
-            </DialogHeader>
+                </p>
+            </div>
 
             <div className="rounded-lg border border-border bg-surface p-4">
                 <p className="text-label font-medium">
