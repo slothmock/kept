@@ -24,6 +24,7 @@ import { useKeptTransactionSender } from "@/wallet/transaction-sender";
 import { AccountMenu } from "@/features/account/components/AccountMenu";
 
 import { AppShell } from "@/app/layout/AppShell";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
   useDashboardDataController,
@@ -789,12 +790,35 @@ export function DashboardController({ session }: { readonly session: Session }) 
 
   if (!session.isReady) {
     return (
-      <main
-        className="grid min-h-screen place-items-center text-sm text-muted-foreground"
-        aria-live="polite"
-      >
-        Preparing your account…
-      </main>
+      <AppShell>
+        <div
+          className="space-y-8"
+          aria-live="polite"
+          aria-label="Preparing your Kept account"
+        >
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-40 rounded-md" />
+            <Skeleton className="h-5 w-72 max-w-full rounded-md" />
+          </div>
+
+          <Skeleton className="h-56 w-full rounded-xl" />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Skeleton className="h-36 rounded-lg" />
+            <Skeleton className="h-36 rounded-lg" />
+            <Skeleton className="h-36 rounded-lg" />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
+            <Skeleton className="h-64 rounded-lg" />
+            <Skeleton className="h-64 rounded-lg" />
+          </div>
+
+          <span className="sr-only">
+            Preparing your account…
+          </span>
+        </div>
+      </AppShell>
     );
   }
 
