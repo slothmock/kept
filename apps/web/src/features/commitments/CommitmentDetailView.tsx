@@ -20,6 +20,26 @@ interface CommitmentDetailViewProps {
   readonly onAddToSavings: () => void;
 }
 
+function goalTargetAmount(goal: GoalDto): string {
+  try {
+    return formatUsdc(BigInt(goal.targetAmountAtomic));
+  } catch {
+    return "—";
+  }
+}
+
+function commitmentTypeLabel(commitment: CommitmentDto): string {
+  if (commitment.definition.code === "WEEKLY_SAVINGS_V1") {
+    return "Weekly savings";
+  }
+
+  if (commitment.definition.code === "ACTIVITY_COUNT_V1") {
+    return "Activity target";
+  }
+
+  return "Commitment";
+}
+
 function formatDate(value: string): string {
   const date = new Date(value);
 
@@ -233,7 +253,7 @@ export function CommitmentDetailView({
                   </p>
 
                   <p className="mt-1 text-caption text-muted-foreground">
-                    {formatUsdc(BigInt(goal.targetAmountAtomic))} {goal.targetAsset} target
+                    {goalTargetAmount(goal)} {goal.targetAsset} target
                   </p>
 
                   <Button
@@ -264,7 +284,7 @@ export function CommitmentDetailView({
                   Type
                 </p>
                 <p className="mt-1 text-label font-medium">
-                  {commitment.definition.code}
+                  {commitmentTypeLabel(commitment)}
                 </p>
               </div>
 
