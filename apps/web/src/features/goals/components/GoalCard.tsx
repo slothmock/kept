@@ -42,70 +42,82 @@ export function GoalCard({
   const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
 
   return (
-    <Card className="overflow-hidden shadow-none transition-shadow hover:shadow-sm">
-      <CardHeader className="gap-5 pb-5">
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="gap-5 p-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="text-caption font-medium text-muted-foreground">
               Goal
             </p>
 
-            <h3 className="truncate text-xl font-semibold tracking-tight">
+            <h3 className="mt-1 truncate text-h3 font-semibold tracking-tight">
               {goal.name}
             </h3>
           </div>
+
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onOpen(goal)}
+            aria-label={`Open ${goal.name} details`}
+          >
+            <ArrowRight className="size-4" />
+          </Button>
         </div>
 
         <div>
-          <div className="flex items-end gap-2">
-            <p className="text-3xl font-semibold tracking-tight tabular-nums">
-              {allocatedAssets === null ? "—" : formatUsdc(allocatedAssets)}
+          <div className="flex items-baseline gap-2">
+            <p className="text-h2 font-semibold tracking-tight tabular-nums">
+              {allocatedAssets === null ? "—" : `£${formatUsdc(allocatedAssets)}`}
             </p>
 
-            {allocatedAssets !== null && (
-              <span className="pb-1 text-sm text-muted-foreground">USDC</span>
-            )}
+            <span className="text-caption text-muted-foreground">
+              of £{targetAmount(goal)}
+            </span>
           </div>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            saved of {targetAmount(goal)} USDC
-          </p>
-        </div>
+          <div className="mt-4 space-y-2">
+            <Progress
+              value={progress.visualPercent}
+              aria-label={`${progress.labelPercent}% of target`}
+            />
 
-        <div className="space-y-2">
-          <Progress
-            value={progress.visualPercent}
-            aria-label={`${progress.labelPercent}% of target`}
-          />
+            <div className="flex items-center justify-between gap-4 text-caption">
+              <span className="font-medium text-foreground tabular-nums">
+                {allocatedAssets === null
+                  ? "Savings unavailable"
+                  : `${progress.labelPercent}% complete`}
+              </span>
 
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <span className="font-medium tabular-nums">
-              {allocatedAssets === null
-                ? "Savings unavailable"
-                : `${progress.labelPercent}% of target`}
-            </span>
-
-            {goal.targetDate && (
-              <span className="text-muted-foreground">Target set</span>
-            )}
+              {goal.targetDate ? (
+                <span className="text-muted-foreground">
+                  Target set
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4 border-t bg-muted/10 pt-5">
+      <CardContent className="space-y-4 border-t border-border bg-surface p-5 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">Current commitment</p>
+          <div>
+            <p className="text-label font-medium">Commitment</p>
+            <p className="mt-1 text-caption text-muted-foreground">
+              Keep a weekly saving habit for this goal.
+            </p>
+          </div>
 
-          {(!commitment || commitment.state === "DRAFT") && (
+          {(!commitment || commitment.state === "DRAFT") ? (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onAddCommitment(goal)}
             >
               <Plus className="size-4" />
-              {commitment ? "Retry setup" : "Add"}
+              {commitment ? "Retry" : "Add"}
             </Button>
-          )}
+          ) : null}
         </div>
 
         {commitment ? (
@@ -113,28 +125,26 @@ export function GoalCard({
         ) : (
           <button
             type="button"
-            className="w-full rounded-lg border border-dashed p-4 text-left text-sm text-muted-foreground transition hover:border-primary/40 hover:bg-accent/40 hover:text-foreground"
+            className="w-full rounded-md border border-dashed border-border bg-background px-4 py-4 text-left text-caption text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => onAddCommitment(goal)}
           >
-            Add a commitment to help you keep moving towards this goal.
+            Add a commitment to keep yourself moving towards this goal.
           </button>
         )}
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button disabled={!funding} onClick={() => onManageSavings(goal)}>
+        <Button
+          variant="outline"
+          className="w-full justify-between"
+          disabled={!funding}
+          onClick={() => onManageSavings(goal)}
+        >
+          <span className="inline-flex items-center gap-2">
             <SlidersHorizontal className="size-4" />
             Manage savings
-          </Button>
+          </span>
 
-          <Button
-            variant="ghost"
-            className="justify-between"
-            onClick={() => onOpen(goal)}
-          >
-            Goal details
-            <ArrowRight className="size-4" />
-          </Button>
-        </div>
+          <ArrowRight className="size-4" />
+        </Button>
       </CardContent>
     </Card>
   );
