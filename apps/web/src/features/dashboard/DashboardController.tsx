@@ -5,7 +5,6 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   createPublicClient,
   getAddress,
@@ -88,8 +87,6 @@ import {
 } from "@/features/withdrawals/use-bank-withdrawal-controller";
 
 export function DashboardController({ session }: { readonly session: Session }) {
-  const navigate = useNavigate();
-
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
