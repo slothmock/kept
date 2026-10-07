@@ -535,6 +535,11 @@ export function DashboardPage(props: DashboardPageProps) {
 
       : null;
 
+  const allocatedGoalSavings =
+    goalFundingState.kind === "ready"
+      ? goalFundingState.funding.totalAllocatedAssets
+      : null;
+
   return (
 
     <div className="space-y-8">
@@ -573,6 +578,59 @@ export function DashboardPage(props: DashboardPageProps) {
         )}
 
       </section>
+
+      {goalsView ? (
+        <section
+          className="grid gap-4 sm:grid-cols-3"
+          aria-label="Goals summary"
+        >
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <p className="text-caption text-muted-foreground">
+                Saved toward goals
+              </p>
+              <p className="mt-2 text-h3 font-semibold tabular-nums">
+                {allocatedGoalSavings === null
+                  ? "—"
+                  : `${formatUsdc(allocatedGoalSavings)} USDC`}
+              </p>
+              <p className="mt-1 text-caption text-muted-foreground">
+                Across {activeGoals.length} active {activeGoals.length === 1 ? "goal" : "goals"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <p className="text-caption text-muted-foreground">
+                Active goals
+              </p>
+              <p className="mt-2 text-h3 font-semibold tabular-nums">
+                {activeGoals.length}
+              </p>
+              <p className="mt-1 text-caption text-muted-foreground">
+                Currently in progress
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <p className="text-caption text-muted-foreground">
+                Unassigned savings
+              </p>
+              <p className="mt-2 text-h3 font-semibold tabular-nums">
+                {unassignedSavings === null
+                  ? "—"
+                  : `${formatUsdc(unassignedSavings)} USDC`}
+              </p>
+              <p className="mt-1 text-caption text-muted-foreground">
+                Available to put towards a goal
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
 
       {!goalsView ? (
         <BalanceCard
@@ -680,7 +738,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
           )}
 
-          {unassignedSavings !== null && unassignedSavings > 0n && (
+          {!goalsView && unassignedSavings !== null && unassignedSavings > 0n && (
 
             <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
 
@@ -746,7 +804,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
           ) : (
 
-            <div className={goalsView ? "grid gap-4 lg:grid-cols-2" : "grid gap-4 md:grid-cols-2"}>
+            <div className={goalsView ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3" : "grid gap-4 md:grid-cols-2"}>
 
               {(goalsView ? activeGoals : activeGoals.slice(0, 2)).map((goal) => (
 
@@ -765,12 +823,6 @@ export function DashboardPage(props: DashboardPageProps) {
                       : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
 
                   }
-
-                  commitment={currentCommitment(goal.id, commitments)}
-
-                  onManageSavings={(selected) => setSavingsGoal(selected)}
-
-                  onAddCommitment={(selected) => setCommitmentGoal(selected)}
 
                   onOpen={(selected) => setDetailGoal(selected)}
 
@@ -798,11 +850,15 @@ export function DashboardPage(props: DashboardPageProps) {
 
                   <div>
 
-                    <h3 className="text-label font-semibold">Add another goal</h3>
+                    <h3 className="text-label font-semibold">
+                      {goalsView ? "Start another goal" : "Add another goal"}
+                    </h3>
 
                     <p className="mt-1 text-caption text-muted-foreground">
 
-                      Give more of your savings a purpose.
+                      {goalsView
+                        ? "Name what you are saving for, choose a target, and keep charting your progress."
+                        : "Give more of your savings a purpose."}
 
                     </p>
 

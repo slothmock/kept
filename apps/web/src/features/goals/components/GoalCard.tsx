@@ -1,10 +1,9 @@
-import type { CommitmentDto, GoalDto } from "@/api/kept-api";
-import { ArrowRight, Plus, SlidersHorizontal } from "lucide-react";
+import type { GoalDto } from "@/api/kept-api";
+import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 import { formatUsdc } from "@/features/savings/format";
 import { goalFundingPercent, type GoalFundingEntry } from "../funding";
 
@@ -20,63 +19,77 @@ function targetAmount(goal: GoalDto): string {
   return formatUsdc(targetAmountAtomic(goal));
 }
 
+function targetDate(goal: GoalDto): string | null {
+  if (!goal.targetDate) {
+    return null;
+  }
+
+  const date = new Date(goal.targetDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 interface GoalCardProps {
   readonly goal: GoalDto;
   readonly funding: GoalFundingEntry | null;
-  readonly commitment?: CommitmentDto | undefined;
-  readonly onManageSavings: (goal: GoalDto) => void;
-  readonly onAddCommitment: (goal: GoalDto) => void;
   readonly onOpen: (goal: GoalDto) => void;
 }
 
 export function GoalCard({
   goal,
   funding,
-  commitment,
-  onManageSavings,
-  onAddCommitment,
   onOpen,
 }: GoalCardProps) {
   const target = targetAmountAtomic(goal);
   const allocatedAssets = funding?.allocatedAssets ?? null;
   const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
+  const formattedTargetDate = targetDate(goal);
 
   return (
-    <Card className="overflow-hidden shadow-none">
-      <CardHeader className="gap-5 p-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-caption font-medium text-muted-foreground">
-              Goal
-            </p>
+    <Card className="group overflow-hidden shadow-none transition-colors hover:border-primary/50">
+      <CardContent className="p-5">
+        <button
+          type="button"
+          className="w-full text-left focus-visible:outline-none"
+          onClick={() => onOpen(goal)}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="truncate text-label font-semibold text-foreground">
+                {goal.name}
+              </h3>
 
-            <h3 className="mt-1 truncate text-h3 font-semibold tracking-tight">
-              {goal.name}
-            </h3>
+              <p className="mt-1 text-caption text-muted-foreground">
+                {formattedTargetDate
+                  ? `Target ${formattedTargetDate}`
+                  : "No target date"}
+              </p>
+            </div>
+
+            <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onOpen(goal)}
-            aria-label={`Open ${goal.name} details`}
-          >
-            <ArrowRight className="size-4" />
-          </Button>
-        </div>
-
-        <div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-h2 font-semibold tracking-tight tabular-nums">
-              {allocatedAssets === null ? "—" : `£${formatUsdc(allocatedAssets)}`}
+          <div className="mt-5 flex items-baseline justify-between gap-4">
+            <p className="text-body font-semibold tabular-nums">
+              {allocatedAssets === null
+                ? "—"
+                : `${formatUsdc(allocatedAssets)} USDC`}
             </p>
 
-            <span className="text-caption text-muted-foreground">
+            <p className="text-caption text-muted-foreground tabular-nums">
               of {targetAmount(goal)} USDC
-            </span>
+            </p>
           </div>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-3 space-y-2">
             <Progress
               value={progress.visualPercent}
               aria-label={`${progress.labelPercent}% of target`}
@@ -86,64 +99,23 @@ export function GoalCard({
               <span className="font-medium text-foreground tabular-nums">
                 {allocatedAssets === null
                   ? "Savings unavailable"
-                  : `${progress.labelPercent}% complete`}
+                  : `${progress.labelPercent}%`}
               </span>
 
-              {goal.targetDate ? (
-                <span className="text-muted-foreground">
-                  Target set
-                </span>
-              ) : null}
+              <span className="text-muted-foreground">
+                saved
+              </span>
             </div>
           </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4 border-t border-border bg-surface p-5 pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-label font-medium">Commitment</p>
-            <p className="mt-1 text-caption text-muted-foreground">
-              Keep a weekly saving habit for this goal.
-            </p>
-          </div>
-
-          {(!commitment || commitment.state === "DRAFT") ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onAddCommitment(goal)}
-            >
-              <Plus className="size-4" />
-              {commitment ? "Retry" : "Add"}
-            </Button>
-          ) : null}
-        </div>
-
-        {commitment ? (
-          <CommitmentCard commitment={commitment} compact />
-        ) : (
-          <button
-            type="button"
-            className="w-full rounded-md border border-dashed border-border bg-background px-4 py-4 text-left text-caption text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            onClick={() => onAddCommitment(goal)}
-          >
-            Add a commitment to keep yourself moving towards this goal.
-          </button>
-        )}
+        </button>
 
         <Button
-          variant="outline"
-          className="w-full justify-between"
-          disabled={!funding}
-          onClick={() => onManageSavings(goal)}
+          variant="ghost"
+          size="sm"
+          className="mt-3 -ml-3"
+          onClick={() => onOpen(goal)}
         >
-          <span className="inline-flex items-center gap-2">
-            <SlidersHorizontal className="size-4" />
-            Manage savings
-          </span>
-
-          <ArrowRight className="size-4" />
+          View goal
         </Button>
       </CardContent>
     </Card>
