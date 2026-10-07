@@ -144,7 +144,7 @@ export function AddMoneyView({
           disabled={executing}
         >
           <ArrowLeft className="size-4" />
-          {view === "crypto" ? "Add money" : "Home"}
+          {view === "crypto" ? "Back to Add money" : "Back to Home"}
         </Button>
 
         <div className="mt-4">
