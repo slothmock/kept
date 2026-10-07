@@ -189,11 +189,11 @@ export function WithdrawView({
           {activeView === "choose" ? (
             <div className="space-y-6">
               <div>
-                <h2 className="text-h2 font-semibold tracking-tight">
+                <h2 className="text-h3 font-semibold tracking-tight">
                   Choose destination
                 </h2>
 
-                <p className="mt-2 text-caption text-muted-foreground">
+                <p className="mt-1 text-caption text-muted-foreground">
                   Available balance includes cash already in Kept and savings currently available to withdraw.
                 </p>
               </div>
@@ -622,9 +622,9 @@ function WithdrawalMethod({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="group flex w-full items-center gap-4 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-surface"
+      className="group flex w-full items-center gap-4 rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-surface"
     >
-      <div className="grid size-9 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground">
+      <div className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
         {icon}
       </div>
 
