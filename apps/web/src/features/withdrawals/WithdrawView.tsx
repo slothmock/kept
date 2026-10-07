@@ -139,8 +139,8 @@ export function WithdrawView({
 
   const backLabel =
     activeView === "choose"
-      ? "Home"
-      : "Withdraw";
+      ? "Back to Home"
+      : "Back to Withdraw";
 
   const handleBack = () => {
     if (activeView === "choose") {
