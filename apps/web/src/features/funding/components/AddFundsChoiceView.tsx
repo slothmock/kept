@@ -29,6 +29,7 @@ const MIN_FIAT_ONRAMP =
 export function AddFundsChoiceView({
   walletAddress,
   fiatEnabled,
+  availableCashReady,
   fiatStatus,
   fiatError,
   executionStatus,
@@ -45,6 +46,9 @@ export function AddFundsChoiceView({
   string | null;
 
   readonly fiatEnabled:
+  boolean;
+
+  readonly availableCashReady:
   boolean;
 
   readonly fiatStatus:
@@ -103,10 +107,12 @@ export function AddFundsChoiceView({
           <Button
             type="button"
             className="w-full"
-            disabled={executing}
+            disabled={!availableCashReady || executing}
             onClick={onUseAvailableCash}
           >
-            Use available cash
+            {availableCashReady
+              ? "Use available cash"
+              : "Checking available cash…"}
           </Button>
         </FundingOption>
 
