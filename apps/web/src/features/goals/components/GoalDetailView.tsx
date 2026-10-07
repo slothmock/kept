@@ -6,36 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HomeActivityPreview } from "@/features/dashboard/HomeActivityPreview";
 import { GoalDetailSummary } from "@/features/goals/components/GoalDetailSummary";
-import { Progress } from "@/components/ui/progress";
 import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 import type { RewardState } from "@/features/commitments/reward-claim";
-import {
-  goalFundingPercent,
-  type GoalFundingEntry,
-} from "@/features/goals/funding";
+import type { GoalFundingEntry } from "@/features/goals/funding";
 import { formatUsdc } from "@/features/savings/format";
-
-function targetAmountAtomic(goal: GoalDto): bigint {
-  try {
-    return BigInt(goal.targetAmountAtomic);
-  } catch {
-    return 0n;
-  }
-}
-
-function formatTargetDate(value: string): string {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
 
 interface GoalDetailViewProps {
   readonly goal: GoalDto;
@@ -81,7 +55,6 @@ export function GoalDetailView({
 }: GoalDetailViewProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const target = targetAmountAtomic(goal);
   const activeCommitments = commitments.filter(
     (commitment) => commitment.state === "ACTIVE",
   );
