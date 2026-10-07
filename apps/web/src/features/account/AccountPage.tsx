@@ -207,7 +207,6 @@ export function AccountPage({
     let cancelled = false;
 
     if (!api) {
-      setMarketLoading(false);
       return;
     }
 
@@ -432,7 +431,7 @@ export function AccountPage({
                 </>
               ) : null}
 
-              {marketLoading ? (
+              {api && marketLoading ? (
                 <div className="py-4">
                   <Skeleton className="h-5 w-full" />
                 </div>
