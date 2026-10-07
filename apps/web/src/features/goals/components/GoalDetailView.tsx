@@ -69,7 +69,7 @@ export function GoalDetailView({
           onClick={onBack}
         >
           <ArrowLeft className="size-4" />
-          Goals
+          Back to Goals
         </Button>
 
         <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
