@@ -1,5 +1,5 @@
 import type { GoalDto } from "@/api/kept-api";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,18 +40,76 @@ function targetDate(goal: GoalDto): string | null {
 interface GoalCardProps {
   readonly goal: GoalDto;
   readonly funding: GoalFundingEntry | null;
+  readonly compact?: boolean;
   readonly onOpen: (goal: GoalDto) => void;
 }
 
 export function GoalCard({
   goal,
   funding,
+  compact = false,
   onOpen,
 }: GoalCardProps) {
   const target = targetAmountAtomic(goal);
   const allocatedAssets = funding?.allocatedAssets ?? null;
   const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
   const formattedTargetDate = targetDate(goal);
+
+  if (compact) {
+    return (
+      <Card className="group overflow-hidden shadow-none transition-colors hover:border-primary/50">
+        <CardContent className="p-5">
+          <button
+            type="button"
+            className="w-full text-left focus-visible:outline-none"
+            onClick={() => onOpen(goal)}
+          >
+            <div className="flex items-start gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                <Target className="size-4" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-label font-medium text-foreground">
+                      {goal.name}
+                    </h3>
+
+                    <p className="mt-0.5 text-caption text-muted-foreground">
+                      {formattedTargetDate
+                        ? `Est. ${formattedTargetDate}`
+                        : "No target date"}
+                    </p>
+                  </div>
+
+                  <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-baseline justify-between gap-4 text-caption">
+              <span className="font-semibold text-muted-foreground tabular-nums">
+                {allocatedAssets === null
+                  ? "Savings unavailable"
+                  : `${formatUsdc(allocatedAssets)} USDC saved`}
+              </span>
+
+              <span className="text-foreground tabular-nums">
+                of {targetAmount(goal)} USDC
+              </span>
+            </div>
+
+            <Progress
+              className="mt-2"
+              value={progress.visualPercent}
+              aria-label={`${progress.labelPercent}% of target`}
+            />
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="group overflow-hidden shadow-none transition-colors hover:border-primary/50">
