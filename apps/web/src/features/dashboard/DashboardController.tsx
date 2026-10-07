@@ -21,7 +21,7 @@ import { type Session } from "@/app/providers/session";
 import { useKeptEvmWallet } from "@/wallet/evm-wallet";
 import { checkNetworkReadiness } from "@/wallet/network-readiness";
 import { useKeptTransactionSender } from "@/wallet/transaction-sender";
-import { AccountMenu } from "@/features/account/components/AccountMenu";
+import { SignOutAction } from "@/features/account/components/SignOutAction";
 
 import { AppShell } from "@/app/layout/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -826,7 +826,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
     <AppShell
       headerAction={
         wallet.address ? (
-          <AccountMenu
+          <SignOutAction
 onSignOut={async () => {
               session.logout();
             }}
