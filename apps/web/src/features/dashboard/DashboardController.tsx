@@ -163,6 +163,18 @@ export function DashboardController({ session }: { readonly session: Session }) 
     [config],
   );
 
+  const loadRecentTransactions =
+    useCallback(
+      async () => {
+        if (!api) {
+          return [];
+        }
+
+        return api.listTransactions();
+      },
+      [api],
+    );
+
   const readSolanaFundingBalances =
     useCallback(
       async (
@@ -803,6 +815,10 @@ export function DashboardController({ session }: { readonly session: Session }) 
     >
       <DashboardPage
         walletAddress={wallet.address}
+
+        loadRecentTransactions={
+          loadRecentTransactions
+        }
 
         readSolanaFundingBalances={
           readSolanaFundingBalances
