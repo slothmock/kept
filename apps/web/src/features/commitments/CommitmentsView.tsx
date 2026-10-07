@@ -12,6 +12,7 @@ interface CommitmentsViewProps {
   readonly goals: readonly GoalDto[];
   readonly onAddCommitment: (goal: GoalDto) => void;
   readonly onOpenGoal: (goal: GoalDto) => void;
+  readonly onOpenCommitment: (commitment: CommitmentDto) => void;
 }
 
 function goalForCommitment(
@@ -26,6 +27,7 @@ export function CommitmentsView({
   goals,
   onAddCommitment,
   onOpenGoal,
+  onOpenCommitment,
 }: CommitmentsViewProps) {
   const active = commitments.filter(
     (commitment) => commitment.state === "ACTIVE",
@@ -155,15 +157,25 @@ export function CommitmentsView({
                         </p>
                       </div>
 
-                      {goal ? (
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onOpenGoal(goal)}
+                          onClick={() => onOpenCommitment(commitment)}
                         >
-                          View goal
+                          View commitment
                         </Button>
-                      ) : null}
+
+                        {goal ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onOpenGoal(goal)}
+                          >
+                            View goal
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -206,9 +218,11 @@ export function CommitmentsView({
                 const goal = goalForCommitment(commitment, goals);
 
                 return (
-                  <div
+                  <button
                     key={commitment.id}
-                    className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    type="button"
+                    onClick={() => onOpenCommitment(commitment)}
+                    className="flex w-full flex-col gap-3 px-5 py-4 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="text-label font-medium">
@@ -228,7 +242,7 @@ export function CommitmentsView({
                     >
                       {commitmentStatus(commitment.state)}
                     </Badge>
-                  </div>
+                  </button>
                 );
               })}
             </CardContent>
