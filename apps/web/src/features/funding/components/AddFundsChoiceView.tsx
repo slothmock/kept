@@ -84,12 +84,12 @@ export function AddFundsChoiceView({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-h2 font-semibold tracking-tight">
-          Add money
+        <h2 className="text-h3 font-semibold tracking-tight">
+          Choose a method
         </h2>
 
-        <p className="mt-2 text-caption text-muted-foreground">
-          Choose where the money is coming from.
+        <p className="mt-1 text-caption text-muted-foreground">
+          Pick where this money is coming from.
         </p>
       </div>
 
@@ -224,9 +224,9 @@ function FundingOption({
   ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-lg border border-border bg-surface p-5 transition-colors hover:border-primary/40">
       <div className="flex items-start gap-3">
-        <div className="grid size-9 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground">
+        <div className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
           {icon}
         </div>
 
