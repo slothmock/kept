@@ -547,20 +547,6 @@ export function DashboardPage(props: DashboardPageProps) {
 
     : undefined;
 
-  const unassignedSavings =
-
-    goalFundingState.kind === "ready" && savingsOverview.positionState.kind === "ready"
-
-      ? goalFundingState.funding.totalVaultShares === 0n &&
-
-        savingsOverview.positionState.position.shares > 0n
-
-        ? savingsOverview.positionState.position.assets
-
-        : goalFundingState.funding.unallocatedAssets
-
-      : null;
-
   const allocatedGoalSavings =
     goalFundingState.kind === "ready"
       ? goalFundingState.funding.totalAllocatedAssets
@@ -1042,14 +1028,13 @@ export function DashboardPage(props: DashboardPageProps) {
                 </p>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
+              <div
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-label text-foreground"
                 aria-label="Goals sorted by soonest target date"
               >
-                <SlidersHorizontal className="size-4" />
+                <SlidersHorizontal className="size-4 text-muted-foreground" />
                 Sort: Soonest
-              </Button>
+              </div>
             </div>
 
             {productState.kind === "error" ? (
