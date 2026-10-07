@@ -87,6 +87,26 @@ export function AppRoutes({
       />
 
       <Route
+        path="/goals"
+        element={
+          session.isAuthenticated
+            ? (
+              <DashboardController
+                session={
+                  session
+                }
+              />
+            )
+            : (
+              <Navigate
+                to="/"
+                replace
+              />
+            )
+        }
+      />
+
+      <Route
         path="/account"
         element={
           session.isAuthenticated

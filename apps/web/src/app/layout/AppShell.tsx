@@ -32,6 +32,7 @@ const navigationItems: readonly NavigationItem[] = [
   {
     label: "Goals",
     icon: Target,
+    to: "/goals",
   },
   {
     label: "Commitments",
@@ -144,6 +145,18 @@ export function AppShell({ children, headerAction }: AppShellProps) {
             }
           >
             Home
+          </NavLink>
+
+          <NavLink
+            to="/goals"
+            className={({ isActive }) =>
+              cn(
+                "shrink-0 rounded-md px-3 py-2 text-label text-muted-foreground transition-colors",
+                isActive && "bg-accent text-accent-foreground",
+              )
+            }
+          >
+            Goals
           </NavLink>
 
           <NavLink

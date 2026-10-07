@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { ArrowRight, Plus, RefreshCw } from "lucide-react";
 import type { CommitmentDto, GoalDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
@@ -432,6 +433,10 @@ function currentCommitment(
 
 export function DashboardPage(props: DashboardPageProps) {
 
+  const location = useLocation();
+
+  const goalsView = location.pathname === "/goals";
+
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
@@ -538,27 +543,39 @@ export function DashboardPage(props: DashboardPageProps) {
 
         <div>
 
-          <p className="text-caption font-medium text-primary">Home</p>
+          <p className="text-caption font-medium text-primary">
+            {goalsView ? "Goals" : "Home"}
+          </p>
 
           <h1 className="mt-2 text-h1 font-semibold tracking-tight">
 
-            Your savings, in one place.
+            {goalsView ? "Your savings goals." : "Your savings, in one place."}
 
           </h1>
 
           <p className="mt-2 max-w-2xl text-body text-muted-foreground">
 
-            Keep an eye on your balance, goals, commitments, and progress.
+            {goalsView
+              ? "Give your savings a purpose and track progress towards what matters."
+              : "Keep an eye on your balance, goals, commitments, and progress."}
 
           </p>
 
         </div>
 
-        <SavingsMarketStatus state={savingsOverview.marketStatusState} />
+        {!goalsView ? (
+          <SavingsMarketStatus state={savingsOverview.marketStatusState} />
+        ) : (
+          <Button onClick={() => setCreateGoalOpen(true)}>
+            <Plus className="size-4" />
+            Create goal
+          </Button>
+        )}
 
       </section>
 
-      <BalanceCard
+      {!goalsView ? (
+        <BalanceCard
 
         positionState={savingsOverview.positionState}
 
@@ -591,9 +608,16 @@ export function DashboardPage(props: DashboardPageProps) {
 
         onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
 
-      />
+        />
+      ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
+      <div
+        className={
+          goalsView
+            ? "space-y-6"
+            : "grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]"
+        }
+      >
 
         <section className="space-y-4" aria-labelledby="goals-heading">
 
@@ -606,28 +630,32 @@ export function DashboardPage(props: DashboardPageProps) {
                 className="text-h2 font-semibold tracking-tight"
               >
 
-                Goals
+                {goalsView ? "All goals" : "Goals"}
 
               </h2>
 
               <p className="mt-1 text-caption text-muted-foreground">
 
-                What you&apos;re saving towards.
+                {goalsView
+                  ? "All of the goals currently guiding your savings."
+                  : "What you&apos;re saving towards."}
 
               </p>
 
             </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCreateGoalOpen(true)}
-            >
+            {!goalsView ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCreateGoalOpen(true)}
+              >
 
-              <Plus className="size-4" />
-              New goal
+                <Plus className="size-4" />
+                New goal
 
-            </Button>
+              </Button>
+            ) : null}
 
           </div>
 
@@ -718,9 +746,9 @@ export function DashboardPage(props: DashboardPageProps) {
 
           ) : (
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className={goalsView ? "grid gap-4 lg:grid-cols-2" : "grid gap-4 md:grid-cols-2"}>
 
-              {activeGoals.slice(0, 2).map((goal) => (
+              {(goalsView ? activeGoals : activeGoals.slice(0, 2)).map((goal) => (
 
                 <GoalCard
 
@@ -750,7 +778,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
               ))}
 
-              {activeGoals.length < 2 && (
+              {(goalsView || activeGoals.length < 2) && (
 
                 <button
 
@@ -790,6 +818,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
         </section>
 
+        {!goalsView ? (
         <section className="space-y-4" aria-labelledby="commitment-heading">
 
           <div>
@@ -855,6 +884,7 @@ export function DashboardPage(props: DashboardPageProps) {
           )}
 
         </section>
+        ) : null}
 
       </div>
 
