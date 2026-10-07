@@ -24,11 +24,7 @@ import {
 
 } from "@/features/commitments/components/CreateCommitmentDialog";
 
-import {
-
-  AddFundsDialog,
-
-} from "@/features/funding/components/AddFundsDialog";
+import { AddMoneyView } from "@/features/funding/AddMoneyView";
 
 import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
 
@@ -451,6 +447,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const commitmentsView = location.pathname === "/commitments";
 
+  const addMoneyView = location.pathname === "/add-money";
+
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
@@ -479,8 +477,6 @@ export function DashboardPage(props: DashboardPageProps) {
     bankWithdrawal,
 
   } = props;
-
-  const [addFundsOpen, setAddFundsOpen] = useState(false);
 
   const [depositOpen, setDepositOpen] = useState(false);
 
@@ -569,6 +565,16 @@ export function DashboardPage(props: DashboardPageProps) {
   return (
 
     <div className="space-y-8">
+
+      {addMoneyView ? (
+        <AddMoneyView
+          walletAddress={walletAddress}
+          fiatEnabled={fiatEnabled}
+          readSolanaFundingBalances={readSolanaFundingBalances}
+          onBack={() => navigate("/dashboard")}
+          onUseAvailableCash={() => setDepositOpen(true)}
+        />
+      ) : null}
 
       {commitmentDetailView ? (
         selectedCommitment ? (
@@ -683,7 +689,7 @@ export function DashboardPage(props: DashboardPageProps) {
       ) : null}
 
 
-      {!goalDetailView && !commitmentDetailView && !commitmentsView ? (
+      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
       <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
         <div>
@@ -720,7 +726,7 @@ export function DashboardPage(props: DashboardPageProps) {
       </section>
       ) : null}
 
-      {goalsView && !commitmentDetailView && !commitmentsView ? (
+      {goalsView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
         <section
           className="grid gap-4 sm:grid-cols-3"
           aria-label="Goals summary"
@@ -773,7 +779,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView ? (
+      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !addMoneyView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
@@ -782,11 +788,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
         transactionPending={savingsTransactions.pendingTransaction !== null}
 
-        onAddMoney={() => {
-
-          setAddFundsOpen(true);
-
-        }}
+        onAddMoney={() => navigate("/add-money")}
 
         onWithdraw={() => setWithdrawOpen(true)}
 
@@ -1086,34 +1088,6 @@ export function DashboardPage(props: DashboardPageProps) {
 
       </div>
       ) : null}
-
-      <AddFundsDialog
-
-        open={addFundsOpen}
-
-        walletAddress={walletAddress}
-
-        fiatEnabled={fiatEnabled}
-
-        readSolanaFundingBalances={
-          readSolanaFundingBalances
-        }
-
-        onOpenChange={
-
-          setAddFundsOpen
-
-        }
-
-        onUseAvailableCash={() => {
-
-          setAddFundsOpen(false);
-
-          setDepositOpen(true);
-
-        }}
-
-      />
 
       <DepositDialog
 
