@@ -17,7 +17,7 @@ export function CommitmentCard({
   const Icon = savings ? PiggyBank : Activity;
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className={compact ? "" : "rounded-lg border border-border bg-surface p-4"}>
       <div className="flex items-start gap-3">
         <div className="grid size-9 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground">
           <Icon className="size-4" />
