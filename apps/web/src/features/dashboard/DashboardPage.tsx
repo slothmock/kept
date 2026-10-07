@@ -12,6 +12,8 @@ import type { ProductDataState } from "@/features/dashboard/product-data-state";
 
 import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 
+import { CommitmentsView } from "@/features/commitments/CommitmentsView";
+
 import {
 
   CreateCommitmentDialog,
@@ -443,6 +445,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const goalsView = location.pathname === "/goals";
 
+  const commitmentsView = location.pathname === "/commitments";
+
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
@@ -552,6 +556,16 @@ export function DashboardPage(props: DashboardPageProps) {
 
     <div className="space-y-8">
 
+      {commitmentsView ? (
+        <CommitmentsView
+          commitments={commitments}
+          goals={goals}
+          onAddCommitment={(goal) => setCommitmentGoal(goal)}
+          onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
+        />
+      ) : null}
+
+
       {goalDetailView ? (
         selectedGoal ? (
           <GoalDetailView
@@ -607,7 +621,7 @@ export function DashboardPage(props: DashboardPageProps) {
       ) : null}
 
 
-      {!goalDetailView ? (
+      {!goalDetailView && !commitmentsView ? (
       <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
         <div>
@@ -644,7 +658,7 @@ export function DashboardPage(props: DashboardPageProps) {
       </section>
       ) : null}
 
-      {goalsView ? (
+      {goalsView && !commitmentsView ? (
         <section
           className="grid gap-4 sm:grid-cols-3"
           aria-label="Goals summary"
@@ -697,7 +711,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView && !goalDetailView ? (
+      {!goalsView && !goalDetailView && !commitmentsView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
@@ -734,7 +748,7 @@ export function DashboardPage(props: DashboardPageProps) {
         />
       ) : null}
 
-      {!goalDetailView ? (
+      {!goalDetailView && !commitmentsView ? (
       <div
         className={
           goalsView
