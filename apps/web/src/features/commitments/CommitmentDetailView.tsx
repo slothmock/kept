@@ -152,7 +152,7 @@ export function CommitmentDetailView({
           onClick={onBack}
         >
           <ArrowLeft className="size-4" />
-          Commitments
+          Back to Commitments
         </Button>
 
         <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
