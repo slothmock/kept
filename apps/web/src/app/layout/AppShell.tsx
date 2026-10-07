@@ -111,12 +111,12 @@ function PrimaryNavigation() {
 export function AppShell({ children, headerAction }: AppShellProps) {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-52 border-r border-border bg-surface md:flex md:flex-col">
-        <div className="px-5 py-6">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 border-r border-border bg-surface md:flex md:flex-col">
+        <div className="px-8 py-9">
           <KeptBrand />
         </div>
 
-        <div className="flex-1 px-3">
+        <div className="flex-1 px-6">
           <PrimaryNavigation />
         </div>
 
@@ -199,8 +199,8 @@ export function AppShell({ children, headerAction }: AppShellProps) {
         </nav>
       </header>
 
-      <div className="md:pl-52">
-        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:px-8 md:py-10 lg:px-10">
+      <div className="md:pl-56">
+        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:px-8 md:py-12 lg:px-10">
           {children}
         </main>
       </div>
