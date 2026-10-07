@@ -190,6 +190,40 @@ export function DashboardController({ session }: { readonly session: Session }) 
       ? getAddress(wallet.address)
       : null;
 
+  const productDataReader =
+    useMemo(
+      () =>
+        publicClient
+          ? {
+              readContract: (input: unknown) =>
+                publicClient.readContract(
+                  input as never,
+                ) as Promise<bigint>,
+            }
+          : null,
+      [
+        publicClient,
+      ],
+    );
+
+  const savingsPositionReader =
+    useMemo(
+      () =>
+        publicClient
+          ? {
+              readContract: (input: unknown) =>
+                publicClient.readContract(
+                  input as never,
+                ) as Promise<bigint>,
+              getChainId: () =>
+                publicClient.getChainId(),
+            }
+          : null,
+      [
+        publicClient,
+      ],
+    );
+
   const {
     productState,
     goalFundingState,
@@ -200,14 +234,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
     vault:
       config?.vault ?? null,
     publicClient:
-      publicClient
-        ? {
-            readContract: (input) =>
-              publicClient.readContract(
-                input as never,
-              ) as Promise<bigint>,
-          }
-        : null,
+      productDataReader,
   });
 
   const {
@@ -231,16 +258,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
       wallet.liveChainId,
     config,
     publicClient:
-      publicClient
-        ? {
-            readContract: (input) =>
-              publicClient.readContract(
-                input as never,
-              ) as Promise<bigint>,
-            getChainId: () =>
-              publicClient.getChainId(),
-          }
-        : null,
+      savingsPositionReader,
     getCurrentWalletChainId,
   });
 
