@@ -305,10 +305,22 @@ export function CommitmentDetailView({
                 Reward
               </p>
 
-              {!rewardState || rewardState.kind === "loading" ? (
+              {rewardState?.kind === "loading" ? (
                 <p className="mt-2 text-label font-medium text-muted-foreground">
                   Checking reward…
                 </p>
+              ) : !rewardState ? (
+                <>
+                  <p className="mt-2 text-h3 font-semibold">
+                    —
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    {commitment.state === "COMPLETED"
+                      ? "Reward details are unavailable for this commitment."
+                      : "Reward details become available after verification."}
+                  </p>
+                </>
               ) : rewardState.kind === "error" ? (
                 <p className="mt-2 text-caption text-muted-foreground">
                   {rewardState.message}
