@@ -587,7 +587,7 @@ export function DashboardPage(props: DashboardPageProps) {
             onClaimReward={goalManagement.rewards.onClaim}
             onAddToSavings={() => setDepositOpen(true)}
           />
-        ) : initialLoading ? (
+        ) : productState.kind === "loading" ? (
           <div className="space-y-4">
             <Skeleton className="h-8 w-48 rounded-md" />
             <Skeleton className="h-28 w-full rounded-lg" />
