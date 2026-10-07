@@ -32,3 +32,9 @@ export interface ContractReader {
 export interface ChainIdReader {
   getChainId(): Promise<number>;
 }
+
+export interface MulticallReader {
+  multicall(
+    input: unknown,
+  ): Promise<readonly unknown[]>;
+}

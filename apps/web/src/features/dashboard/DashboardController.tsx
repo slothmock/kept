@@ -213,6 +213,10 @@ export function DashboardController({ session }: { readonly session: Session }) 
                 ) as Promise<bigint>,
               getChainId: () =>
                 publicClient.getChainId(),
+              multicall: (input: unknown) =>
+                publicClient.multicall(
+                  input as never,
+                ) as Promise<readonly unknown[]>,
             }
           : null,
       [

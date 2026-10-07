@@ -2,7 +2,11 @@ import { erc20Abi, type Address } from "viem";
 
 import type {
   ContractReader,
+  MulticallReader,
 } from "@/wallet/blockchain";
+
+const MONAD_MULTICALL3_ADDRESS =
+  "0xcA11bde05977b3631167028862bE2a173976CA11" as Address;
 
 const vaultPositionAbi = [
   {
@@ -37,10 +41,11 @@ export interface VaultPosition {
 }
 
 export interface ReadVaultPositionInput {
-  readonly publicClient: ContractReader;
+  readonly publicClient: ContractReader & MulticallReader;
   readonly usdc: Address;
   readonly vault: Address;
   readonly account: Address;
+  readonly chainId: number;
 }
 
 export async function readVaultPosition({
@@ -48,41 +53,84 @@ export async function readVaultPosition({
   usdc,
   vault,
   account,
+  chainId,
 }: ReadVaultPositionInput): Promise<VaultPosition> {
-  const [usdcBalance, allowance, shares] = await Promise.all([
-    publicClient.readContract({
+  const contracts = [
+    {
       address: usdc,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [account],
-    }),
-    publicClient.readContract({
+    },
+    {
       address: usdc,
       abi: erc20Abi,
       functionName: "allowance",
       args: [account, vault],
-    }),
-    publicClient.readContract({
+    },
+    {
       address: vault,
       abi: vaultPositionAbi,
       functionName: "balanceOf",
       args: [account],
-    }),
-  ]);
-  const [assets, withdrawableAssets] = await Promise.all([
-    publicClient.readContract({
-      address: vault,
-      abi: vaultPositionAbi,
-      functionName: "convertToAssets",
-      args: [shares],
-    }),
-    publicClient.readContract({
+    },
+    {
       address: vault,
       abi: vaultPositionAbi,
       functionName: "maxWithdraw",
       args: [account],
-    }),
-  ]);
+    },
+  ] as const;
 
-  return { usdcBalance, allowance, shares, assets, withdrawableAssets };
+  const results =
+    chainId === 31_337
+      ? await Promise.all(
+          contracts.map(
+            (contract) =>
+              publicClient.readContract(
+                contract,
+              ),
+          ),
+        )
+      : await publicClient.multicall({
+          allowFailure: false,
+          multicallAddress:
+            MONAD_MULTICALL3_ADDRESS,
+          contracts,
+        });
+
+  const [
+    usdcBalance,
+    allowance,
+    shares,
+    withdrawableAssets,
+  ] =
+    results;
+
+  if (
+    typeof usdcBalance !== "bigint"
+    || typeof allowance !== "bigint"
+    || typeof shares !== "bigint"
+    || typeof withdrawableAssets !== "bigint"
+  ) {
+    throw new Error(
+      "Vault position multicall returned an unexpected result.",
+    );
+  }
+
+  const assets =
+    await publicClient.readContract({
+      address: vault,
+      abi: vaultPositionAbi,
+      functionName: "convertToAssets",
+      args: [shares],
+    });
+
+  return {
+    usdcBalance,
+    allowance,
+    shares,
+    assets,
+    withdrawableAssets,
+  };
 }

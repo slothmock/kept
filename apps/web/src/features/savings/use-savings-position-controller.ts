@@ -10,6 +10,7 @@ import type {
 import type {
   ChainIdReader,
   ContractReader,
+  MulticallReader,
 } from "@/wallet/blockchain";
 import {
   checkNetworkReadiness,
@@ -48,7 +49,7 @@ interface UseSavingsPositionControllerInput {
     VaultConfig | null;
 
   readonly publicClient:
-    (ContractReader & ChainIdReader) | null;
+    (ContractReader & ChainIdReader & MulticallReader) | null;
 
   readonly getCurrentWalletChainId:
     () => Promise<number | null>;
@@ -204,6 +205,8 @@ export function useSavingsPositionController({
               vault:
                 config.vault,
               account,
+              chainId:
+                config.chainId,
             });
 
           if (
