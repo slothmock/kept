@@ -2,6 +2,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Info,
   LogOut,
   ShieldCheck,
   UserRound,
@@ -28,8 +29,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AccountMenu } from "@/features/account/components/AccountMenu";
@@ -94,36 +93,36 @@ function AccountAddress({
   }
 
   return (
-    <div className="py-3">
-      <p className="text-caption text-muted-foreground">
-        Account address
-      </p>
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div>
+        <p className="text-caption text-muted-foreground">
+          Kept wallet
+        </p>
 
-      <div className="mt-2 flex items-center justify-between gap-3">
-        <code className="text-label tabular-nums">
+        <code className="mt-1 block text-label tabular-nums">
           {shortAddress(address)}
         </code>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void copyAddress();
-          }}
-        >
-          {copied ? (
-            <>
-              <Check className="size-4" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="size-4" />
-              Copy
-            </>
-          )}
-        </Button>
       </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          void copyAddress();
+        }}
+      >
+        {copied ? (
+          <>
+            <Check className="size-4" />
+            Copied
+          </>
+        ) : (
+          <>
+            <Copy className="size-4" />
+            Copy
+          </>
+        )}
+      </Button>
     </div>
   );
 }
@@ -274,253 +273,285 @@ export function AccountPage({
     >
       <div className="space-y-8">
         <section>
-          <p className="text-caption font-medium text-primary">
-            Account
-          </p>
-
-          <h1 className="mt-2 text-h1 font-semibold tracking-tight">
-            Account & privacy.
+          <h1 className="text-h1 font-semibold tracking-tight">
+            Account & privacy
           </h1>
 
           <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-            Manage your account, understand how your savings work, and review Kept&apos;s privacy and legal information.
+            Manage your account and see how Kept handles your wallet, savings, and account information.
           </p>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserRound className="size-4" />
-                Your account
-              </CardTitle>
-            </CardHeader>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(20rem,0.95fr)]">
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
+                Your Kept account
+              </h2>
 
-            <CardContent className="divide-y divide-border">
-              <DetailRow
-                label="Email"
-                value={session.email ?? "Unavailable"}
-              />
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-5">
+                  <div className="flex items-start gap-3 py-3">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                      <UserRound className="size-4" />
+                    </div>
 
-              <DetailRow
-                label="Sign-in method"
-                value="Email"
-              />
+                    <div className="min-w-0">
+                      <p className="text-label font-semibold">
+                        {session.email ?? "Kept account"}
+                      </p>
 
-              <div className="flex items-center justify-between gap-4 py-4">
-                <div>
-                  <p className="text-label font-medium">
-                    Sign out
-                  </p>
+                      <p className="mt-1 text-caption text-muted-foreground">
+                        Signed in with email
+                      </p>
+                    </div>
+                  </div>
 
-                  <p className="mt-1 text-caption text-muted-foreground">
-                    End your current Kept session.
-                  </p>
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={signOutPending}
-                  onClick={() => {
-                    void signOut();
-                  }}
-                >
-                  <LogOut className="size-4" />
-                  {signOutPending
-                    ? "Signing out…"
-                    : "Sign out"}
-                </Button>
-              </div>
-
-              {signOutError ? (
-                <p
-                  className="py-3 text-caption text-destructive"
-                  role="alert"
-                >
-                  {signOutError}
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <WalletCards className="size-4" />
-                Kept account
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="divide-y divide-border">
-              {wallet.address ? (
-                <AccountAddress address={wallet.address} />
-              ) : (
-                <DetailRow
-                  label="Account address"
-                  value="Account not ready"
-                />
-              )}
-
-              {transparencyLoading ? (
-                <div className="space-y-3 py-4">
-                  <Skeleton className="h-5 w-full" />
-                  <Skeleton className="h-5 w-full" />
-                </div>
-              ) : transparency ? (
-                <>
                   <DetailRow
-                    label="Network"
-                    value={transparency.networkName}
+                    label="Sign-in method"
+                    value="Email"
+                  />
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
+                Wallet
+              </h2>
+
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-5">
+                  {wallet.address ? (
+                    <AccountAddress address={wallet.address} />
+                  ) : (
+                    <DetailRow
+                      label="Kept wallet"
+                      value="Account not ready"
+                    />
+                  )}
+
+                  {transparencyLoading ? (
+                    <div className="space-y-3 py-4">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-full" />
+                    </div>
+                  ) : transparency ? (
+                    <>
+                      <DetailRow
+                        label="Network"
+                        value={transparency.networkName}
+                      />
+
+                      <DetailRow
+                        label="Savings asset"
+                        value={transparency.savingsAsset}
+                      />
+                    </>
+                  ) : (
+                    <p className="py-4 text-caption text-muted-foreground">
+                      Wallet details are currently unavailable.
+                    </p>
+                  )}
+
+                  <p className="py-4 text-caption text-muted-foreground">
+                    Kept uses your embedded wallet behind the scenes for savings transactions.
+                  </p>
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
+                Security & account
+              </h2>
+
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-5">
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <div>
+                      <p className="text-label font-medium">
+                        Sign out
+                      </p>
+
+                      <p className="mt-1 text-caption text-muted-foreground">
+                        End your current Kept session.
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={signOutPending}
+                      onClick={() => {
+                        void signOut();
+                      }}
+                    >
+                      <LogOut className="size-4" />
+                      {signOutPending
+                        ? "Signing out…"
+                        : "Sign out"}
+                    </Button>
+                  </div>
+
+                  {signOutError ? (
+                    <p
+                      className="py-3 text-caption text-destructive"
+                      role="alert"
+                    >
+                      {signOutError}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </section>
+          </div>
+
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
+                Privacy controls
+              </h2>
+
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-0">
+                  <PrivacyLink
+                    to="/privacy"
+                    title="Privacy policy"
+                    description="How Kept handles your information."
                   />
 
-                  <DetailRow
-                    label="Savings asset"
-                    value={transparency.savingsAsset}
+                  <PrivacyLink
+                    to="/verification"
+                    title="Commitment verification"
+                    description="What Kept checks when verifying commitments."
                   />
-                </>
-              ) : (
-                <p className="py-4 text-caption text-muted-foreground">
-                  Account details are currently unavailable.
-                </p>
-              )}
 
-              <p className="py-4 text-caption text-muted-foreground">
-                Kept manages this wallet behind the scenes during normal use.
-              </p>
-            </CardContent>
-          </Card>
+                  <PrivacyLink
+                    to="/terms"
+                    title="Terms of service"
+                    description="The terms that apply when using Kept."
+                  />
+                </CardContent>
+              </Card>
+            </section>
 
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>
-                Savings transparency
-              </CardTitle>
-            </CardHeader>
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
+                What stays where
+              </h2>
 
-            <CardContent className="divide-y divide-border">
-              <DetailRow
-                label="Yield source"
-                value="Aave"
-              />
+              <Card className="shadow-none">
+                <CardContent className="space-y-5 p-5">
+                  <InfoRow
+                    icon={ShieldCheck}
+                    title="Account information"
+                    description="Your login and product data are handled by Kept's application services."
+                  />
 
-              {transparencyLoading ? (
-                <div className="space-y-3 py-4">
-                  <Skeleton className="h-5 w-full" />
-                  <Skeleton className="h-5 w-full" />
-                </div>
-              ) : transparency ? (
-                <>
-                  <DetailRow
-                    label="Deposit fee"
-                    value={
-                      transparency.depositFeeBps !== null
-                        ? formatBps(transparency.depositFeeBps)
-                        : "Unavailable"
+                  <InfoRow
+                    icon={WalletCards}
+                    title="Savings"
+                    description={
+                      transparency
+                        ? `Savings use ${transparency.savingsAsset} on ${transparency.networkName}.`
+                        : "Savings are held through Kept's configured on-chain savings infrastructure."
                     }
                   />
 
-                  <DetailRow
-                    label="Performance fee"
-                    value={
-                      transparency.performanceFeeBps !== null
-                        ? `${formatBps(transparency.performanceFeeBps)} of earnings`
-                        : "Unavailable"
+                  <InfoRow
+                    icon={Info}
+                    title="Yield & fees"
+                    description={
+                      transparency
+                        ? `Yield comes from Aave. Deposit fee: ${transparency.depositFeeBps !== null ? formatBps(transparency.depositFeeBps) : "unavailable"}. Performance fee: ${transparency.performanceFeeBps !== null ? `${formatBps(transparency.performanceFeeBps)} of earnings` : "unavailable"}.`
+                        : "Yield and fee details are currently unavailable."
                     }
                   />
-                </>
-              ) : null}
 
-              {api && marketLoading ? (
-                <div className="py-4">
-                  <Skeleton className="h-5 w-full" />
-                </div>
-              ) : marketStatus ? (
-                <DetailRow
-                  label="Current APY"
-                  value={`${(
-                    Number(marketStatus.netApyBps) / 100
-                  ).toFixed(2)}%`}
-                />
-              ) : (
-                <DetailRow
-                  label="Current APY"
-                  value="Unavailable"
-                />
-              )}
+                  <div className="rounded-lg bg-accent/30 p-4">
+                    <p className="text-caption text-muted-foreground">
+                      Current APY
+                    </p>
 
-              <p className="py-4 text-caption text-muted-foreground">
-                Yield is variable. Current APY is shown after Kept&apos;s performance fee.
-              </p>
-            </CardContent>
-          </Card>
+                    {api && marketLoading ? (
+                      <Skeleton className="mt-2 h-6 w-20" />
+                    ) : (
+                      <p className="mt-1 text-h3 font-semibold tabular-nums">
+                        {marketStatus
+                          ? `${(Number(marketStatus.netApyBps) / 100).toFixed(2)}%`
+                          : "Unavailable"}
+                      </p>
+                    )}
 
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="size-4" />
-                Privacy & information
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="divide-y divide-border p-0">
-              <Button
-                render={<Link to="/privacy" />}
-                variant="ghost"
-                className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
-              >
-                <div className="text-left">
-                  <p className="text-label font-medium">
-                    Privacy policy
-                  </p>
-
-                  <p className="mt-1 text-caption text-muted-foreground">
-                    How Kept handles your information.
-                  </p>
-                </div>
-
-                <ExternalLink className="size-4 text-muted-foreground" />
-              </Button>
-
-              <Button
-                render={<Link to="/terms" />}
-                variant="ghost"
-                className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
-              >
-                <div className="text-left">
-                  <p className="text-label font-medium">
-                    Terms of service
-                  </p>
-
-                  <p className="mt-1 text-caption text-muted-foreground">
-                    The terms that apply when using Kept.
-                  </p>
-                </div>
-
-                <ExternalLink className="size-4 text-muted-foreground" />
-              </Button>
-
-              <Button
-                render={<Link to="/verification" />}
-                variant="ghost"
-                className="h-auto w-full justify-between rounded-none px-6 py-4 font-normal"
-              >
-                <div className="text-left">
-                  <p className="text-label font-medium">
-                    Verification
-                  </p>
-
-                  <p className="mt-1 text-caption text-muted-foreground">
-                    How commitments are verified.
-                  </p>
-                </div>
-
-                <ExternalLink className="size-4 text-muted-foreground" />
-              </Button>
-            </CardContent>
-          </Card>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Variable and shown after Kept&apos;s performance fee.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          </div>
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function PrivacyLink({
+  to,
+  title,
+  description,
+}: {
+  readonly to: string;
+  readonly title: string;
+  readonly description: string;
+}) {
+  return (
+    <Button
+      render={<Link to={to} />}
+      variant="ghost"
+      className="h-auto w-full justify-between rounded-none px-5 py-4 font-normal"
+    >
+      <div className="text-left">
+        <p className="text-label font-medium">
+          {title}
+        </p>
+
+        <p className="mt-1 text-caption text-muted-foreground">
+          {description}
+        </p>
+      </div>
+
+      <ExternalLink className="size-4 text-muted-foreground" />
+    </Button>
+  );
+}
+
+function InfoRow({
+  icon: Icon,
+  title,
+  description,
+}: {
+  readonly icon: typeof ShieldCheck;
+  readonly title: string;
+  readonly description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+        <Icon className="size-4" />
+      </div>
+
+      <div>
+        <p className="text-label font-medium">
+          {title}
+        </p>
+
+        <p className="mt-1 text-caption text-muted-foreground">
+          {description}
+        </p>
+      </div>
+    </div>
   );
 }
