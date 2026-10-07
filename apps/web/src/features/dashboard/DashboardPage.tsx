@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowRight, Plus, RefreshCw } from "lucide-react";
 import type { CommitmentDto, GoalDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ import { CreateGoalDialog } from "@/features/goals/components/CreateGoalDialog";
 
 import { GoalCard } from "@/features/goals/components/GoalCard";
 
-import { GoalDetailsDialog } from "@/features/goals/components/GoalDetailsDialog";
+import { GoalDetailView } from "@/features/goals/components/GoalDetailView";
 
 import type { GoalFundingState } from "@/features/goals/funding";
 
@@ -435,6 +435,12 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const location = useLocation();
 
+  const navigate = useNavigate();
+
+  const { goalId } = useParams<{ goalId: string }>();
+
+  const goalDetailView = location.pathname.startsWith("/goals/");
+
   const goalsView = location.pathname === "/goals";
 
   const fiatEnabled =
@@ -481,7 +487,6 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const [savingsGoal, setSavingsGoal] = useState<GoalDto | null>(null);
 
-  const [detailGoal, setDetailGoal] = useState<GoalDto | null>(null);
 
   const bankFlowNeedsAttention =
     bankWithdrawal.phase !== "setup"
@@ -497,6 +502,18 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const activeGoals = goals.filter((goal) => goal.status === "ACTIVE");
 
+  const selectedGoal =
+    goalDetailView && goalId
+      ? goals.find((goal) => goal.id === goalId) ?? null
+      : null;
+
+  const selectedGoalCommitments =
+    selectedGoal
+      ? commitments.filter(
+        (commitment) => commitment.savingsGoalId === selectedGoal.id,
+      )
+      : [];
+
   const initialLoading = productState.kind === "loading" && goals.length === 0;
 
   const activeCommitments = commitments.filter(
@@ -505,15 +522,6 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const featuredCommitment = activeCommitments[0] ?? null;
 
-  const detailCommitments = detailGoal
-
-    ? commitments.filter(
-
-      (commitment) => commitment.savingsGoalId === detailGoal.id,
-
-    )
-
-    : [];
 
   const commitmentForDialog = commitmentGoal
 
@@ -544,6 +552,53 @@ export function DashboardPage(props: DashboardPageProps) {
 
     <div className="space-y-8">
 
+      {goalDetailView ? (
+        selectedGoal ? (
+          <GoalDetailView
+            goal={selectedGoal}
+            funding={
+              goalFundingState.kind !== "loading"
+                ? (goalFundingState.funding?.byGoal.get(selectedGoal.id) ?? null)
+                : null
+            }
+            commitments={selectedGoalCommitments}
+            deleting={goalManagement.deletion.deleting}
+            deleteStatus={goalManagement.deletion.status}
+            deleteError={goalManagement.deletion.error}
+            onDelete={goalManagement.deletion.onDelete}
+            onBack={() => {
+              goalManagement.deletion.onDismiss();
+              navigate("/goals");
+            }}
+            onManageSavings={(goal) => setSavingsGoal(goal)}
+            onAddCommitment={(goal) => setCommitmentGoal(goal)}
+            rewardStates={goalManagement.rewards.states}
+            claimingRewardId={goalManagement.rewards.claimingId}
+            rewardClaimError={goalManagement.rewards.claimError}
+            onClaimReward={goalManagement.rewards.onClaim}
+            onAddToSavings={() => setDepositOpen(true)}
+          />
+        ) : (
+          <Card className="border-dashed shadow-none">
+            <CardContent className="p-6">
+              <p className="text-label font-medium">Goal not found</p>
+              <p className="mt-2 text-caption text-muted-foreground">
+                This goal may have been deleted or is no longer available.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate("/goals")}
+              >
+                Back to goals
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      ) : null}
+
+
+      {!goalDetailView ? (
       <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
         <div>
@@ -578,6 +633,7 @@ export function DashboardPage(props: DashboardPageProps) {
         )}
 
       </section>
+      ) : null}
 
       {goalsView ? (
         <section
@@ -632,7 +688,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView ? (
+      {!goalsView && !goalDetailView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
@@ -669,6 +725,7 @@ export function DashboardPage(props: DashboardPageProps) {
         />
       ) : null}
 
+      {!goalDetailView ? (
       <div
         className={
           goalsView
@@ -824,7 +881,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
                   }
 
-                  onOpen={(selected) => setDetailGoal(selected)}
+                  onOpen={(selected) => navigate(`/goals/${selected.id}`)}
 
                 />
 
@@ -943,6 +1000,7 @@ export function DashboardPage(props: DashboardPageProps) {
         ) : null}
 
       </div>
+      ) : null}
 
       <AddFundsDialog
 
@@ -1316,42 +1374,6 @@ export function DashboardPage(props: DashboardPageProps) {
           }
         }}
         onSubmit={goalManagement.commitment.onCreate}
-      />
-      <GoalDetailsDialog
-        open={detailGoal !== null}
-        goal={detailGoal}
-        funding={
-          detailGoal && goalFundingState.kind !== "loading"
-            ? (goalFundingState.funding?.byGoal.get(detailGoal.id) ?? null)
-            : null
-        }
-        commitments={detailCommitments}
-        rewardStates={goalManagement.rewards.states}
-        claimingRewardId={goalManagement.rewards.claimingId}
-        rewardClaimError={goalManagement.rewards.claimError}
-        onClaimReward={goalManagement.rewards.onClaim}
-        deleting={goalManagement.deletion.deleting}
-        deleteStatus={goalManagement.deletion.status}
-        deleteError={goalManagement.deletion.error}
-        onDelete={goalManagement.deletion.onDelete}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDetailGoal(null);
-            goalManagement.deletion.onDismiss();
-          }
-        }}
-        onAddToSavings={() => {
-          setDetailGoal(null);
-          setDepositOpen(true);
-        }}
-        onManageSavings={(goal) => {
-          setDetailGoal(null);
-          setSavingsGoal(goal);
-        }}
-        onAddCommitment={(goal) => {
-          setDetailGoal(null);
-          setCommitmentGoal(goal);
-        }}
       />
     </div>
   );
