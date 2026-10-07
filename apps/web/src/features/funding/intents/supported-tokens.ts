@@ -33,33 +33,15 @@ const SUPPORTED_SOURCE_CHAINS =
         ...SUPPORTED_SOLANA_FUNDING_CHAINS,
     ]);
 
-export interface FundingAsset {
-    readonly assetId:
-    string;
+import type {
+    FundingAsset,
+    KeptFundingAssets,
+} from "@/features/funding/intents/core/funding-assets";
 
-    readonly symbol:
-    string;
-
-    readonly blockchain:
-    string;
-
-    readonly contractAddress:
-    string | null;
-
-    readonly decimals:
-    number;
-
-    readonly kind:
-    "native" | "token";
-}
-
-export interface KeptFundingAssets {
-    readonly origins:
-    readonly FundingAsset[];
-
-    readonly destination:
-    FundingAsset;
-}
+export type {
+    FundingAsset,
+    KeptFundingAssets,
+} from "@/features/funding/intents/core/funding-assets";
 
 function toFundingAsset(
     token:

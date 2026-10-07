@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   MINIMUM_USDC_DEPOSIT_ASSETS,
   minimumUsdcDepositError,
-} from "../src/vault/deposit-input.js";
+} from "../src/lib/usdc-input.js";
 
 describe("minimum USDC deposit", () => {
   it("rejects amounts below 10 USDC", () => {

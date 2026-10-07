@@ -16,7 +16,7 @@ import {
     vi,
 } from "vitest";
 
-import { AddFundsDialog } from "../src/features/funding/AddFundsDialog.js";
+import { AddFundsDialog } from "../src/features/funding/components/AddFundsDialog.js";
 
 const {
     getProvider,
@@ -46,7 +46,7 @@ const {
 }));
 
 vi.mock(
-    "../src/chain/evm-wallet.js",
+    "../src/wallet/evm-wallet.js",
     () => ({
         useKeptEvmWallet:
             () => ({
@@ -158,7 +158,7 @@ vi.mock(
 );
 
 vi.mock(
-    "../src/features/funding/PrivyFundingButton.js",
+    "../src/features/funding/components/PrivyFundingButton.js",
     () => ({
         PrivyFundingButton:
             () => (

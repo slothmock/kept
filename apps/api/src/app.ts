@@ -661,6 +661,332 @@ export function buildApp(
     >;
   } | null = null;
 
+  const readSavingsPerformanceFor =
+    async (
+      auth: AuthenticatedRequest,
+    ): Promise<SavingsPerformanceDto> => {
+      if (!auth.identity.wallet) {
+        throw new NotFoundError(
+          "Privy embedded wallet",
+        );
+      }
+
+      const cacheKey =
+        auth.identity.wallet
+          .toLowerCase();
+
+      const now =
+        Date.now();
+
+      const cached =
+        savingsPerformanceCache
+          .get(
+            cacheKey,
+          );
+
+      if (
+        cached
+        && cached.expiresAt > now
+      ) {
+        return cached.promise;
+      }
+
+      const nowMilliseconds =
+        Math.floor(
+          now / 1_000,
+        ) * 1_000;
+
+      const promise =
+        dependencies.chainId
+          === 10_143
+        && dependencies
+          .savingsCurrentAssets
+        && dependencies
+          .savingsActivityIndex
+          ? (async () => {
+            if (
+              !dependencies
+                .savingsActivityIndex!
+                .isReady()
+            ) {
+              const syncStatus =
+                dependencies
+                  .savingsActivityIndex!
+                  .status();
+
+              throw new SavingsHistorySynchronizingError({
+                progressPercent:
+                  syncStatus.progressPercent,
+                currentBlock:
+                  syncStatus.currentBlock,
+                targetBlock:
+                  syncStatus.targetBlock,
+              });
+            }
+
+            const snapshotStatus =
+              dependencies
+                .savingsActivityIndex!
+                .status();
+
+            const snapshotBlock =
+              snapshotStatus
+                .currentBlock;
+
+            if (
+              snapshotBlock ===
+              null
+            ) {
+              throw new SavingsHistorySynchronizingError({
+                progressPercent:
+                  snapshotStatus.progressPercent,
+                currentBlock:
+                  snapshotStatus.currentBlock,
+                targetBlock:
+                  snapshotStatus.targetBlock,
+              });
+            }
+
+            const [
+              activity,
+              currentAssets,
+            ] =
+              await Promise.all([
+                dependencies
+                  .savingsActivityIndex!
+                  .readAccountActivity(
+                    auth.identity
+                      .wallet!,
+                    snapshotBlock,
+                  ),
+
+                dependencies
+                  .savingsCurrentAssets!
+                  .read(
+                    auth.identity
+                      .wallet!,
+                    snapshotBlock,
+                  ),
+              ]);
+
+            const earningsAssets =
+              currentAssets
+              + activity
+                .withdrawnAssets
+              - activity
+                .depositedAssets;
+
+            return {
+              depositedAssetsAtomic:
+                activity
+                  .depositedAssets
+                  .toString(),
+
+              withdrawnAssetsAtomic:
+                activity
+                  .withdrawnAssets
+                  .toString(),
+
+              netContributionsAtomic:
+                activity
+                  .netAssets
+                  .toString(),
+
+              currentAssetsAtomic:
+                currentAssets
+                  .toString(),
+
+              earningsAssetsAtomic:
+                earningsAssets
+                  .toString(),
+            };
+          })()
+          : dependencies
+            .savingsPerformance
+            .readPerformance({
+              account:
+                auth.identity
+                  .wallet,
+
+              startAt:
+                new Date(0),
+
+              endAt:
+                new Date(
+                  nowMilliseconds,
+                ),
+            });
+
+      savingsPerformanceCache
+        .set(
+          cacheKey,
+          {
+            expiresAt:
+              now
+              + SAVINGS_PERFORMANCE_CACHE_TTL_MS,
+
+            promise,
+          },
+        );
+
+      try {
+        return await promise;
+      } catch (error) {
+        const current =
+          savingsPerformanceCache
+            .get(
+              cacheKey,
+            );
+
+        if (
+          current?.promise
+            === promise
+        ) {
+          savingsPerformanceCache
+            .delete(
+              cacheKey,
+            );
+        }
+
+        throw error;
+      }
+    };
+
+  const readSavingsMarketStatus =
+    async () => {
+      const now =
+        Date.now();
+
+      if (
+        savingsMarketStatusCache
+        && savingsMarketStatusCache
+          .expiresAt > now
+      ) {
+        return savingsMarketStatusCache
+          .promise;
+      }
+
+      const promise =
+        dependencies
+          .savingsMarketStatus
+          .readStatus();
+
+      savingsMarketStatusCache = {
+        expiresAt:
+          now
+          + SAVINGS_MARKET_STATUS_CACHE_TTL_MS,
+
+        promise,
+      };
+
+      try {
+        return await promise;
+      } catch (error) {
+        if (
+          savingsMarketStatusCache
+            ?.promise === promise
+        ) {
+          savingsMarketStatusCache =
+            null;
+        }
+
+        throw error;
+      }
+    };
+
+  const listReconciledCommitments =
+    async (
+      userId: string,
+    ) => {
+      const commitments =
+        await dependencies
+          .persistence
+          .listCommitments(
+            userId,
+          );
+
+      return Promise.all(
+        commitments.map(
+          async (
+            commitment,
+          ) => {
+            if (
+              commitment.state
+                !== "ACTIVE"
+              || !commitment
+                .onchainCommitmentId
+            ) {
+              return commitment;
+            }
+
+            if (
+              !dependencies
+                .commitmentSettlementVerifier
+            ) {
+              throw new CommitmentSettlementUnavailableError();
+            }
+
+            const settlement =
+              await settlementRequest(
+                () =>
+                  dependencies
+                    .commitmentSettlementVerifier!
+                    .inspect({
+                      offchainCommitmentId:
+                        commitment.id,
+
+                      onchainCommitmentId:
+                        commitment
+                          .onchainCommitmentId!,
+
+                      startAt:
+                        new Date(
+                          commitment
+                            .epochStart,
+                        ),
+
+                      endAt:
+                        new Date(
+                          commitment
+                            .epochEnd,
+                        ),
+                    }),
+              );
+
+            const targetState =
+              (
+                {
+                  2: "COMPLETED",
+                  3: "FAILED",
+                  4: "CANCELLED",
+                } as const
+              )[settlement.status as 2 | 3 | 4];
+
+            if (
+              settlement.status
+                === 1
+            ) {
+              return commitment;
+            }
+
+            if (
+              !targetState
+            ) {
+              throw new CommitmentSettlementMismatchError(
+                "Onchain commitment has an invalid active lifecycle status",
+              );
+            }
+
+            return {
+              ...commitment,
+              state:
+                targetState,
+            };
+          },
+        ),
+      );
+    };
+
   const app = Fastify({
     logger: options.enableLogging
       ? { redact: ["req.headers.authorization"] }
@@ -1501,6 +1827,178 @@ export function buildApp(
   }
 
   app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
+
+  app.get(
+    "/v1/dashboard",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const auth =
+            asAuthenticatedRequest(
+              request,
+            );
+
+          if (
+            !auth.identity.wallet
+          ) {
+            throw new NotFoundError(
+              "Privy embedded wallet",
+            );
+          }
+
+          const performancePromise =
+            readSavingsPerformanceFor(
+              auth,
+            )
+              .then(
+                (
+                  performance,
+                ) => ({
+                  kind:
+                    "ready" as const,
+                  data:
+                    performance,
+                }),
+              )
+              .catch(
+                (
+                  error,
+                ) => {
+                  if (
+                    error
+                    instanceof SavingsHistorySynchronizingError
+                  ) {
+                    return {
+                      kind:
+                        "synchronizing" as const,
+                      progressPercent:
+                        error
+                          .progressPercent,
+                    };
+                  }
+
+                  request.log.warn(
+                    {
+                      err:
+                        error,
+                    },
+                    "dashboard savings performance unavailable",
+                  );
+
+                  return {
+                    kind:
+                      "error" as const,
+                  };
+                },
+              );
+
+          const marketStatusPromise =
+            readSavingsMarketStatus()
+              .then(
+                (
+                  marketStatus,
+                ) => ({
+                  kind:
+                    "ready" as const,
+                  data:
+                    marketStatus,
+                }),
+              )
+              .catch(
+                (
+                  error,
+                ) => {
+                  request.log.warn(
+                    {
+                      err:
+                        error,
+                    },
+                    "dashboard savings market status unavailable",
+                  );
+
+                  return {
+                    kind:
+                      "error" as const,
+                  };
+                },
+              );
+
+          const [
+            goals,
+            commitments,
+            savingsPerformance,
+            savingsMarketStatus,
+          ] =
+            await Promise.all([
+              dependencies
+                .persistence
+                .listGoals(
+                  auth.user.id,
+                ),
+
+              listReconciledCommitments(
+                auth.user.id,
+              ),
+
+              performancePromise,
+
+              marketStatusPromise,
+            ]);
+
+          const allocationEntries =
+            await Promise.all(
+              goals.map(
+                async (
+                  goal,
+                ) => {
+                  const allocation =
+                    await dependencies
+                      .persistence
+                      .getGoalAllocation(
+                        auth.user.id,
+                        goal.id,
+                        auth.identity
+                          .wallet!,
+                      );
+
+                  if (
+                    !allocation
+                  ) {
+                    throw new NotFoundError(
+                      "Savings goal",
+                    );
+                  }
+
+                  return [
+                    goal.id,
+                    allocation,
+                  ] as const;
+                },
+              ),
+            );
+
+          return {
+            goals,
+            commitments,
+            allocations:
+              Object.fromEntries(
+                allocationEntries,
+              ),
+            savings: {
+              performance:
+                savingsPerformance,
+              marketStatus:
+                savingsMarketStatus,
+            },
+          };
+        },
+      ),
+  );
 
   app.post(
     "/v1/staging/faucet",

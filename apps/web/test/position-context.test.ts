@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   currentPositionState,
   type BoundPositionState,
-} from "../src/features/dashboard/position-context.js";
+} from "../src/features/savings/position-context.js";
 
 const firstAccount = "0x1111111111111111111111111111111111111111";
 const secondAccount = "0x2222222222222222222222222222222222222222";

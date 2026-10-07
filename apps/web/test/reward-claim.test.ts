@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Address, Hex } from "viem";
 
-import { claimCommitmentReward } from "../src/commitments/reward-claim.js";
+import { claimCommitmentReward } from "../src/features/commitments/reward-claim.js";
 
 const manager =
     "0x1111111111111111111111111111111111111111" as Address;

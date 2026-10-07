@@ -4,6 +4,7 @@ import type { CommitmentDto, GoalDto } from "../src/api/kept-api.js";
 import {
   beginProductRefresh,
   failProductRefresh,
+  initialProductDataState,
   type ProductDataState,
 } from "../src/features/dashboard/product-data-state.js";
 
@@ -38,5 +39,49 @@ describe("product data refresh state", () => {
       goals: [goal],
       commitments: [commitment],
     });
+  });
+});
+
+
+it("starts with an empty loading state", () => {
+  expect(initialProductDataState()).toEqual({
+    kind: "loading",
+    goals: [],
+    commitments: [],
+  });
+});
+
+it("preserves stale data when refreshing from an error state", () => {
+  const errored: ProductDataState = {
+    kind: "error",
+    message: "Temporary failure",
+    goals: [goal],
+    commitments: [commitment],
+  };
+
+  expect(beginProductRefresh(errored)).toEqual({
+    kind: "loading",
+    goals: [goal],
+    commitments: [commitment],
+  });
+});
+
+it("preserves loaded data when a ready-state refresh fails", () => {
+  const ready: ProductDataState = {
+    kind: "ready",
+    goals: [goal],
+    commitments: [commitment],
+  };
+
+  expect(
+    failProductRefresh(
+      ready,
+      "Refresh failed",
+    ),
+  ).toEqual({
+    kind: "error",
+    message: "Refresh failed",
+    goals: [goal],
+    commitments: [commitment],
   });
 });

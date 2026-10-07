@@ -317,6 +317,93 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("returns the aggregated dashboard read model in one authenticated request", async () => {
+    const dependencies = buildDependencies();
+
+    const listGoals = vi.spyOn(
+      dependencies.persistence,
+      "listGoals",
+    );
+
+    const listCommitments = vi.spyOn(
+      dependencies.persistence,
+      "listCommitments",
+    );
+
+    const getGoalAllocation = vi.spyOn(
+      dependencies.persistence,
+      "getGoalAllocation",
+    );
+
+    const readPerformance = vi.spyOn(
+      dependencies.savingsPerformance,
+      "readPerformance",
+    );
+
+    const readStatus = vi.spyOn(
+      dependencies.savingsMarketStatus,
+      "readStatus",
+    );
+
+    const app = buildApp(
+      dependencies,
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/dashboard",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    expect(response.json()).toEqual({
+      goals: [goal],
+      commitments: [commitment],
+      allocations: {
+        [goal.id]: {
+          goalId: goal.id,
+          allocatedSharesAtomic: "0",
+          totalVaultSharesAtomic: "0",
+          totalAllocatedSharesAtomic: "0",
+          unallocatedSharesAtomic: "0",
+        },
+      },
+      savings: {
+        performance: {
+          kind: "ready",
+          data: {
+            depositedAssetsAtomic: "0",
+            withdrawnAssetsAtomic: "0",
+            netContributionsAtomic: "0",
+            currentAssetsAtomic: "0",
+            earningsAssetsAtomic: "0",
+          },
+        },
+        marketStatus: {
+          kind: "ready",
+          data: {
+            tvlAssetsAtomic: "0",
+            suppliedAssetsAtomic: "0",
+            supplyCapAssetsAtomic: null,
+            availableToDepositAtomic: null,
+            availableToWithdrawAtomic: "0",
+            grossApyBps: "0",
+            netApyBps: "0",
+          },
+        },
+      },
+    });
+
+    expect(listGoals).toHaveBeenCalledTimes(1);
+    expect(listCommitments).toHaveBeenCalledTimes(1);
+    expect(getGoalAllocation).toHaveBeenCalledTimes(1);
+    expect(readPerformance).toHaveBeenCalledTimes(1);
+    expect(readStatus).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
   it("returns authenticated MoonPay client parameters", async () => {
     const app = buildApp(buildDependencies());
     const allowedIp = await app.inject({

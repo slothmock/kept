@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createBoundTransactionSender } from "../src/chain/transaction-sender.js";
+import { createBoundTransactionSender } from "../src/wallet/transaction-sender.js";
 
 const transaction = {
   to: "0x1111111111111111111111111111111111111111",
