@@ -11,7 +11,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
 
 import {
   createKeptApi,
@@ -226,8 +225,6 @@ export function ActivityPage({
 }: {
   readonly session: Session;
 }) {
-  const navigate = useNavigate();
-
   const [transactions, setTransactions] =
     useState<readonly TransactionDto[]>([]);
 
@@ -330,10 +327,7 @@ export function ActivityPage({
     <AppShell
       headerAction={
         <AccountMenu
-          onOpenAccount={() => {
-            navigate("/account");
-          }}
-          onSignOut={session.logout}
+onSignOut={session.logout}
         />
       }
     >
