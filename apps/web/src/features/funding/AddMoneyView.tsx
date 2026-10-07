@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ShieldCheck, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -148,23 +148,20 @@ export function AddMoneyView({
         </Button>
 
         <div className="mt-4">
-          <p className="text-caption font-medium text-primary">
+          <h1 className="text-h1 font-semibold tracking-tight">
             Add money
-          </p>
-
-          <h1 className="mt-2 text-h1 font-semibold tracking-tight">
-            Add money to Kept.
           </h1>
 
           <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-            Use available cash, transfer crypto, or fund through Kept&apos;s payment partner.
+            Choose how you want to add money to your Kept account.
           </p>
         </div>
       </div>
 
-      <Card className="mx-auto w-full max-w-2xl shadow-none">
-        <CardContent className="p-5 sm:p-6">
-          {view === "choose" ? (
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] xl:items-start">
+        <Card className="shadow-none">
+          <CardContent className="p-5 sm:p-6">
+            {view === "choose" ? (
             <AddFundsChoiceView
               walletAddress={walletAddress}
               fiatEnabled={fiatEnabled}
@@ -259,9 +256,80 @@ export function AddMoneyView({
                 });
               }}
             />
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+
+        <aside className="space-y-4 xl:sticky xl:top-8">
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <p className="text-caption font-medium text-muted-foreground">
+                Adding to
+              </p>
+
+              <div className="mt-3 flex items-start gap-3">
+                <div className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <WalletCards className="size-4" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-label font-semibold">
+                    Your Kept account
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    {walletAddress
+                      ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
+                      : "Preparing your embedded wallet…"}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-none">
+            <CardContent className="space-y-5 p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <CheckCircle2 className="size-4" />
+                </div>
+
+                <div>
+                  <p className="text-label font-medium">
+                    Review before sending
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    Crypto transfers show the route and minimum receive before you confirm them.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <ShieldCheck className="size-4" />
+                </div>
+
+                <div>
+                  <p className="text-label font-medium">
+                    Your funding method stays separate
+                  </p>
+
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    Kept only uses the method you choose for this add-money flow.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <p className="px-1 text-caption text-muted-foreground">
+            {fiatEnabled
+              ? "Card or bank funding is handled through Kept's payment partner."
+              : "Card or bank funding is currently unavailable."}
+          </p>
+        </aside>
+      </div>
     </div>
   );
 }
