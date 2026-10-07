@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { FundingAsset } from "@/features/funding/intents/supported-tokens";
 import { formatUsdc } from "@/features/savings/format";
 import { CryptoWithdrawalStep } from "@/features/withdrawals/components/CryptoWithdrawalStep";
@@ -31,6 +32,7 @@ interface WithdrawablePosition {
 
 interface WithdrawViewProps {
   readonly position: WithdrawablePosition | null;
+  readonly positionLoading: boolean;
   readonly amount: string;
   readonly status: string | null;
   readonly error: string | null;
@@ -81,6 +83,7 @@ interface WithdrawViewProps {
 
 export function WithdrawView({
   position,
+  positionLoading,
   amount,
   status,
   error,
@@ -213,6 +216,7 @@ export function WithdrawView({
                   icon={<WalletCards className="size-4" />}
                   title="Available cash"
                   description="Move money out of savings while keeping it inside your Kept account."
+                  disabled={positionLoading}
                   onClick={() => setView("available-cash")}
                 />
 
@@ -221,6 +225,7 @@ export function WithdrawView({
                     icon={<WalletCards className="size-4" />}
                     title="Crypto wallet"
                     description="Send USDC to a supported asset and network outside Kept."
+                    disabled={positionLoading}
                     onClick={() => setView("crypto")}
                   />
                 ) : null}
@@ -234,7 +239,7 @@ export function WithdrawView({
                         : "Bank account — Coming soon"
                     }
                     description="Cash out through Kept's payment partner."
-                    disabled={!bankEnabled}
+                    disabled={!bankEnabled || positionLoading}
                     onClick={() => setView("bank")}
                   />
                 ) : null}
@@ -519,21 +524,34 @@ export function WithdrawView({
                 Available to withdraw
               </p>
 
-              <p className="mt-2 text-h2 font-semibold tabular-nums">
-                {formatUsdc(totalAvailableAssets)} USDC
-              </p>
+              {positionLoading ? (
+                <>
+                  <Skeleton className="mt-2 h-8 w-40 rounded-md" />
 
-              <div className="mt-5 space-y-3 border-t border-border pt-4">
-                <DetailRow
-                  label="Available cash"
-                  value={`${formatUsdc(availableCash)} USDC`}
-                />
+                  <div className="mt-5 space-y-3 border-t border-border pt-4">
+                    <Skeleton className="h-5 w-full rounded-md" />
+                    <Skeleton className="h-5 w-full rounded-md" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-h2 font-semibold tabular-nums">
+                    {formatUsdc(totalAvailableAssets)} USDC
+                  </p>
 
-                <DetailRow
-                  label="Available from savings"
-                  value={`${formatUsdc(withdrawableAssets)} USDC`}
-                />
-              </div>
+                  <div className="mt-5 space-y-3 border-t border-border pt-4">
+                    <DetailRow
+                      label="Available cash"
+                      value={`${formatUsdc(availableCash)} USDC`}
+                    />
+
+                    <DetailRow
+                      label="Available from savings"
+                      value={`${formatUsdc(withdrawableAssets)} USDC`}
+                    />
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
