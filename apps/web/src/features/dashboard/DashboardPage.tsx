@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
 import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 
@@ -499,6 +499,17 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const activeGoals = goals.filter((goal) => goal.status === "ACTIVE");
 
+  const sortedActiveGoals = [...activeGoals].sort((left, right) => {
+    const leftDate = left.targetDate
+      ? new Date(left.targetDate).getTime()
+      : Number.POSITIVE_INFINITY;
+    const rightDate = right.targetDate
+      ? new Date(right.targetDate).getTime()
+      : Number.POSITIVE_INFINITY;
+
+    return leftDate - rightDate;
+  });
+
   const selectedGoal =
     goalDetailView && goalId
       ? goals.find((goal) => goal.id === goalId) ?? null
@@ -955,7 +966,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
             <Button onClick={() => setCreateGoalOpen(true)}>
               <Plus className="size-4" />
-              Create goal
+              Create a goal
             </Button>
           </section>
 
@@ -964,15 +975,17 @@ export function DashboardPage(props: DashboardPageProps) {
             aria-label="Goals summary"
           >
             <Card className="shadow-none">
-              <CardContent className="p-5">
-                <p className="text-caption text-muted-foreground">
+              <CardContent className="p-6">
+                <p className="text-caption font-medium text-muted-foreground">
                   Saved toward goals
                 </p>
-                <p className="mt-2 text-h3 font-semibold tabular-nums">
+
+                <p className="mt-2 text-h2 font-semibold tabular-nums">
                   {allocatedGoalSavings === null
                     ? "—"
                     : `${formatUsdc(allocatedGoalSavings)} USDC`}
                 </p>
+
                 <p className="mt-1 text-caption text-muted-foreground">
                   Across {activeGoals.length} active {activeGoals.length === 1 ? "goal" : "goals"}
                 </p>
@@ -980,13 +993,15 @@ export function DashboardPage(props: DashboardPageProps) {
             </Card>
 
             <Card className="shadow-none">
-              <CardContent className="p-5">
-                <p className="text-caption text-muted-foreground">
+              <CardContent className="p-6">
+                <p className="text-caption font-medium text-muted-foreground">
                   Active goals
                 </p>
-                <p className="mt-2 text-h3 font-semibold tabular-nums">
+
+                <p className="mt-2 text-h2 font-semibold tabular-nums">
                   {activeGoals.length}
                 </p>
+
                 <p className="mt-1 text-caption text-muted-foreground">
                   Currently in progress
                 </p>
@@ -994,34 +1009,47 @@ export function DashboardPage(props: DashboardPageProps) {
             </Card>
 
             <Card className="shadow-none">
-              <CardContent className="p-5">
-                <p className="text-caption text-muted-foreground">
-                  Unassigned savings
+              <CardContent className="p-6">
+                <p className="text-caption font-medium text-muted-foreground">
+                  Current APY
                 </p>
-                <p className="mt-2 text-h3 font-semibold tabular-nums">
-                  {unassignedSavings === null
-                    ? "—"
-                    : `${formatUsdc(unassignedSavings)} USDC`}
+
+                <p className="mt-2 text-h2 font-semibold tabular-nums">
+                  {savingsOverview.marketStatusState.kind === "ready"
+                    ? `${(savingsOverview.marketStatusState.netApyBps / 100).toFixed(2)}%`
+                    : "—"}
                 </p>
+
                 <p className="mt-1 text-caption text-muted-foreground">
-                  Available to put towards a goal
+                  Variable, after Kept&apos;s fee
                 </p>
               </CardContent>
             </Card>
           </section>
 
           <section className="space-y-4" aria-labelledby="goals-heading">
-            <div>
-              <h2
-                id="goals-heading"
-                className="text-h3 font-semibold tracking-tight"
-              >
-                Active goals
-              </h2>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2
+                  id="goals-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Active goals
+                </h2>
 
-              <p className="mt-1 text-caption text-muted-foreground">
-                {activeGoals.length} {activeGoals.length === 1 ? "goal" : "goals"} currently growing
-              </p>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  {activeGoals.length} {activeGoals.length === 1 ? "goal" : "goals"} currently growing
+                </p>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Goals sorted by soonest target date"
+              >
+                <SlidersHorizontal className="size-4" />
+                Sort: Soonest
+              </Button>
             </div>
 
             {productState.kind === "error" ? (
@@ -1040,18 +1068,20 @@ export function DashboardPage(props: DashboardPageProps) {
                 </Button>
               </div>
             ) : initialLoading ? (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <Skeleton className="h-56 rounded-lg" />
-                <Skeleton className="h-56 rounded-lg" />
-                <Skeleton className="h-56 rounded-lg" />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
               </div>
             ) : activeGoals.length === 0 ? (
               <Card className="border-dashed shadow-none">
-                <CardContent className="flex min-h-52 flex-col items-start justify-center gap-4 p-6">
+                <CardContent className="flex min-h-40 items-center justify-between gap-4 p-6">
                   <div>
-                    <h3 className="text-h3 font-semibold">
+                    <h3 className="text-label font-semibold">
                       Create your first goal
                     </h3>
+
                     <p className="mt-1 max-w-lg text-caption text-muted-foreground">
                       Give your savings a destination and track your progress.
                     </p>
@@ -1064,11 +1094,12 @@ export function DashboardPage(props: DashboardPageProps) {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {activeGoals.map((goal) => (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {sortedActiveGoals.map((goal) => (
                   <GoalCard
                     key={goal.id}
                     goal={goal}
+                    compact
                     funding={
                       goalFundingState.kind === "loading"
                         ? null
@@ -1083,20 +1114,23 @@ export function DashboardPage(props: DashboardPageProps) {
                 <button
                   type="button"
                   onClick={() => setCreateGoalOpen(true)}
-                  className="group flex min-h-56 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-surface p-6 text-center transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="group flex min-h-36 flex-col items-start justify-center rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:border-primary/50 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   <div className="grid size-10 place-items-center rounded-full bg-accent text-accent-foreground">
                     <Plus className="size-4" />
                   </div>
 
-                  <div>
-                    <h3 className="text-label font-semibold">
-                      Start another goal
-                    </h3>
-                    <p className="mt-1 text-caption text-muted-foreground">
-                      Name what you are saving for, choose a target, and keep charting your progress.
-                    </p>
-                  </div>
+                  <h3 className="mt-4 text-label font-medium">
+                    Start another goal
+                  </h3>
+
+                  <p className="mt-4 max-w-md text-caption text-muted-foreground">
+                    Name what you are saving for, choose a target, and keep charting your progress.
+                  </p>
+
+                  <span className="mt-4 rounded-md border border-border px-3 py-2 text-label font-medium">
+                    Create goal
+                  </span>
                 </button>
               </div>
             )}
