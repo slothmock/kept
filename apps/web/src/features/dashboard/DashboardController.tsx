@@ -827,10 +827,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
       headerAction={
         wallet.address ? (
           <AccountMenu
-            onOpenAccount={() => {
-              navigate("/account");
-            }}
-            onSignOut={async () => {
+onSignOut={async () => {
               session.logout();
             }}
           />
