@@ -37,6 +37,7 @@ const navigationItems: readonly NavigationItem[] = [
   {
     label: "Commitments",
     icon: HandCoins,
+    to: "/commitments",
   },
   {
     label: "Activity",
@@ -157,6 +158,18 @@ export function AppShell({ children, headerAction }: AppShellProps) {
             }
           >
             Goals
+          </NavLink>
+
+          <NavLink
+            to="/commitments"
+            className={({ isActive }) =>
+              cn(
+                "shrink-0 rounded-md px-3 py-2 text-label text-muted-foreground transition-colors",
+                isActive && "bg-accent text-accent-foreground",
+              )
+            }
+          >
+            Commitments
           </NavLink>
 
           <NavLink
