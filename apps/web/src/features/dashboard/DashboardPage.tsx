@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { ArrowRight, Plus, RefreshCw } from "lucide-react";
 import type { CommitmentDto, GoalDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 
@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { ProductDataState } from "@/features/dashboard/product-data-state";
+
+import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 
 import {
 
@@ -492,6 +494,12 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const initialLoading = productState.kind === "loading" && goals.length === 0;
 
+  const activeCommitments = commitments.filter(
+    (commitment) => commitment.state === "ACTIVE",
+  );
+
+  const featuredCommitment = activeCommitments[0] ?? null;
+
   const detailCommitments = detailGoal
 
     ? commitments.filter(
@@ -524,23 +532,23 @@ export function DashboardPage(props: DashboardPageProps) {
 
   return (
 
-    <div className="space-y-10">
+    <div className="space-y-8">
 
-      <section className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
         <div>
 
-          <p className="text-sm font-medium text-primary">Dashboard</p>
+          <p className="text-caption font-medium text-primary">Home</p>
 
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h1 className="mt-2 text-h1 font-semibold tracking-tight">
 
-            Keep moving forward.
+            Your savings, in one place.
 
           </h1>
 
-          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+          <p className="mt-2 max-w-2xl text-body text-muted-foreground">
 
-            Track your savings, goals, commitments, and rewards in one place.
+            Keep an eye on your balance, goals, commitments, and progress.
 
           </p>
 
@@ -585,225 +593,270 @@ export function DashboardPage(props: DashboardPageProps) {
 
       />
 
-      <section className="space-y-5" aria-labelledby="goals-heading">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
 
-        <div className="flex items-end justify-between gap-4">
+        <section className="space-y-4" aria-labelledby="goals-heading">
 
-          <div>
-
-            <h2
-
-              id="goals-heading"
-
-              className="text-xl font-semibold tracking-tight"
-
-            >
-
-              Your savings goals
-
-            </h2>
-
-          </div>
-
-          {productState.kind === "error" && (
-
-            <Button variant="ghost" size="sm" onClick={onRefreshProductData}>
-
-              <RefreshCw className="size-4" />
-
-              Retry
-
-            </Button>
-
-          )}
-
-        </div>
-
-        {productState.kind === "error" && (
-
-          <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-
-            {productState.message}
-
-          </p>
-
-        )}
-
-        {unassignedSavings !== null && (
-
-          <div className="flex flex-col gap-3 rounded-lg border bg-muted/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-4">
 
             <div>
 
-              <p className="font-medium">Unassigned savings</p>
+              <h2
+                id="goals-heading"
+                className="text-h2 font-semibold tracking-tight"
+              >
 
-              <p className="mt-1 text-sm text-muted-foreground">
+                Goals
 
-                Savings you haven&apos;t assigned to a goal yet.
+              </h2>
+
+              <p className="mt-1 text-caption text-muted-foreground">
+
+                What you&apos;re saving towards.
 
               </p>
 
             </div>
 
-            <p className="text-lg font-semibold tabular-nums">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCreateGoalOpen(true)}
+            >
 
-              {formatUsdc(unassignedSavings)} USDC
+              <Plus className="size-4" />
+              New goal
+
+            </Button>
+
+          </div>
+
+          {productState.kind === "error" && (
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-danger-surface px-4 py-3">
+
+              <p className="text-caption text-destructive">
+
+                {productState.message}
+
+              </p>
+
+              <Button variant="ghost" size="sm" onClick={onRefreshProductData}>
+
+                <RefreshCw className="size-4" />
+                Retry
+
+              </Button>
+
+            </div>
+
+          )}
+
+          {unassignedSavings !== null && unassignedSavings > 0n && (
+
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+              <div>
+
+                <p className="text-label font-medium">Unassigned savings</p>
+
+                <p className="mt-1 text-caption text-muted-foreground">
+
+                  Savings that are not assigned to a goal yet.
+
+                </p>
+
+              </div>
+
+              <p className="text-body font-semibold tabular-nums">
+
+                £{formatUsdc(unassignedSavings)}
+
+              </p>
+
+            </div>
+
+          )}
+
+          {initialLoading ? (
+
+            <div className="grid gap-4 md:grid-cols-2">
+
+              <Skeleton className="h-72 rounded-lg" />
+              <Skeleton className="h-72 rounded-lg" />
+
+            </div>
+
+          ) : activeGoals.length === 0 ? (
+
+            <Card className="border-dashed shadow-none">
+
+              <CardContent className="flex min-h-52 flex-col items-start justify-center gap-4 p-6">
+
+                <div>
+
+                  <h3 className="text-h3 font-semibold">Create your first goal</h3>
+
+                  <p className="mt-1 max-w-lg text-caption text-muted-foreground">
+
+                    Give your savings a destination and track your progress.
+
+                  </p>
+
+                </div>
+
+                <Button onClick={() => setCreateGoalOpen(true)}>
+
+                  <Plus className="size-4" />
+                  Create goal
+
+                </Button>
+
+              </CardContent>
+
+            </Card>
+
+          ) : (
+
+            <div className="grid gap-4 md:grid-cols-2">
+
+              {activeGoals.slice(0, 2).map((goal) => (
+
+                <GoalCard
+
+                  key={goal.id}
+
+                  goal={goal}
+
+                  funding={
+
+                    goalFundingState.kind === "loading"
+
+                      ? null
+
+                      : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
+
+                  }
+
+                  commitment={currentCommitment(goal.id, commitments)}
+
+                  onManageSavings={(selected) => setSavingsGoal(selected)}
+
+                  onAddCommitment={(selected) => setCommitmentGoal(selected)}
+
+                  onOpen={(selected) => setDetailGoal(selected)}
+
+                />
+
+              ))}
+
+              {activeGoals.length < 2 && (
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setCreateGoalOpen(true)}
+
+                  className="group flex min-h-72 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-surface p-6 text-center transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+
+                >
+
+                  <div className="grid size-10 place-items-center rounded-full bg-accent text-accent-foreground">
+
+                    <Plus className="size-4" />
+
+                  </div>
+
+                  <div>
+
+                    <h3 className="text-label font-semibold">Add another goal</h3>
+
+                    <p className="mt-1 text-caption text-muted-foreground">
+
+                      Give more of your savings a purpose.
+
+                    </p>
+
+                  </div>
+
+                </button>
+
+              )}
+
+            </div>
+
+          )}
+
+        </section>
+
+        <section className="space-y-4" aria-labelledby="commitment-heading">
+
+          <div>
+
+            <h2
+              id="commitment-heading"
+              className="text-h2 font-semibold tracking-tight"
+            >
+
+              Commitment
+
+            </h2>
+
+            <p className="mt-1 text-caption text-muted-foreground">
+
+              The habit you&apos;re keeping right now.
 
             </p>
 
           </div>
 
-        )}
+          {featuredCommitment ? (
 
-        {initialLoading ? (
+            <Card className="shadow-none">
 
-          <div className="grid gap-4 md:grid-cols-2">
+              <CardContent className="space-y-4 p-5">
 
-            <Skeleton className="h-80 rounded-xl" />
+                <CommitmentCard commitment={featuredCommitment} />
 
-            <Skeleton className="h-80 rounded-xl" />
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between"
+                  disabled
+                >
 
-          </div>
+                  View commitment
+                  <ArrowRight className="size-4" />
 
-        ) : activeGoals.length === 0 ? (
+                </Button>
 
-          <Card className="border-dashed shadow-none">
+              </CardContent>
 
-            <CardContent className="flex flex-col items-start gap-4 p-8 sm:flex-row sm:items-center sm:justify-between">
+            </Card>
 
-              <div>
+          ) : (
 
-                <h3 className="font-semibold">Create your first goal</h3>
+            <Card className="border-dashed shadow-none">
 
-                <p className="mt-1 max-w-lg text-sm text-muted-foreground">
+              <CardContent className="flex min-h-48 flex-col justify-center p-5">
 
-                  Give your savings a destination, then choose a weekly savings
+                <p className="text-label font-medium">No active commitment</p>
 
-                  commitment.
+                <p className="mt-2 text-caption text-muted-foreground">
+
+                  Add a commitment to one of your goals to build a consistent saving habit.
 
                 </p>
 
-              </div>
+              </CardContent>
 
-              <Button onClick={() => setCreateGoalOpen(true)}>
+            </Card>
 
-                <Plus className="size-4" />
+          )}
 
-                Create goal
+        </section>
 
-              </Button>
-
-            </CardContent>
-
-          </Card>
-
-        ) : (
-
-          <div className="grid gap-4 md:grid-cols-2">
-
-            {activeGoals.map((goal) => (
-
-              <GoalCard
-
-                key={goal.id}
-
-                goal={goal}
-
-                funding={
-
-                  goalFundingState.kind === "loading"
-
-                    ? null
-
-                    : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
-
-                }
-
-                commitment={currentCommitment(goal.id, commitments)}
-
-                onManageSavings={(selected) => setSavingsGoal(selected)}
-
-                onAddCommitment={(selected) => setCommitmentGoal(selected)}
-
-                onOpen={(selected) => setDetailGoal(selected)}
-
-              />
-
-            ))}
-
-            <button
-
-              type="button"
-
-              onClick={() => setCreateGoalOpen(true)}
-
-              className="
-
-      group flex min-h-80 flex-col items-center
-
-      justify-center gap-4 rounded-xl border
-
-      border-dashed bg-muted/10 p-8 text-center
-
-      transition
-
-      hover:border-primary/40
-
-      hover:bg-accent/30
-
-      focus-visible:outline-none
-
-      focus-visible:ring-2
-
-      focus-visible:ring-ring
-
-      focus-visible:ring-offset-2
-
-    "
-
-            >
-
-              <div
-
-                className="
-
-        grid size-12 place-items-center rounded-full
-
-        border bg-background text-muted-foreground
-
-        transition
-
-        group-hover:border-primary/30
-
-        group-hover:text-primary
-
-      "
-
-              >
-
-                <Plus className="size-5" />
-
-              </div>
-
-              <div>
-
-                <h3 className="font-semibold">Create another goal</h3>
-
-                <p className="mt-1 max-w-xs text-sm leading-6 text-muted-foreground">
-
-                  Give more of your savings a purpose.
-
-                </p>
-
-              </div>
-
-            </button>
-
-          </div>
-
-        )}
-
-      </section>
+      </div>
 
       <AddFundsDialog
 
