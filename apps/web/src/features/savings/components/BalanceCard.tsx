@@ -142,7 +142,7 @@ export function BalanceCard({
             ) : (
               <p className="mt-2 text-balance font-semibold tracking-tight tabular-nums">
                 {ready
-                  ? `£${formatUsdc(positionState.position.assets)}`
+                  ? `${formatUsdc(positionState.position.assets)} USDC`
                   : "—"}
               </p>
             )}
@@ -177,7 +177,7 @@ export function BalanceCard({
             </p>
             <p className="mt-1 text-body font-semibold tabular-nums">
               {ready
-                ? `£${formatUsdc(positionState.position.usdcBalance)}`
+                ? `${formatUsdc(positionState.position.usdcBalance)} USDC`
                 : "—"}
             </p>
           </div>
@@ -188,10 +188,7 @@ export function BalanceCard({
             </p>
             <p className="mt-1 text-body font-semibold tabular-nums">
               {ready
-                ? `£${formatUsdc(
-                  positionState.position.assets
-                  - positionState.position.usdcBalance,
-                )}`
+                ? `${formatUsdc(\n                  positionState.position.assets\n                  - positionState.position.usdcBalance,\n                )} USDC`
                 : "—"}
             </p>
           </div>
@@ -214,7 +211,7 @@ export function BalanceCard({
             ) : savingsPerformanceState.kind === "ready" ? (
               <p className="mt-1 text-body font-semibold tabular-nums">
                 {earnings !== null && earnings > 0n ? "+" : ""}
-                £{formatUsdc(earnings ?? 0n)}
+                {formatUsdc(earnings ?? 0n)} USDC
               </p>
             ) : (
               <p className="mt-1 text-body font-semibold">—</p>

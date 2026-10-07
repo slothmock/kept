@@ -670,7 +670,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
               <p className="text-body font-semibold tabular-nums">
 
-                £{formatUsdc(unassignedSavings)}
+                {formatUsdc(unassignedSavings)} USDC
 
               </p>
 

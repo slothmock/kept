@@ -72,7 +72,7 @@ export function GoalCard({
             </p>
 
             <span className="text-caption text-muted-foreground">
-              of £{targetAmount(goal)}
+              of {targetAmount(goal)} USDC
             </span>
           </div>
 
