@@ -49,6 +49,18 @@ function ProtectedRoute({
   return children;
 }
 
+function DashboardRoute({
+  session,
+}: {
+  readonly session: Session;
+}) {
+  return (
+    <ProtectedRoute session={session}>
+      <DashboardController session={session} />
+    </ProtectedRoute>
+  );
+}
+
 function ProtectedRouteSkeleton() {
   return (
     <AppShell>
@@ -89,12 +101,6 @@ export function AppRoutes({
   readonly session:
     Session;
 }) {
-  const dashboard = (
-    <ProtectedRoute session={session}>
-      <DashboardController session={session} />
-    </ProtectedRoute>
-  );
-
   return (
     <Routes>
       <Route
@@ -135,13 +141,13 @@ export function AppRoutes({
         }
       />
 
-      <Route path="/dashboard" element={dashboard} />
-      <Route path="/goals" element={dashboard} />
-      <Route path="/goals/:goalId" element={dashboard} />
-      <Route path="/commitments" element={dashboard} />
-      <Route path="/commitments/:commitmentId" element={dashboard} />
-      <Route path="/add-money" element={dashboard} />
-      <Route path="/withdraw" element={dashboard} />
+      <Route path="/dashboard" element={<DashboardRoute session={session} />} />
+      <Route path="/goals" element={<DashboardRoute session={session} />} />
+      <Route path="/goals/:goalId" element={<DashboardRoute session={session} />} />
+      <Route path="/commitments" element={<DashboardRoute session={session} />} />
+      <Route path="/commitments/:commitmentId" element={<DashboardRoute session={session} />} />
+      <Route path="/add-money" element={<DashboardRoute session={session} />} />
+      <Route path="/withdraw" element={<DashboardRoute session={session} />} />
 
       <Route
         path="/activity"
