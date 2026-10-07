@@ -11,6 +11,9 @@ import {
   AccountPage,
 } from "@/features/account/AccountPage";
 import {
+  ActivityPage,
+} from "@/features/activity/ActivityPage";
+import {
   DashboardController,
 } from "@/features/dashboard/DashboardController";
 import {
@@ -152,6 +155,26 @@ export function AppRoutes({
           session.isAuthenticated
             ? (
               <DashboardController
+                session={
+                  session
+                }
+              />
+            )
+            : (
+              <Navigate
+                to="/"
+                replace
+              />
+            )
+        }
+      />
+
+      <Route
+        path="/activity"
+        element={
+          session.isAuthenticated
+            ? (
+              <ActivityPage
                 session={
                   session
                 }
