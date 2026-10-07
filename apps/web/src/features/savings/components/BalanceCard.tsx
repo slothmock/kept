@@ -188,7 +188,10 @@ export function BalanceCard({
             </p>
             <p className="mt-1 text-body font-semibold tabular-nums">
               {ready
-                ? `${formatUsdc(\n                  positionState.position.assets\n                  - positionState.position.usdcBalance,\n                )} USDC`
+                ? `${formatUsdc(
+                  positionState.position.assets
+                  - positionState.position.usdcBalance,
+                )} USDC`
                 : "—"}
             </p>
           </div>
