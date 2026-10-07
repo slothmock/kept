@@ -684,6 +684,12 @@ export function DashboardPage(props: DashboardPageProps) {
                 : null
             }
             commitments={selectedGoalCommitments}
+            currentApyBps={
+              savingsOverview.marketStatusState.kind === "ready"
+                ? savingsOverview.marketStatusState.netApyBps
+                : null
+            }
+            loadRecentTransactions={loadRecentTransactions}
             deleting={goalManagement.deletion.deleting}
             deleteStatus={goalManagement.deletion.status}
             deleteError={goalManagement.deletion.error}
