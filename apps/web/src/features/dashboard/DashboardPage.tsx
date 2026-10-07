@@ -779,7 +779,7 @@ export function DashboardPage(props: DashboardPageProps) {
         </section>
       ) : null}
 
-      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !addMoneyView ? (
+      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
         <BalanceCard
 
         positionState={savingsOverview.positionState}
@@ -812,7 +812,7 @@ export function DashboardPage(props: DashboardPageProps) {
         />
       ) : null}
 
-      {!goalDetailView && !commitmentsView ? (
+      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView ? (
       <div
         className={
           goalsView
