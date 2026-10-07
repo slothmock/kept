@@ -16,7 +16,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
-import { commitmentStatus } from "@/features/commitments/display";
 
 interface CommitmentsViewProps {
   readonly commitments: readonly CommitmentDto[];
