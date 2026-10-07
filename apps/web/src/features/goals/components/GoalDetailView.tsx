@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
-import type { CommitmentDto, GoalDto } from "@/api/kept-api";
+import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HomeActivityPreview } from "@/features/dashboard/HomeActivityPreview";
+import { GoalDetailSummary } from "@/features/goals/components/GoalDetailSummary";
 import { Progress } from "@/components/ui/progress";
 import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 import type { RewardState } from "@/features/commitments/reward-claim";
@@ -39,6 +41,8 @@ interface GoalDetailViewProps {
   readonly goal: GoalDto;
   readonly funding: GoalFundingEntry | null;
   readonly commitments: readonly CommitmentDto[];
+  readonly currentApyBps: number | null;
+  readonly loadRecentTransactions: () => Promise<readonly TransactionDto[]>;
   readonly deleting: boolean;
   readonly deleteStatus: string | null;
   readonly deleteError: string | null;
@@ -60,6 +64,8 @@ export function GoalDetailView({
   goal,
   funding,
   commitments,
+  currentApyBps,
+  loadRecentTransactions,
   deleting,
   deleteStatus,
   deleteError,
@@ -76,8 +82,9 @@ export function GoalDetailView({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const target = targetAmountAtomic(goal);
-  const allocatedAssets = funding?.allocatedAssets ?? null;
-  const progress = goalFundingPercent(allocatedAssets ?? 0n, target);
+  const activeCommitments = commitments.filter(
+    (commitment) => commitment.state === "ACTIVE",
+  );
 
   return (
     <div className="space-y-8">
@@ -94,15 +101,12 @@ export function GoalDetailView({
 
         <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-caption font-medium text-primary">Goal</p>
-            <h1 className="mt-2 text-h1 font-semibold tracking-tight">
+            <p className="text-caption font-medium text-muted-foreground">
+              Goal
+            </p>
+            <h1 className="mt-1 text-h1 font-semibold tracking-tight">
               {goal.name}
             </h1>
-            <p className="mt-2 text-body text-muted-foreground">
-              {goal.targetDate
-                ? `Target date ${formatTargetDate(goal.targetDate)}`
-                : "Keep building towards what matters."}
-            </p>
           </div>
 
           <Button
@@ -115,38 +119,12 @@ export function GoalDetailView({
         </div>
       </div>
 
-      <Card className="shadow-none">
-        <CardContent className="p-6 sm:p-8">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
-            <div>
-              <p className="text-caption text-muted-foreground">
-                Saved towards this goal
-              </p>
-              <p className="mt-2 text-balance font-semibold tracking-tight tabular-nums">
-                {allocatedAssets === null
-                  ? "—"
-                  : `${formatUsdc(allocatedAssets)} USDC`}
-              </p>
-              <p className="mt-2 text-caption text-muted-foreground">
-                of {formatUsdc(target)} {goal.targetAsset}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-4 text-caption">
-                <span className="text-muted-foreground">Progress</span>
-                <span className="font-medium tabular-nums">
-                  {allocatedAssets === null ? "—" : `${progress.labelPercent}%`}
-                </span>
-              </div>
-              <Progress
-                value={progress.visualPercent}
-                aria-label={`${progress.labelPercent}% of target`}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <GoalDetailSummary
+        goal={goal}
+        funding={funding}
+        currentApyBps={currentApyBps}
+        activeCommitments={activeCommitments.length}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.7fr)]">
         <section className="space-y-4" aria-labelledby="goal-commitments-heading">
@@ -154,7 +132,7 @@ export function GoalDetailView({
             <div>
               <h2
                 id="goal-commitments-heading"
-                className="text-h2 font-semibold tracking-tight"
+                className="text-h3 font-semibold tracking-tight"
               >
                 Commitments
               </h2>
@@ -185,7 +163,7 @@ export function GoalDetailView({
                 return (
                   <Card key={commitment.id} className="shadow-none">
                     <CardContent className="space-y-4 p-4">
-                      <CommitmentCard commitment={commitment} />
+                      <CommitmentCard commitment={commitment} compact />
 
                       {commitment.state === "COMPLETED"
                         && rewardState?.kind === "ready"
@@ -259,27 +237,18 @@ export function GoalDetailView({
         </section>
 
         <aside className="space-y-4">
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>Goal details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-caption text-muted-foreground">Target</p>
-                <p className="mt-1 text-label font-medium tabular-nums">
-                  {formatUsdc(target)} {goal.targetAsset}
-                </p>
-              </div>
-              <div>
-                <p className="text-caption text-muted-foreground">Target date</p>
-                <p className="mt-1 text-label font-medium">
-                  {goal.targetDate
-                    ? formatTargetDate(goal.targetDate)
-                    : "No target date"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <div>
+            <h2 className="text-h3 font-semibold tracking-tight">
+              Recent activity
+            </h2>
+            <p className="mt-1 text-caption text-muted-foreground">
+              Recent Kept transactions across your account.
+            </p>
+          </div>
+
+          <HomeActivityPreview
+            loadTransactions={loadRecentTransactions}
+          />
 
           <Card className="border-destructive/25 shadow-none">
             <CardHeader>
