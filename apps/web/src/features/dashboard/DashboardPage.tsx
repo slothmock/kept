@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowRight, Plus, RefreshCw } from "lucide-react";
-import type { CommitmentDto, GoalDto } from "@/api/kept-api";
+import { Plus, RefreshCw } from "lucide-react";
+import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { ProductDataState } from "@/features/dashboard/product-data-state";
+import { HomeActivityPreview } from "@/features/dashboard/HomeActivityPreview";
 
 import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 
@@ -42,10 +43,6 @@ import {
   BalanceCard,
 } from "@/features/savings/components/BalanceCard";
 
-import {
-  SavingsMarketStatus,
-} from "@/features/savings/components/SavingsMarketStatus";
-
 import type {
   PositionState,
   SavingsMarketStatusState,
@@ -69,6 +66,9 @@ import type { FundingAsset } from "@/features/funding/intents/supported-tokens";
 interface DashboardPageProps {
 
   readonly walletAddress: string | null;
+
+  readonly loadRecentTransactions:
+    () => Promise<readonly TransactionDto[]>;
 
   readonly readSolanaFundingBalances: (
     owner: string,
@@ -439,6 +439,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const { goalId, commitmentId } = useParams<{ goalId?: string; commitmentId?: string }>();
 
+  const homeView = location.pathname === "/dashboard";
+
   const goalDetailView = location.pathname.startsWith("/goals/");
 
   const goalsView = location.pathname === "/goals";
@@ -459,6 +461,8 @@ export function DashboardPage(props: DashboardPageProps) {
   const {
 
     walletAddress,
+
+    loadRecentTransactions,
 
     readSolanaFundingBalances,
 
@@ -728,404 +732,376 @@ export function DashboardPage(props: DashboardPageProps) {
       ) : null}
 
 
-      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
-      <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      {homeView ? (
+        <>
+          <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-h1 font-semibold tracking-tight">
+              Home
+            </h1>
 
-        <div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => navigate("/add-money")}>
+                <Plus className="size-4" />
+                Add money
+              </Button>
 
-          <p className="text-caption font-medium text-primary">
-            {goalsView ? "Goals" : "Home"}
-          </p>
-
-          <h1 className="mt-2 text-h1 font-semibold tracking-tight">
-
-            {goalsView ? "Your savings goals." : "Your savings, in one place."}
-
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-
-            {goalsView
-              ? "Give your savings a purpose and track progress towards what matters."
-              : "Keep an eye on your balance, goals, commitments, and progress."}
-
-          </p>
-
-        </div>
-
-        {!goalsView ? (
-          <SavingsMarketStatus state={savingsOverview.marketStatusState} />
-        ) : (
-          <Button onClick={() => setCreateGoalOpen(true)}>
-            <Plus className="size-4" />
-            Create goal
-          </Button>
-        )}
-
-      </section>
-      ) : null}
-
-      {goalsView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
-        <section
-          className="grid gap-4 sm:grid-cols-3"
-          aria-label="Goals summary"
-        >
-          <Card className="shadow-none">
-            <CardContent className="p-5">
-              <p className="text-caption text-muted-foreground">
-                Saved toward goals
-              </p>
-              <p className="mt-2 text-h3 font-semibold tabular-nums">
-                {allocatedGoalSavings === null
-                  ? "—"
-                  : `${formatUsdc(allocatedGoalSavings)} USDC`}
-              </p>
-              <p className="mt-1 text-caption text-muted-foreground">
-                Across {activeGoals.length} active {activeGoals.length === 1 ? "goal" : "goals"}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-none">
-            <CardContent className="p-5">
-              <p className="text-caption text-muted-foreground">
-                Active goals
-              </p>
-              <p className="mt-2 text-h3 font-semibold tabular-nums">
-                {activeGoals.length}
-              </p>
-              <p className="mt-1 text-caption text-muted-foreground">
-                Currently in progress
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-none">
-            <CardContent className="p-5">
-              <p className="text-caption text-muted-foreground">
-                Unassigned savings
-              </p>
-              <p className="mt-2 text-h3 font-semibold tabular-nums">
-                {unassignedSavings === null
-                  ? "—"
-                  : `${formatUsdc(unassignedSavings)} USDC`}
-              </p>
-              <p className="mt-1 text-caption text-muted-foreground">
-                Available to put towards a goal
-              </p>
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
-
-      {!goalsView && !goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
-        <BalanceCard
-
-        positionState={savingsOverview.positionState}
-
-        savingsPerformanceState={savingsOverview.performanceState}
-
-        transactionPending={savingsTransactions.pendingTransaction !== null}
-
-        onAddMoney={() => navigate("/add-money")}
-
-        onWithdraw={() => navigate("/withdraw")}
-
-        onRefresh={async () => {
-          await Promise.all([
-            savingsOverview.onRefreshPosition(),
-            savingsOverview.onRefreshDashboardData(),
-          ]);
-        }}
-
-        stagingFaucetAvailable={savingsOverview.stagingFaucet.available}
-
-        stagingFaucetClaiming={savingsOverview.stagingFaucet.claiming}
-
-        stagingFaucetStatus={savingsOverview.stagingFaucet.status}
-
-        stagingFaucetError={savingsOverview.stagingFaucet.error}
-
-        onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
-
-        />
-      ) : null}
-
-      {!goalDetailView && !commitmentDetailView && !commitmentsView && !addMoneyView && !withdrawView ? (
-      <div
-        className={
-          goalsView
-            ? "space-y-6"
-            : "grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]"
-        }
-      >
-
-        <section className="space-y-4" aria-labelledby="goals-heading">
-
-          <div className="flex items-center justify-between gap-4">
-
-            <div>
-
-              <h2
-                id="goals-heading"
-                className="text-h2 font-semibold tracking-tight"
+              <Button
+                variant="outline"
+                onClick={() => navigate("/withdraw")}
               >
-
-                {goalsView ? "All goals" : "Goals"}
-
-              </h2>
-
-              <p className="mt-1 text-caption text-muted-foreground">
-
-                {goalsView
-                  ? "All of the goals currently guiding your savings."
-                  : "What you&apos;re saving towards."}
-
-              </p>
-
+                Withdraw
+              </Button>
             </div>
+          </section>
 
-            {!goalsView ? (
+          <BalanceCard
+            positionState={savingsOverview.positionState}
+            savingsPerformanceState={savingsOverview.performanceState}
+            marketStatusState={savingsOverview.marketStatusState}
+            allocatedGoalSavings={allocatedGoalSavings}
+            showActions={false}
+            transactionPending={savingsTransactions.pendingTransaction !== null}
+            onAddMoney={() => navigate("/add-money")}
+            onWithdraw={() => navigate("/withdraw")}
+            onRefresh={async () => {
+              await Promise.all([
+                savingsOverview.onRefreshPosition(),
+                savingsOverview.onRefreshDashboardData(),
+              ]);
+            }}
+            stagingFaucetAvailable={savingsOverview.stagingFaucet.available}
+            stagingFaucetClaiming={savingsOverview.stagingFaucet.claiming}
+            stagingFaucetStatus={savingsOverview.stagingFaucet.status}
+            stagingFaucetError={savingsOverview.stagingFaucet.error}
+            onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
+          />
+
+          <section className="space-y-4" aria-labelledby="home-goals-heading">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <h2
+                  id="home-goals-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Your goals
+                </h2>
+
+                <p className="mt-1 text-caption text-muted-foreground">
+                  {allocatedGoalSavings === null
+                    ? `${activeGoals.length} active ${activeGoals.length === 1 ? "goal" : "goals"}`
+                    : `${formatUsdc(allocatedGoalSavings)} USDC saved across ${activeGoals.length} ${activeGoals.length === 1 ? "goal" : "goals"}`}
+                </p>
+              </div>
+
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setCreateGoalOpen(true)}
+                onClick={() => navigate("/goals")}
               >
-
-                <Plus className="size-4" />
-                New goal
-
+                View all goals
               </Button>
-            ) : null}
-
-          </div>
-
-          {productState.kind === "error" && (
-
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-danger-surface px-4 py-3">
-
-              <p className="text-caption text-destructive">
-
-                {productState.message}
-
-              </p>
-
-              <Button variant="ghost" size="sm" onClick={onRefreshProductData}>
-
-                <RefreshCw className="size-4" />
-                Retry
-
-              </Button>
-
             </div>
 
-          )}
-
-          {!goalsView && unassignedSavings !== null && unassignedSavings > 0n && (
-
-            <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-              <div>
-
-                <p className="text-label font-medium">Unassigned savings</p>
-
-                <p className="mt-1 text-caption text-muted-foreground">
-
-                  Savings that are not assigned to a goal yet.
-
+            {productState.kind === "error" ? (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-danger-surface px-4 py-3">
+                <p className="text-caption text-destructive">
+                  {productState.message}
                 </p>
-
-              </div>
-
-              <p className="text-body font-semibold tabular-nums">
-
-                {formatUsdc(unassignedSavings)} USDC
-
-              </p>
-
-            </div>
-
-          )}
-
-          {initialLoading ? (
-
-            <div className="grid gap-4 md:grid-cols-2">
-
-              <Skeleton className="h-72 rounded-lg" />
-              <Skeleton className="h-72 rounded-lg" />
-
-            </div>
-
-          ) : activeGoals.length === 0 ? (
-
-            <Card className="border-dashed shadow-none">
-
-              <CardContent className="flex min-h-52 flex-col items-start justify-center gap-4 p-6">
-
-                <div>
-
-                  <h3 className="text-h3 font-semibold">Create your first goal</h3>
-
-                  <p className="mt-1 max-w-lg text-caption text-muted-foreground">
-
-                    Give your savings a destination and track your progress.
-
-                  </p>
-
-                </div>
-
-                <Button onClick={() => setCreateGoalOpen(true)}>
-
-                  <Plus className="size-4" />
-                  Create goal
-
-                </Button>
-
-              </CardContent>
-
-            </Card>
-
-          ) : (
-
-            <div className={goalsView ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3" : "grid gap-4 md:grid-cols-2"}>
-
-              {(goalsView ? activeGoals : activeGoals.slice(0, 2)).map((goal) => (
-
-                <GoalCard
-
-                  key={goal.id}
-
-                  goal={goal}
-
-                  funding={
-
-                    goalFundingState.kind === "loading"
-
-                      ? null
-
-                      : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
-
-                  }
-
-                  onOpen={(selected) => navigate(`/goals/${selected.id}`)}
-
-                />
-
-              ))}
-
-              {(goalsView || activeGoals.length < 2) && (
-
-                <button
-
-                  type="button"
-
-                  onClick={() => setCreateGoalOpen(true)}
-
-                  className="group flex min-h-72 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-surface p-6 text-center transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-
-                >
-
-                  <div className="grid size-10 place-items-center rounded-full bg-accent text-accent-foreground">
-
-                    <Plus className="size-4" />
-
-                  </div>
-
-                  <div>
-
-                    <h3 className="text-label font-semibold">
-                      {goalsView ? "Start another goal" : "Add another goal"}
-                    </h3>
-
-                    <p className="mt-1 text-caption text-muted-foreground">
-
-                      {goalsView
-                        ? "Name what you are saving for, choose a target, and keep charting your progress."
-                        : "Give more of your savings a purpose."}
-
-                    </p>
-
-                  </div>
-
-                </button>
-
-              )}
-
-            </div>
-
-          )}
-
-        </section>
-
-        {!goalsView ? (
-        <section className="space-y-4" aria-labelledby="commitment-heading">
-
-          <div>
-
-            <h2
-              id="commitment-heading"
-              className="text-h2 font-semibold tracking-tight"
-            >
-
-              Commitment
-
-            </h2>
-
-            <p className="mt-1 text-caption text-muted-foreground">
-
-              The habit you&apos;re keeping right now.
-
-            </p>
-
-          </div>
-
-          {featuredCommitment ? (
-
-            <Card className="shadow-none">
-
-              <CardContent className="space-y-4 p-5">
-
-                <CommitmentCard commitment={featuredCommitment} />
 
                 <Button
                   variant="ghost"
-                  className="w-full justify-between"
-                  onClick={() => navigate(`/commitments/${featuredCommitment.id}`)}
+                  size="sm"
+                  onClick={onRefreshProductData}
                 >
-
-                  View commitment
-                  <ArrowRight className="size-4" />
-
+                  <RefreshCw className="size-4" />
+                  Retry
                 </Button>
+              </div>
+            ) : initialLoading ? (
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+              </div>
+            ) : activeGoals.length === 0 ? (
+              <Card className="border-dashed shadow-none">
+                <CardContent className="flex min-h-36 items-center justify-between gap-4 p-6">
+                  <div>
+                    <p className="text-label font-medium">
+                      Create your first goal
+                    </p>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Give your savings a destination and track your progress.
+                    </p>
+                  </div>
 
+                  <Button onClick={() => setCreateGoalOpen(true)}>
+                    <Plus className="size-4" />
+                    Create goal
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {activeGoals.slice(0, 3).map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    compact
+                    funding={
+                      goalFundingState.kind === "loading"
+                        ? null
+                        : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
+                    }
+                    onOpen={(selected) =>
+                      navigate(`/goals/${selected.id}`)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
+            <section className="space-y-4" aria-labelledby="home-commitment-heading">
+              <div className="flex items-end justify-between gap-4">
+                <h2
+                  id="home-commitment-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Active commitment
+                </h2>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/commitments")}
+                >
+                  View commitments
+                </Button>
+              </div>
+
+              {featuredCommitment ? (
+                <Card className="shadow-none">
+                  <CardContent className="p-5">
+                    <CommitmentCard
+                      commitment={featuredCommitment}
+                      compact
+                    />
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                      <p className="text-caption text-muted-foreground">
+                        Due {new Date(featuredCommitment.epochEnd).toLocaleDateString()}
+                      </p>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          navigate(`/commitments/${featuredCommitment.id}`)
+                        }
+                      >
+                        View commitment
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="flex min-h-32 flex-col justify-center p-5">
+                    <p className="text-label font-medium">
+                      No active commitment
+                    </p>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Add a commitment to a goal when you are ready to build a regular saving habit.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </section>
+
+            <section className="space-y-4" aria-labelledby="home-activity-heading">
+              <div className="flex items-end justify-between gap-4">
+                <h2
+                  id="home-activity-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Recent activity
+                </h2>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/activity")}
+                >
+                  See all
+                </Button>
+              </div>
+
+              <HomeActivityPreview
+                loadTransactions={loadRecentTransactions}
+              />
+            </section>
+          </div>
+        </>
+      ) : null}
+
+      {goalsView ? (
+        <>
+          <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-h1 font-semibold tracking-tight">
+              Goals
+            </h1>
+
+            <Button onClick={() => setCreateGoalOpen(true)}>
+              <Plus className="size-4" />
+              Create goal
+            </Button>
+          </section>
+
+          <section
+            className="grid gap-4 sm:grid-cols-3"
+            aria-label="Goals summary"
+          >
+            <Card className="shadow-none">
+              <CardContent className="p-5">
+                <p className="text-caption text-muted-foreground">
+                  Saved toward goals
+                </p>
+                <p className="mt-2 text-h3 font-semibold tabular-nums">
+                  {allocatedGoalSavings === null
+                    ? "—"
+                    : `${formatUsdc(allocatedGoalSavings)} USDC`}
+                </p>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Across {activeGoals.length} active {activeGoals.length === 1 ? "goal" : "goals"}
+                </p>
               </CardContent>
-
             </Card>
 
-          ) : (
+            <Card className="shadow-none">
+              <CardContent className="p-5">
+                <p className="text-caption text-muted-foreground">
+                  Active goals
+                </p>
+                <p className="mt-2 text-h3 font-semibold tabular-nums">
+                  {activeGoals.length}
+                </p>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Currently in progress
+                </p>
+              </CardContent>
+            </Card>
 
-            <Card className="border-dashed shadow-none">
+            <Card className="shadow-none">
+              <CardContent className="p-5">
+                <p className="text-caption text-muted-foreground">
+                  Unassigned savings
+                </p>
+                <p className="mt-2 text-h3 font-semibold tabular-nums">
+                  {unassignedSavings === null
+                    ? "—"
+                    : `${formatUsdc(unassignedSavings)} USDC`}
+                </p>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Available to put towards a goal
+                </p>
+              </CardContent>
+            </Card>
+          </section>
 
-              <CardContent className="flex min-h-48 flex-col justify-center p-5">
+          <section className="space-y-4" aria-labelledby="goals-heading">
+            <div>
+              <h2
+                id="goals-heading"
+                className="text-h3 font-semibold tracking-tight"
+              >
+                Active goals
+              </h2>
 
-                <p className="text-label font-medium">No active commitment</p>
+              <p className="mt-1 text-caption text-muted-foreground">
+                {activeGoals.length} {activeGoals.length === 1 ? "goal" : "goals"} currently growing
+              </p>
+            </div>
 
-                <p className="mt-2 text-caption text-muted-foreground">
-
-                  Add a commitment to one of your goals to build a consistent saving habit.
-
+            {productState.kind === "error" ? (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-danger-surface px-4 py-3">
+                <p className="text-caption text-destructive">
+                  {productState.message}
                 </p>
 
-              </CardContent>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefreshProductData}
+                >
+                  <RefreshCw className="size-4" />
+                  Retry
+                </Button>
+              </div>
+            ) : initialLoading ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Skeleton className="h-56 rounded-lg" />
+                <Skeleton className="h-56 rounded-lg" />
+                <Skeleton className="h-56 rounded-lg" />
+              </div>
+            ) : activeGoals.length === 0 ? (
+              <Card className="border-dashed shadow-none">
+                <CardContent className="flex min-h-52 flex-col items-start justify-center gap-4 p-6">
+                  <div>
+                    <h3 className="text-h3 font-semibold">
+                      Create your first goal
+                    </h3>
+                    <p className="mt-1 max-w-lg text-caption text-muted-foreground">
+                      Give your savings a destination and track your progress.
+                    </p>
+                  </div>
 
-            </Card>
+                  <Button onClick={() => setCreateGoalOpen(true)}>
+                    <Plus className="size-4" />
+                    Create goal
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {activeGoals.map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    funding={
+                      goalFundingState.kind === "loading"
+                        ? null
+                        : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
+                    }
+                    onOpen={(selected) =>
+                      navigate(`/goals/${selected.id}`)
+                    }
+                  />
+                ))}
 
-          )}
+                <button
+                  type="button"
+                  onClick={() => setCreateGoalOpen(true)}
+                  className="group flex min-h-56 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-surface p-6 text-center transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <div className="grid size-10 place-items-center rounded-full bg-accent text-accent-foreground">
+                    <Plus className="size-4" />
+                  </div>
 
-        </section>
-        ) : null}
-
-      </div>
+                  <div>
+                    <h3 className="text-label font-semibold">
+                      Start another goal
+                    </h3>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Name what you are saving for, choose a target, and keep charting your progress.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </section>
+        </>
       ) : null}
 
       <DepositDialog
