@@ -15,7 +15,6 @@ import {
 } from "react";
 import {
   Link,
-  useNavigate,
 } from "react-router-dom";
 
 import {
@@ -132,7 +131,6 @@ export function AccountPage({
 }: {
   readonly session: Session;
 }) {
-  const navigate = useNavigate();
   const wallet = useKeptEvmWallet();
 
   const [signOutPending, setSignOutPending] =
@@ -264,10 +262,7 @@ export function AccountPage({
     <AppShell
       headerAction={
         <AccountMenu
-          onOpenAccount={() => {
-            navigate("/account");
-          }}
-          onSignOut={session.logout}
+onSignOut={session.logout}
         />
       }
     >
