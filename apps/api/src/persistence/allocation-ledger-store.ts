@@ -280,7 +280,7 @@ export class AllocationLedgerStore {
             originEventId: lot.originEventId,
             originKind: lot.originKind,
             sharesAtomic: lot.sharesAtomic,
-            wasEverGoalAllocated: lot.everGoalAllocated,
+            wasEverGoalAllocated: lot.everGoalAllocated ?? false,
             createdAt: now,
           })));
         } else {
