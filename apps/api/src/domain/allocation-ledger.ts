@@ -44,14 +44,14 @@ export function assertLedgerEvent(
     legs[0]?.bucket === legs[1]?.bucket)) {
     throw new Error("Internal transfer must have two opposite legs between distinct buckets");
   }
-  if (kind !== "TRANSFER" && kind !== "OPENING" && legs.length !== 1) {
+  if (kind !== "TRANSFER" && kind !== "OPENING" && kind !== "RECONCILIATION_DEBIT" && legs.length !== 1) {
     throw new Error("Vault boundary events require one leg");
   }
   if ((kind === "VAULT_CREDIT" || kind === "RECONCILIATION_CREDIT") &&
     (legs.length !== 1 || legs[0]?.bucket !== "UNASSIGNED" || sum <= 0n)) {
     throw new Error("Vault credits must increase unassigned shares");
   }
-  if ((kind === "VAULT_DEBIT" || kind === "RECONCILIATION_DEBIT") && sum >= 0n) {
+  if ((kind === "VAULT_DEBIT" || kind === "RECONCILIATION_DEBIT") && (sum >= 0n || legs.some(leg => leg.deltaShares >= 0n))) {
     throw new Error("Vault debits must reduce shares");
   }
   if (kind === "OPENING" && legs.some(leg => leg.deltaShares < 0n)) {
