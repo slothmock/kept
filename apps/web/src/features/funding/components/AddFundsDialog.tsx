@@ -89,7 +89,6 @@ export function AddFundsDialog({
     fiatEnabled,
     readSolanaFundingBalances,
     onOpenChange,
-    onUseAvailableCash,
 }: AddFundsDialogProps) {
     const [
         view,
@@ -231,21 +230,6 @@ export function AddFundsDialog({
             ],
         );
 
-    const handleUseAvailableCash =
-        useCallback(
-            () => {
-                onOpenChange(
-                    false,
-                );
-
-                onUseAvailableCash();
-            },
-            [
-                onOpenChange,
-                onUseAvailableCash,
-            ],
-        );
-
     return (
         <Dialog
             open={
@@ -266,10 +250,6 @@ export function AddFundsDialog({
 
                         fiatEnabled={
                             fiatEnabled
-                        }
-
-                        availableCashReady={
-                            true
                         }
 
                         fiatStatus={
@@ -305,10 +285,6 @@ export function AddFundsDialog({
                         }}
 
                         onFiatError={handleFiatError}
-
-                        onUseAvailableCash={
-                            handleUseAvailableCash
-                        }
 
                         onTransferCrypto={() => {
                             invalidateCryptoPreview();
