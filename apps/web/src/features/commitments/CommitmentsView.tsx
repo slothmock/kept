@@ -102,7 +102,8 @@ export function CommitmentsView({
       (goal) =>
         !currentCommitments.some(
           (commitment) =>
-            commitment.savingsGoalId === goal.id,
+            commitment.savingsGoalId === goal.id
+            && commitment.definition.code === "WEEKLY_SAVINGS_V1",
         ),
     );
 
