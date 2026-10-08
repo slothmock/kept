@@ -63,6 +63,7 @@ export interface ApiDependencies {
 
   readonly persistence: Pick<
     KeptPersistenceService,
+    | "joinWaitlist"
     | "createUser"
     | "ensureEmbeddedWallet"
     | "createGoal"
@@ -139,6 +140,10 @@ export interface BuildAppOptions {
   readonly webOrigin?: string;
   readonly stagingAllowedPrivyUserIds?: readonly string[] | null;
   readonly intentsProxyRateLimit?: {
+    readonly maxRequests: number;
+    readonly windowMs: number;
+  };
+  readonly waitlistRateLimit?: {
     readonly maxRequests: number;
     readonly windowMs: number;
   };
@@ -650,6 +655,23 @@ export function buildApp(
 
   options: BuildAppOptions = {},
 ): FastifyInstance {
+  const waitlistRequests =
+    new Map<
+      string,
+      {
+        count: number;
+        resetAt: number;
+      }
+    >();
+
+  const waitlistRateLimit =
+    options.waitlistRateLimit
+    ?? {
+      maxRequests: 10,
+      windowMs:
+        60 * 60 * 1_000,
+    };
+
   const savingsPerformanceCache =
     new Map<
       string,
@@ -1114,6 +1136,7 @@ export function buildApp(
   app.addHook("onRequest", async (request, reply) => {
     if (
       request.url === "/health" ||
+      request.url === "/v1/waitlist" ||
       (
         dependencies.moonPay
         && request.url.startsWith(
@@ -1201,6 +1224,132 @@ export function buildApp(
       return reply;
     }
   });
+
+  app.post(
+    "/v1/waitlist",
+    async (
+      request,
+      reply,
+    ) => {
+      let clientIp: string;
+
+      try {
+        clientIp =
+          getCustomerIp(
+            request,
+          );
+      } catch {
+        return reply
+          .code(400)
+          .send({
+            error: {
+              code:
+                "VALIDATION_ERROR",
+            },
+          });
+      }
+
+      const now =
+        Date.now();
+
+      if (
+        waitlistRequests.size
+        > 10_000
+      ) {
+        for (
+          const [
+            key,
+            value,
+          ]
+          of waitlistRequests
+        ) {
+          if (
+            value.resetAt
+            <= now
+          ) {
+            waitlistRequests.delete(
+              key,
+            );
+          }
+        }
+      }
+
+      const existing =
+        waitlistRequests.get(
+          clientIp,
+        );
+
+      if (
+        !existing
+        || existing.resetAt
+          <= now
+      ) {
+        waitlistRequests.set(
+          clientIp,
+          {
+            count: 1,
+            resetAt:
+              now
+              + waitlistRateLimit
+                .windowMs,
+          },
+        );
+      } else if (
+        existing.count
+        >= waitlistRateLimit
+          .maxRequests
+      ) {
+        reply.header(
+          "retry-after",
+          Math.max(
+            1,
+            Math.ceil(
+              (
+                existing.resetAt
+                - now
+              ) / 1_000,
+            ),
+          ).toString(),
+        );
+
+        return reply
+          .code(429)
+          .send({
+            error: {
+              code:
+                "RATE_LIMITED",
+            },
+          });
+      } else {
+        existing.count += 1;
+      }
+
+      return handle(
+        request,
+        reply,
+        async () => {
+          const body =
+            requireObject(
+              request.body,
+            );
+
+          await dependencies
+            .persistence
+            .joinWaitlist({
+              email:
+                requireString(
+                  body,
+                  "email",
+                ),
+            });
+
+          return reply
+            .code(204)
+            .send();
+        },
+      );
+    },
+  );
 
   app.all(
     "/api/intents-connect/*",
