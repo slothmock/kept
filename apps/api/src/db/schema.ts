@@ -184,6 +184,30 @@ export const allocationLedgerEvents = pgTable(
   ],
 );
 
+export const allocationDepositClaims = pgTable(
+  "allocation_deposit_claims",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    ledgerEventId: uuid("ledger_event_id"),
+    chainId: bigint("chain_id", {mode:"bigint"}).notNull(),
+    vaultAddress: text("vault_address").notNull(),
+    transactionHash: text("transaction_hash").notNull(),
+    logIndex: integer("log_index").notNull(),
+    sharesAtomic: numeric("shares_atomic",{precision:78,scale:0}).notNull(),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at",{withTimezone:true}).notNull(),
+  },
+  (table) => [
+    foreignKey({columns:[table.ledgerEventId,table.userId],foreignColumns:[allocationLedgerEvents.id,allocationLedgerEvents.userId],name:"allocation_deposit_claims_event_owner_fk"}),
+    uniqueIndex("allocation_deposit_claims_log_unique").on(table.chainId,sql`lower(${table.vaultAddress})`,sql`lower(${table.transactionHash})`,table.logIndex),
+    index("allocation_deposit_claims_user_idx").on(table.userId,table.createdAt),
+    check("allocation_deposit_claims_shares_positive",sql`${table.sharesAtomic} > 0`),
+    check("allocation_deposit_claims_status_valid",sql`${table.status} IN ('CREDITED','ALREADY_REFLECTED')`),
+    check("allocation_deposit_claims_credit_consistency",sql`(${table.status} = 'CREDITED' AND ${table.ledgerEventId} IS NOT NULL) OR (${table.status} = 'ALREADY_REFLECTED' AND ${table.ledgerEventId} IS NULL)`),
+  ],
+);
+
 export const allocationLedgerEntries = pgTable(
   "allocation_ledger_entries",
   {
