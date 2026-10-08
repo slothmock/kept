@@ -922,7 +922,7 @@ export function DashboardPage(props: DashboardPageProps) {
               <div
                 className={
                   activeGoals.length === 1
-                    ? "grid gap-4 lg:mx-auto lg:max-w-4xl lg:grid-cols-2"
+                    ? "grid gap-4 lg:grid-cols-2"
                     : "grid gap-4 lg:grid-cols-3"
                 }
               >
