@@ -1070,6 +1070,32 @@ export class KeptPersistenceService {
   }
 
   /**
+   * Trusted entry point for indexed Deposit claims. The live share balance is
+   * always read independently from the configured vault reader.
+   * Do not expose a client-supplied live balance as an API parameter.
+   */
+  async claimVerifiedVaultDeposit(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+    readonly vaultAddress: string;
+    readonly transactionHash: string;
+    readonly logIndex: number;
+  }): Promise<{status:"CREDITED"|"ALREADY_REFLECTED";eventId:string|null}> {
+    if (!this.vaultShares) throw new Error("Vault share reader is not configured");
+    const {shares} = await this.readVaultShares(input.walletAddress);
+    const ledger = new AllocationLedgerStore(this.db);
+    return ledger.claimIndexedDeposit({
+      userId:input.userId,
+      chainId:this.vaultShares.chainId,
+      vaultAddress:input.vaultAddress,
+      ownerAddress:input.walletAddress,
+      transactionHash:input.transactionHash,
+      logIndex:input.logIndex,
+      liveVaultShares:shares,
+    });
+  }
+
+  /**
    * Prepare a clean pre-launch account. This never imports legacy allocations
    * and only initializes after confirming the live vault position is empty.
    */
