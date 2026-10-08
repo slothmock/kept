@@ -67,7 +67,7 @@ describe.sequential("atomic verified vault deposit claim",()=>{
       },
     });
     await expect(service.claimVerifiedVaultDeposit({
-      userId,walletAddress:address,transactionHash:claim.transactionHash,logIndex:claim.logIndex,
+      userId,walletAddress:claim.ownerAddress,transactionHash:claim.transactionHash,logIndex:claim.logIndex,
     })).rejects.toThrow(/Trusted vault address/);
     expect(await ledger.getBalances(userId)).toEqual({});
   });
