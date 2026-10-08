@@ -6,7 +6,15 @@ export function commitmentTitle(commitment: CommitmentDto): string {
     const amount = commitment.parameters.targetAmountAtomic;
     if (typeof amount === "string") {
       try {
-        return `Add ${formatUsdc(BigInt(amount))} USDC to savings this week`;
+        const formattedAmount =
+          formatUsdc(
+            BigInt(amount),
+          ).replace(
+            /\.00$/,
+            "",
+          );
+
+        return `Add ${formattedAmount} USDC to savings this week`;
       } catch {
         return "Add to savings this week";
       }
