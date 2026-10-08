@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, Check, ShieldCheck, Sparkles, Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,24 @@ export function LandingPage({ session }: { readonly session: Session }) {
   const navigate = useNavigate();
   const [signInPending, setSignInPending] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (
+      session.isReady
+      && session.isAuthenticated
+    ) {
+      navigate(
+        "/dashboard",
+        {
+          replace: true,
+        },
+      );
+    }
+  }, [
+    navigate,
+    session.isAuthenticated,
+    session.isReady,
+  ]);
 
   async function start() {
     if (session.isAuthenticated) {
