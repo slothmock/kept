@@ -110,6 +110,22 @@ describe.sequential("allocation ledger persistence", () => {
     expect(events.rows).toHaveLength(0);
   });
 
+  it("checks opening status and vault parity in the same transaction", async () => {
+    const userId = await user();
+    await connection.db.transaction(async tx => {
+      expect(await store.hasOpeningInTransaction(tx, userId)).toBe(false);
+      await store.assertVaultParityInTransaction(tx, userId, 0n);
+    });
+    await store.openPositions({userId, positions: {UNASSIGNED: 20n}, key: "bootstrap"});
+    await connection.db.transaction(async tx => {
+      expect(await store.hasOpeningInTransaction(tx, userId)).toBe(true);
+      expect(await store.getBalancesInTransaction(tx, userId)).toEqual({UNASSIGNED: 20n});
+      await store.assertVaultParityInTransaction(tx, userId, 20n);
+      await expect(store.assertVaultParityInTransaction(tx, userId, 19n))
+        .rejects.toThrow("out of sync");
+    });
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
