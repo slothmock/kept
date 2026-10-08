@@ -888,8 +888,9 @@ export function DashboardPage(props: DashboardPageProps) {
               </div>
 
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
+                className="bg-surface text-foreground hover:bg-accent"
                 onClick={() => navigate("/goals")}
               >
                 View all goals
@@ -917,26 +918,14 @@ export function DashboardPage(props: DashboardPageProps) {
                 <Skeleton className="h-36 rounded-lg" />
                 <Skeleton className="h-36 rounded-lg" />
               </div>
-            ) : activeGoals.length === 0 ? (
-              <Card className="border-dashed shadow-none">
-                <CardContent className="flex min-h-36 items-center justify-between gap-4 p-6">
-                  <div>
-                    <p className="text-label font-medium">
-                      Create your first goal
-                    </p>
-                    <p className="mt-1 text-caption text-muted-foreground">
-                      Give your savings a destination and track your progress.
-                    </p>
-                  </div>
-
-                  <Button onClick={() => setCreateGoalOpen(true)}>
-                    <Plus className="size-4" />
-                    Create goal
-                  </Button>
-                </CardContent>
-              </Card>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div
+                className={
+                  activeGoals.length === 1
+                    ? "grid gap-4 lg:mx-auto lg:max-w-4xl lg:grid-cols-2"
+                    : "grid gap-4 lg:grid-cols-3"
+                }
+              >
                 {activeGoals.slice(0, 3).map((goal) => (
                   <GoalCard
                     key={goal.id}
@@ -952,6 +941,26 @@ export function DashboardPage(props: DashboardPageProps) {
                     }
                   />
                 ))}
+
+                {activeGoals.length <= 2 ? (
+                  <button
+                    type="button"
+                    onClick={() => setCreateGoalOpen(true)}
+                    className="group flex min-h-36 flex-col items-start justify-center rounded-lg border border-dashed border-border bg-surface p-5 text-left transition-colors hover:border-primary/50 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  >
+                    <div className="grid size-10 place-items-center rounded-full bg-accent text-accent-foreground">
+                      <Plus className="size-4" />
+                    </div>
+
+                    <h3 className="mt-4 text-label font-medium">
+                      Create a goal
+                    </h3>
+
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Start saving toward something new.
+                    </p>
+                  </button>
+                ) : null}
               </div>
             )}
           </section>
@@ -967,8 +976,9 @@ export function DashboardPage(props: DashboardPageProps) {
                 </h2>
 
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
+                  className="bg-surface text-foreground hover:bg-accent"
                   onClick={() => navigate("/commitments")}
                 >
                   View commitments
@@ -1026,8 +1036,9 @@ export function DashboardPage(props: DashboardPageProps) {
                 </h2>
 
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
+                  className="bg-surface text-foreground hover:bg-accent"
                   onClick={() => navigate("/activity")}
                 >
                   See all
