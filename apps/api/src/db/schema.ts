@@ -432,6 +432,7 @@ export const vaultActivityEvents = pgTable(
       precision: 78,
       scale: 0,
     }).notNull(),
+    sharesAtomic: numeric("shares_atomic", { precision: 78, scale: 0 }),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     transactionHash: text("transaction_hash").notNull(),
     logIndex: integer("log_index").notNull(),
@@ -458,6 +459,10 @@ export const vaultActivityEvents = pgTable(
     check(
       "vault_activity_events_assets_nonnegative",
       sql`${table.assetsAtomic} >= 0`,
+    ),
+    check(
+      "vault_activity_events_shares_nonnegative",
+      sql`${table.sharesAtomic} IS NULL OR ${table.sharesAtomic} >= 0`,
     ),
   ],
 );
