@@ -32,7 +32,7 @@ export function networkName(chainId: string | null): string | null {
   }
 
   const key = normalizedNetworkKey(chainId);
-  return NETWORKS[key]?.name ?? `Network ${chainId.trim()}`;
+  return NETWORKS[key]?.name ?? "Unknown network";
 }
 
 export function transactionExplorerUrl(
