@@ -66,6 +66,6 @@ export function countFirstGoalAllocations(
   return moved.reduce((total, lot) =>
     total + (lot.bucket === "UNASSIGNED" &&
       lot.visitedGoals.length === 0 &&
-      (lot.originKind === "OPENING" || lot.originKind === "EXTERNAL_DEPOSIT")
+      lot.originKind === "EXTERNAL_DEPOSIT"
       ? lot.shares : 0n), 0n);
 }
