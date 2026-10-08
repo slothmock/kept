@@ -1258,7 +1258,18 @@ export class KeptPersistenceService {
 
   private async cleanLedgerBalances(tx: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0], userId: string, shares: bigint) {
     const ledger = new AllocationLedgerStore(this.db);
-    await ledger.reconcileToVaultSharesInTransaction(tx,{userId,liveShares:shares,key:`clean-vault-reconciliation:${randomUUID()}`});
+    const before = await ledger.getBalancesInTransaction(tx,userId);
+    const accounted = Object.values(before).reduce((total,value)=>total+value,0n);
+    if (accounted < shares) {
+      throw new Error("Vault deposit attribution pending: verified deposits must be claimed before goal reconciliation");
+    }
+    // Withdrawals still reconcile down; positive reconciliation would erase
+    // fresh-deposit evidence by creating ineligible UNKNOWN shares.
+    if (accounted > shares) {
+      await ledger.reconcileToVaultSharesInTransaction(tx,{
+        userId,liveShares:shares,key:`clean-vault-withdrawal:${randomUUID()}`,
+      });
+    }
     await ledger.assertVaultParityInTransaction(tx,userId,shares);
     return ledger.getBalancesInTransaction(tx,userId);
   }
