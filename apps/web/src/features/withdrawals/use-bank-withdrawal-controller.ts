@@ -856,6 +856,7 @@ export function useBankWithdrawalController({
         config,
         ensureTransactionNetwork,
         fiatEnabled,
+        getAccessToken,
         getProvider,
         order,
         position,
