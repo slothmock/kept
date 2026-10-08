@@ -40,6 +40,31 @@ export class AllocationLedgerStore {
     ]));
   }
 
+  /**
+   * Clean-start initialization for an account whose live vault balance was
+   * independently verified as zero by the calling service.
+   * No opening shares or historical allocations are manufactured.
+   */
+  async initializeEmptyAccountInTransaction(
+    tx: LedgerTransaction,
+    input: { userId: string; key: string },
+  ): Promise<string> {
+    if (!input.key.trim()) throw new Error("Ledger initialization key required");
+    const [owner] = await tx.select({ id: users.id }).from(users)
+      .where(eq(users.id, input.userId)).for("update");
+    if (!owner) throw new Error("Unknown ledger owner");
+    const [prior] = await tx.select({ id: allocationLedgerEvents.id })
+      .from(allocationLedgerEvents)
+      .where(eq(allocationLedgerEvents.userId, input.userId)).limit(1);
+    if (prior) throw new Error("Allocation ledger is already initialized or contains events");
+    const id = randomUUID();
+    await tx.insert(allocationLedgerEvents).values({
+      id, userId: input.userId, eventKind: "OPENING",
+      idempotencyKey: input.key, createdAt: new Date(),
+    });
+    return id;
+  }
+
   /** Check whether the account was explicitly initialized. */
   async hasOpeningInTransaction(tx: LedgerTransaction, userId: string): Promise<boolean> {
     const [opening] = await tx.select({id: allocationLedgerEvents.id})
