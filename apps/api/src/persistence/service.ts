@@ -1210,6 +1210,24 @@ export class KeptPersistenceService {
     });
   }
 
+  private async isCleanStartLedger(tx: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0], userId: string): Promise<boolean> {
+    const rows = await tx.execute(sql`SELECT 1 FROM allocation_ledger_events WHERE user_id = ${userId}::uuid AND event_kind = 'OPENING' AND idempotency_key = 'clean-start:empty-account' LIMIT 1`);
+    return rows.rows.length === 1;
+  }
+
+  private async cleanLedgerBalances(tx: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0], userId: string, shares: bigint) {
+    const ledger = new AllocationLedgerStore(this.db);
+    await ledger.reconcileToVaultSharesInTransaction(tx,{userId,liveShares:shares,key:`clean-vault-reconciliation:${randomUUID()}`});
+    await ledger.assertVaultParityInTransaction(tx,userId,shares);
+    return ledger.getBalancesInTransaction(tx,userId);
+  }
+
+  private cleanLedgerTotals(balances: Readonly<Record<string,bigint>>, goalId: string) {
+    const goal = balances[`GOAL:${goalId}`] ?? 0n;
+    const allocated = Object.entries(balances).reduce((n,[key,value])=> key.startsWith("GOAL:") ? n+value : n,0n);
+    return {goal,allocated};
+  }
+
   async getGoalAllocation(
     userId: string,
     goalId: string,
@@ -1232,6 +1250,13 @@ export class KeptPersistenceService {
       ) {
         return null;
       }
+
+      if (await this.isCleanStartLedger(transaction,userId)) {
+        const balances = await this.cleanLedgerBalances(transaction,userId,shares);
+        const totals = this.cleanLedgerTotals(balances,goalId);
+        return this.toGoalAllocationDto(goalId,totals.goal,totals.allocated,shares);
+      }
+
 
       await this.reconcileGoalAndLedgerInTransaction(
         transaction, repository, userId, shares,
@@ -1278,6 +1303,22 @@ export class KeptPersistenceService {
           throw new NotFoundError("Savings goal");
         }
         const { shares } = await this.readVaultShares(input.walletAddress);
+
+        if (await this.isCleanStartLedger(transaction,input.userId)) {
+          const ledger = new AllocationLedgerStore(this.db);
+          const balances = await this.cleanLedgerBalances(transaction,input.userId,shares);
+          const totals = this.cleanLedgerTotals(balances,input.goalId);
+          if (totals.goal + delta < 0n) throw new PersistenceValidationError("Goal allocation cannot become negative");
+          if (totals.allocated + delta > shares) throw new PersistenceValidationError("Goal allocations exceed current vault shares");
+          if (delta !== 0n) await ledger.transferInTransaction(transaction,{
+            userId:input.userId,
+            from:delta>0n?"UNASSIGNED":`GOAL:${input.goalId}`,
+            to:delta>0n?`GOAL:${input.goalId}`:"UNASSIGNED",
+            shares:delta>0n?delta:-delta,key:`goal-allocation:${idempotencyKey}`,
+          });
+          return this.toGoalAllocationDto(input.goalId,totals.goal+delta,totals.allocated+delta,shares);
+        }
+
 
         await this.reconcileGoalAndLedgerInTransaction(
           transaction, repository, input.userId, shares,
@@ -1384,6 +1425,22 @@ export class KeptPersistenceService {
         const { shares } = await this.readVaultShares(
           input.walletAddress,
         );
+        if (await this.isCleanStartLedger(transaction,input.userId)) {
+          const ledger = new AllocationLedgerStore(this.db);
+          const balances = await this.cleanLedgerBalances(transaction,input.userId,shares);
+          const from = this.cleanLedgerTotals(balances,input.fromGoalId);
+          const to = this.cleanLedgerTotals(balances,input.toGoalId);
+          if (from.goal < amount) throw new PersistenceValidationError("Source goal does not have enough allocated shares");
+          await ledger.transferInTransaction(transaction,{
+            userId:input.userId,from:`GOAL:${input.fromGoalId}`,to:`GOAL:${input.toGoalId}`,
+            shares:amount,key:`goal-reallocation:${idempotencyKey}`,
+          });
+          return {
+            from:this.toGoalAllocationDto(input.fromGoalId,from.goal-amount,from.allocated,shares),
+            to:this.toGoalAllocationDto(input.toGoalId,to.goal+amount,to.allocated,shares),
+          };
+        }
+
         await this.reconcileGoalAndLedgerInTransaction(
           transaction, repository, input.userId, shares,
         );
