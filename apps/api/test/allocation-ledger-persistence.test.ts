@@ -157,6 +157,60 @@ describe.sequential("allocation ledger persistence", () => {
     expect(legacy.rows[0].count).toBe(0);
   });
 
+  it("mirrors initialized allocations and idempotent replay without changing legacy reads", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n,
+      reader: {readShares: async () => 100n, convertToAssets: async (shares: bigint) => shares},
+    });
+    await store.openPositions({userId, positions: {UNASSIGNED: 100n}, key: "cutover"});
+    const input = {
+      userId, goalId, walletAddress: "0x0000000000000000000000000000000000000001",
+      reason: "manual", idempotencyKey: "new-allocation", shareDeltaAtomic: "35",
+    };
+    const first = await service.allocateGoalShares(input);
+    expect(first.allocatedSharesAtomic).toBe("35");
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED: 65n, [`GOAL:${goalId}`]: 35n});
+    expect(await service.allocateGoalShares(input)).toEqual(first);
+    const second = await service.allocateGoalShares({...input, idempotencyKey: "unassign", shareDeltaAtomic: "-10"});
+    expect(second.allocatedSharesAtomic).toBe("25");
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED: 75n, [`GOAL:${goalId}`]: 25n});
+    await service.assertGoalAllocationCutoverReady({userId, walletAddress: input.walletAddress});
+  });
+
+  it("does not mirror an account without an opening ledger", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {readShares: async () => 50n, convertToAssets: async (s: bigint) => s},
+    });
+    const result = await service.allocateGoalShares({
+      userId, goalId, walletAddress: "0x0000000000000000000000000000000000000001",
+      reason: "manual", idempotencyKey: "legacy-only", shareDeltaAtomic: "10",
+    });
+    expect(result.allocatedSharesAtomic).toBe("10");
+    expect(await store.getBalances(userId)).toEqual({});
+  });
+
+  it("rolls back legacy writes when mirrored ledger parity fails", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {readShares: async () => 100n, convertToAssets: async (s: bigint) => s},
+    });
+    await store.openPositions({userId, positions: {UNASSIGNED: 80n, [`GOAL:${goalId}`]: 20n}, key: "bad-opening"});
+    await expect(service.allocateGoalShares({
+      userId, goalId, walletAddress: "0x0000000000000000000000000000000000000001",
+      reason: "manual", idempotencyKey: "should-rollback", shareDeltaAtomic: "10",
+    })).rejects.toThrow(/mismatch/);
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED: 80n, [`GOAL:${goalId}`]: 20n});
+    const rows = await connection.pool.query(
+      "SELECT count(*)::integer AS n FROM goal_share_allocations WHERE user_id=$1", [userId],
+    );
+    expect(rows.rows[0].n).toBe(0);
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
