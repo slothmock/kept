@@ -1,6 +1,19 @@
-import { Link } from "react-router-dom";
+import {
+  ArrowLeft,
+} from "lucide-react";
+import {
+  Link,
+} from "react-router-dom";
 
-type PublicInformationPageKind = "privacy" | "terms" | "verification";
+import keptLogo from "@/assets/img/kept-logo-192x192.png";
+import {
+  Button,
+} from "@/components/ui/button";
+
+type PublicInformationPageKind =
+  | "privacy"
+  | "terms"
+  | "verification";
 
 interface InformationSection {
   readonly title: string;
@@ -14,7 +27,10 @@ interface PublicInformationContent {
   readonly sections: readonly InformationSection[];
 }
 
-const pageContent: Record<PublicInformationPageKind, PublicInformationContent> = {
+const pageContent: Record<
+  PublicInformationPageKind,
+  PublicInformationContent
+> = {
   privacy: {
     title: "Privacy",
     eyebrow: "How Kept handles information",
@@ -113,33 +129,146 @@ const pageContent: Record<PublicInformationPageKind, PublicInformationContent> =
   },
 };
 
-export function PublicInformationPage({ page }: { readonly page: PublicInformationPageKind }) {
-  const content = pageContent[page];
+export function PublicInformationPage({
+  page,
+}: {
+  readonly page:
+    PublicInformationPageKind;
+}) {
+  const content =
+    pageContent[page];
 
   return (
-    <main className="public-information">
-      <header className="public-information__header">
-        <Link className="brand" to="/">Kept</Link>
-        <Link className="button button--quiet" to="/">Back to home</Link>
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border/70 bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link
+            to="/"
+            className="flex items-center gap-2 font-semibold tracking-tight"
+            aria-label="Kept home"
+          >
+            <img
+              src={keptLogo}
+              alt=""
+              className="size-8 object-contain"
+            />
+
+            <span>
+              Kept
+            </span>
+          </Link>
+
+          <Button
+            variant="ghost"
+            render={
+              <Link to="/" />
+            }
+          >
+            <ArrowLeft className="size-4" />
+            Back to home
+          </Button>
+        </div>
       </header>
-      <section className="public-information__content">
-        <div className="public-information__intro">
-          <p className="eyebrow">{content.eyebrow}</p>
-          <h1>{content.title}</h1>
-          <p>{content.summary}</p>
+
+      <main className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+        <section className="max-w-3xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">
+            {content.eyebrow}
+          </p>
+
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
+            {content.title}
+          </h1>
+
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
+            {content.summary}
+          </p>
+        </section>
+
+        <div className="mt-12 space-y-4 sm:mt-16">
+          {content.sections.map(
+            (
+              section,
+              index,
+            ) => (
+              <article
+                key={section.title}
+                className="grid gap-5 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-[3rem_minmax(0,1fr)] sm:p-6"
+              >
+                <div
+                  className="grid size-10 place-items-center rounded-lg bg-primary/10 text-sm font-semibold tabular-nums text-primary"
+                  aria-hidden="true"
+                >
+                  {String(
+                    index + 1,
+                  ).padStart(
+                    2,
+                    "0",
+                  )}
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                    {section.title}
+                  </h2>
+
+                  <div className="mt-3 space-y-3 text-base leading-7 text-muted-foreground">
+                    {section.body.map(
+                      (
+                        paragraph,
+                      ) => (
+                        <p
+                          key={
+                            paragraph
+                          }
+                        >
+                          {
+                            paragraph
+                          }
+                        </p>
+                      ),
+                    )}
+                  </div>
+                </div>
+              </article>
+            ),
+          )}
         </div>
-        <div className="public-information__sections">
-          {content.sections.map((section, index) => (
-            <article className="public-information__section" key={section.title}>
-              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <h2>{section.title}</h2>
-                {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-              </div>
-            </article>
-          ))}
+      </main>
+
+      <footer className="border-t border-border/70">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <span>
+            Kept
+          </span>
+
+          <nav
+            className="flex flex-wrap gap-x-4 gap-y-2"
+            aria-label="Public information"
+          >
+            <Link
+              to="/privacy"
+              className="transition-colors hover:text-foreground"
+            >
+              Privacy
+            </Link>
+
+            <Link
+              to="/terms"
+              className="transition-colors hover:text-foreground"
+            >
+              Terms
+            </Link>
+
+            <Link
+              to="/verification"
+              className="transition-colors hover:text-foreground"
+            >
+              Verification
+            </Link>
+          </nav>
         </div>
-      </section>
-    </main>
+      </footer>
+    </div>
   );
 }
