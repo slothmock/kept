@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   CalendarCheck2,
@@ -5,6 +6,7 @@ import {
   Clock3,
   Info,
   Target,
+  Trash2,
 } from "lucide-react";
 
 import type {
@@ -17,6 +19,14 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { commitmentStatus, commitmentTitle } from "@/features/commitments/display";
 import type { RewardState } from "@/features/commitments/reward-claim";
 import { formatUsdc } from "@/features/savings/format";
@@ -30,6 +40,11 @@ interface CommitmentDetailViewProps {
   readonly onBack: () => void;
   readonly onOpenGoal: (goal: GoalDto) => void;
   readonly onClaimReward: (commitment: CommitmentDto) => Promise<boolean>;
+  readonly cancelling: boolean;
+  readonly cancelStatus: string | null;
+  readonly cancelError: string | null;
+  readonly onCancel: (commitment: CommitmentDto) => Promise<boolean>;
+  readonly onDismissCancel: () => void;
   readonly onAddToSavings: () => void;
 }
 
@@ -132,8 +147,15 @@ export function CommitmentDetailView({
   onBack,
   onOpenGoal,
   onClaimReward,
+  cancelling,
+  cancelStatus,
+  cancelError,
+  onCancel,
+  onDismissCancel,
   onAddToSavings,
 }: CommitmentDetailViewProps) {
+  const [cancelDialogOpen, setCancelDialogOpen] =
+    useState(false);
   const reward =
     rewardState?.kind === "ready"
       ? rewardState.reward
@@ -430,8 +452,102 @@ export function CommitmentDetailView({
               </div>
             </CardContent>
           </Card>
+
+          {commitment.state === "ACTIVE" ? (
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full"
+                disabled={cancelling}
+                onClick={() => {
+                  onDismissCancel();
+                  setCancelDialogOpen(true);
+                }}
+              >
+                <Trash2 className="size-4" />
+                {cancelling ? "Cancelling…" : "Cancel commitment"}
+              </Button>
+
+              {cancelStatus ? (
+                <p
+                  className="text-caption text-muted-foreground"
+                  role="status"
+                >
+                  {cancelStatus}
+                </p>
+              ) : null}
+
+              {cancelError ? (
+                <p
+                  className="text-caption text-destructive"
+                  role="alert"
+                >
+                  {cancelError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </aside>
       </div>
+
+      <Dialog
+        open={cancelDialogOpen}
+        onOpenChange={(open) => {
+          if (!cancelling) {
+            setCancelDialogOpen(open);
+          }
+
+          if (!open) {
+            onDismissCancel();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Cancel this commitment?
+            </DialogTitle>
+
+            <DialogDescription>
+              This stops the current commitment. You can create another commitment of the same type for this goal afterwards.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={cancelling}
+              onClick={() => setCancelDialogOpen(false)}
+            >
+              Keep commitment
+            </Button>
+
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={cancelling}
+              onClick={() => {
+                void (
+                  async () => {
+                    const succeeded =
+                      await onCancel(commitment);
+
+                    if (succeeded) {
+                      setCancelDialogOpen(false);
+                    }
+                  }
+                )();
+              }}
+            >
+              {cancelling
+                ? "Cancelling…"
+                : "Cancel commitment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

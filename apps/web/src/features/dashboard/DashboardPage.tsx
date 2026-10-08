@@ -239,6 +239,25 @@ interface DashboardPageProps {
 
     };
 
+    readonly cancellation: {
+      readonly cancellingId:
+      string | null;
+
+      readonly status:
+      string | null;
+
+      readonly error:
+      string | null;
+
+      readonly onCancel: (
+        commitment: CommitmentDto,
+      ) => Promise<boolean>;
+
+      readonly onDismiss:
+      () => void;
+
+    };
+
     readonly rewards: {
 
       readonly states:
@@ -703,6 +722,13 @@ export function DashboardPage(props: DashboardPageProps) {
             onBack={() => navigate("/commitments")}
             onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
             onClaimReward={goalManagement.rewards.onClaim}
+            cancelling={
+              goalManagement.cancellation.cancellingId === selectedCommitment.id
+            }
+            cancelStatus={goalManagement.cancellation.status}
+            cancelError={goalManagement.cancellation.error}
+            onCancel={goalManagement.cancellation.onCancel}
+            onDismissCancel={goalManagement.cancellation.onDismiss}
             onAddToSavings={() => setDepositOpen(true)}
           />
         ) : productState.kind === "loading" ? (
