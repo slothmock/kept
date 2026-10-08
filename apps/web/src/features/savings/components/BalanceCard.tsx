@@ -33,6 +33,7 @@ interface BalanceCardProps {
   readonly showActions?: boolean;
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
+  readonly onAddToSavings: () => void;
   readonly onRefresh: () => Promise<void>;
   readonly stagingFaucetAvailable: boolean;
   readonly stagingFaucetClaiming: boolean;
@@ -50,6 +51,7 @@ export function BalanceCard({
   showActions = true,
   onAddMoney,
   onWithdraw,
+  onAddToSavings,
   onRefresh,
   stagingFaucetAvailable,
   stagingFaucetClaiming,
@@ -246,21 +248,32 @@ export function BalanceCard({
           </div>
         </div>
 
-        {stagingFaucetAvailable ? (
-          <div className="mt-5 border-t border-white/15 pt-5">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={stagingFaucetClaiming || transactionPending}
-              onClick={onClaimStagingFaucet}
-              className="text-balance-foreground/75 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-white/35"
-            >
-              {stagingFaucetClaiming
-                ? "Getting test funds…"
-                : "Get test funds"}
-            </Button>
+        <div className="mt-5 flex flex-col gap-3 border-t border-white/15 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            {stagingFaucetAvailable ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={stagingFaucetClaiming || transactionPending}
+                onClick={onClaimStagingFaucet}
+                className="text-balance-foreground/75 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-white/35"
+              >
+                {stagingFaucetClaiming
+                  ? "Getting test funds…"
+                  : "Get test funds"}
+              </Button>
+            ) : null}
           </div>
-        ) : null}
+
+          <Button
+            disabled={!ready || transactionPending}
+            onClick={onAddToSavings}
+            className="bg-surface text-foreground hover:bg-accent disabled:bg-white/10 disabled:text-white/45"
+          >
+            <ArrowDownToLine className="size-4" />
+            Add to savings
+          </Button>
+        </div>
 
         {stagingFaucetStatus ? (
           <p
