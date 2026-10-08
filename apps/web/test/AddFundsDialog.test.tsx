@@ -178,9 +178,6 @@ function renderDialog() {
     const onOpenChange =
         vi.fn();
 
-    const onUseAvailableCash =
-        vi.fn();
-
     render(
         <AddFundsDialog
             open
@@ -188,15 +185,11 @@ function renderDialog() {
             onOpenChange={
                 onOpenChange
             }
-            onUseAvailableCash={
-                onUseAvailableCash
-            }
         />,
     );
 
     return {
         onOpenChange,
-        onUseAvailableCash,
     };
 }
 
@@ -978,35 +971,5 @@ describe(
             },
         );
 
-        it(
-            "uses available cash",
-            () => {
-                const {
-                    onOpenChange,
-                    onUseAvailableCash,
-                } =
-                    renderDialog();
-
-                fireEvent.click(
-                    screen.getByRole(
-                        "button",
-                        {
-                            name:
-                                "Use available cash",
-                        },
-                    ),
-                );
-
-                expect(
-                    onOpenChange,
-                ).toHaveBeenCalledWith(
-                    false,
-                );
-
-                expect(
-                    onUseAvailableCash,
-                ).toHaveBeenCalledOnce();
-            },
-        );
     },
 );
