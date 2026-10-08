@@ -66,6 +66,31 @@ describe.sequential("allocation ledger persistence", () => {
     await expect(store.recordVaultChange({...input,shares: 30n})).rejects.toThrow();
   });
 
+  it("bootstraps explicit opening positions once without treating them as deposits", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    const positions = {UNASSIGNED: 75n, [`GOAL:${goalId}`]: 25n};
+    await store.openPositions({userId, positions, key: "cutover"});
+    await store.openPositions({userId, positions, key: "cutover"});
+    expect(await store.getBalances(userId)).toEqual(positions);
+    await expect(store.openPositions({userId, positions: {UNASSIGNED: 100n}, key: "other-cutover"})).rejects.toThrow();
+    const origins = await connection.pool.query(
+      "SELECT DISTINCT origin_kind FROM allocation_ledger_entries WHERE user_id=$1", [userId],
+    );
+    expect(origins.rows.map(row => row.origin_kind)).toEqual(["OPENING"]);
+  });
+
+  it("serializes concurrent debits so balances cannot be spent twice", async () => {
+    const userId = await user();
+    await store.recordVaultChange({userId, shares: 10n, kind: "VAULT_CREDIT", key: "start"});
+    const outcomes = await Promise.allSettled([
+      store.recordVaultChange({userId, shares: 7n, kind: "VAULT_DEBIT", key: "debit-1"}),
+      store.recordVaultChange({userId, shares: 7n, kind: "VAULT_DEBIT", key: "debit-2"}),
+    ]);
+    expect(outcomes.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED: 3n});
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
