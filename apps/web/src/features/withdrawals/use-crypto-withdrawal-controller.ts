@@ -17,6 +17,9 @@ import type {
   KeptApi,
 } from "@/api/kept-api";
 import type {
+  AccessTokenProvider,
+} from "@/api/http-client";
+import type {
   TransactionSender,
 } from "@/wallet/blockchain";
 import {
@@ -63,6 +66,9 @@ import {
 interface UseCryptoWithdrawalControllerInput {
   readonly api:
     KeptApi | null;
+
+  readonly getAccessToken:
+    AccessTokenProvider;
 
   readonly account:
     Address | null;
@@ -116,6 +122,7 @@ export interface CryptoWithdrawalController
 
 export function useCryptoWithdrawalController({
   api,
+  getAccessToken,
   account,
   config,
   position,
@@ -221,6 +228,7 @@ export function useCryptoWithdrawalController({
 
           const runner =
             createKeptIntentsRunner({
+              getAccessToken,
               sourceAddress:
                 account,
               family:
@@ -264,6 +272,7 @@ export function useCryptoWithdrawalController({
         account,
         config,
         ensureTransactionNetwork,
+        getAccessToken,
         getProvider,
         position,
         ui,
@@ -656,6 +665,7 @@ export function useCryptoWithdrawalController({
         api,
         config,
         ensureTransactionNetwork,
+        getAccessToken,
         getProvider,
         position,
         refreshPosition,
