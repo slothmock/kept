@@ -211,6 +211,34 @@ describe.sequential("allocation ledger persistence", () => {
     expect(rows.rows[0].n).toBe(0);
   });
 
+  it("reconciles multi-goal withdrawals atomically and conserves provenance", async () => {
+    const userId = await user();
+    const goalA = await goal(userId);
+    const goalB = await goal(userId);
+    await store.openPositions({userId,positions:{UNASSIGNED:20n,[`GOAL:${goalA}`]:200n,[`GOAL:${goalB}`]:100n},key:"opening"});
+    const id = await store.reconcileToVaultShares({userId,liveShares:150n,key:"vault-observation-1"});
+    expect(id).toBeTruthy();
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED:0n,[`GOAL:${goalA}`]:100n,[`GOAL:${goalB}`]:50n});
+    const entries = await connection.pool.query<{share_delta_atomic:string}>(
+      "SELECT share_delta_atomic::text FROM allocation_ledger_entries WHERE event_id=$1", [id]);
+    expect(entries.rows.map(row => row.share_delta_atomic).sort()).toEqual(["-100","-20","-50"].sort());
+    const lotTotal = await connection.pool.query<{total:string}>(
+      "SELECT coalesce(sum(shares_atomic),0)::text AS total FROM allocation_share_lots WHERE user_id=$1", [userId]);
+    expect(lotTotal.rows[0]?.total).toBe("150");
+    expect(await store.reconcileToVaultShares({userId,liveShares:150n,key:"vault-observation-2"})).toBeNull();
+  });
+
+  it("credits unexpected shares only to unassigned without qualifying them as deposits", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    await store.openPositions({userId,positions:{UNASSIGNED:5n,[`GOAL:${goalId}`]:15n},key:"opening"});
+    await store.reconcileToVaultShares({userId,liveShares:30n,key:"credit"});
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED:15n,[`GOAL:${goalId}`]:15n});
+    const credit = await connection.pool.query<{origin_kind:string}>(
+      "SELECT origin_kind FROM allocation_share_lots WHERE user_id=$1 AND bucket_id=(SELECT id FROM allocation_buckets WHERE user_id=$1 AND bucket_kind='UNASSIGNED')", [userId]);
+    expect(credit.rows.every(row => row.origin_kind !== "EXTERNAL_DEPOSIT")).toBe(true);
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
