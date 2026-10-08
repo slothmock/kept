@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useState,
   type FormEvent,
 } from "react";
@@ -23,8 +24,15 @@ import {
 import {
   joinWaitlist,
 } from "@/features/public/waitlist-api";
+import type {
+  Session,
+} from "@/app/providers/session";
 
-export function WaitlistPage() {
+export function WaitlistPage({
+  session,
+}: {
+  readonly session: Session;
+}) {
   const [
     email,
     setEmail,
@@ -50,6 +58,23 @@ export function WaitlistPage() {
     useState<
       string | null
     >(null);
+
+  useEffect(
+    () => {
+      if (
+        !email
+        && session.email
+      ) {
+        setEmail(
+          session.email,
+        );
+      }
+    },
+    [
+      email,
+      session.email,
+    ],
+  );
 
   async function submit(
     event:
@@ -256,15 +281,6 @@ export function WaitlistPage() {
         </section>
       </main>
 
-      <footer className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 text-sm text-muted-foreground sm:px-6 lg:px-8">
-        <span>
-          Kept
-        </span>
-
-        <span>
-          Goals with follow-through
-        </span>
-      </footer>
     </div>
   );
 }
