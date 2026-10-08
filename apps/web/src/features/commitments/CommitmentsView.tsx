@@ -12,6 +12,13 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Card,
   CardContent,
 } from "@/components/ui/card";
@@ -47,6 +54,9 @@ export function CommitmentsView({
 }: CommitmentsViewProps) {
   const [filter, setFilter] =
     useState<CommitmentFilter>("active");
+
+  const [goalPickerOpen, setGoalPickerOpen] =
+    useState(false);
 
   const active = commitments.filter(
     (commitment) => commitment.state === "ACTIVE",
@@ -87,14 +97,18 @@ export function CommitmentsView({
   const completedCommitments =
     [...completed, ...failed, ...cancelled];
 
-  const suggestedGoals =
+  const availableGoals =
     activeGoals.filter(
       (goal) =>
         !currentCommitments.some(
           (commitment) =>
-            commitment.savingsGoalId === goal.id,
+            commitment.savingsGoalId === goal.id
+            && commitment.definition.code === "WEEKLY_SAVINGS_V1",
         ),
     );
+
+  const suggestedGoals =
+    availableGoals;
 
   const visibleCommitments =
     filter === "active"
@@ -108,9 +122,9 @@ export function CommitmentsView({
           Commitments
         </h1>
 
-        {activeGoals.length > 0 ? (
+        {availableGoals.length > 0 ? (
           <Button
-            onClick={() => onAddCommitment(activeGoals[0]!)}
+            onClick={() => setGoalPickerOpen(true)}
           >
             <Plus className="size-4" />
             Add commitment
@@ -369,6 +383,46 @@ export function CommitmentsView({
           </div>
         </section>
       ) : null}
+
+
+      <Dialog
+        open={goalPickerOpen}
+        onOpenChange={setGoalPickerOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Choose a goal
+            </DialogTitle>
+
+            <DialogDescription>
+              Select the goal you want to add a weekly commitment to.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {availableGoals.map((goal) => (
+              <button
+                key={goal.id}
+                type="button"
+                className="w-full rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-primary/50 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                onClick={() => {
+                  setGoalPickerOpen(false);
+                  onAddCommitment(goal);
+                }}
+              >
+                <p className="text-label font-medium">
+                  {goal.name}
+                </p>
+
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Add a weekly savings commitment to this goal.
+                </p>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {filter === "completed"
         && completedCommitments.length > 0 ? (

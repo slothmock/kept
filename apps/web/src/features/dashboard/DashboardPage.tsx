@@ -606,6 +606,18 @@ export function DashboardPage(props: DashboardPageProps) {
 
     : undefined;
 
+  const currentCommitmentsForDialog =
+    commitmentGoal
+      ? commitments.filter(
+        (commitment) =>
+          commitment.savingsGoalId === commitmentGoal.id
+          && (
+            commitment.state === "DRAFT"
+            || commitment.state === "ACTIVE"
+          ),
+      )
+      : [];
+
   const allocatedGoalSavings =
     goalFundingState.kind === "ready"
       ? goalFundingState.funding.totalAllocatedAssets
@@ -1290,6 +1302,7 @@ export function DashboardPage(props: DashboardPageProps) {
         draft={
           commitmentForDialog?.state === "DRAFT" ? commitmentForDialog : null
         }
+        currentCommitments={currentCommitmentsForDialog}
         submitting={goalManagement.commitment.creating}
         status={goalManagement.commitment.status}
         error={goalManagement.commitment.error}
