@@ -239,6 +239,92 @@ export class AllocationLedgerStore {
     });
   }
 
+  /**
+   * Atomically credit ALL still-unclaimed confirmed Deposit logs for this owner.
+   * Their aggregate minted shares must explain the full vault/ledger gap.
+   * Do not partially attribute a batch or silently promote UNKNOWN lots.
+   */
+  async claimIndexedDepositBatch(input: {
+    userId: string; chainId: bigint; vaultAddress: string;
+    ownerAddress: string; liveVaultShares: bigint;
+  }): Promise<{credited: number; shares: bigint}> {
+    if (input.chainId <= 0n) throw new Error("Invalid deposit chain");
+    const vault = getAddress(input.vaultAddress);
+    const walletAddress = getAddress(input.ownerAddress);
+    return this.db.transaction(async tx => {
+      const [owner] = await tx.select({id:users.id}).from(users)
+        .where(eq(users.id,input.userId)).for("update");
+      if (!owner) throw new Error("Unknown ledger owner");
+      const [wallet] = await tx.select({id:wallets.id}).from(wallets).where(and(
+        eq(wallets.userId,input.userId),eq(wallets.chainId,input.chainId),
+        sql`lower(${wallets.address}) = lower(${walletAddress})`,
+      )).limit(1);
+      if (!wallet) throw new Error("Deposit owner wallet does not belong to user");
+      if (!(await this.hasOpeningInTransaction(tx,input.userId))) {
+        throw new Error("Deposit ledger has not been initialized");
+      }
+      const indexed = await tx.select().from(vaultActivityEvents).where(and(
+        eq(vaultActivityEvents.chainId,input.chainId),
+        eq(vaultActivityEvents.eventType,"DEPOSIT"),
+        sql`lower(${vaultActivityEvents.vaultAddress}) = lower(${vault})`,
+        sql`lower(${vaultActivityEvents.accountAddress}) = lower(${walletAddress})`,
+      )).orderBy(asc(vaultActivityEvents.blockNumber),asc(vaultActivityEvents.logIndex));
+      const prior = await tx.select().from(allocationDepositClaims).where(and(
+        eq(allocationDepositClaims.chainId,input.chainId),
+        sql`lower(${allocationDepositClaims.vaultAddress}) = lower(${vault})`,
+      ));
+      const claimed = new Map(prior.map(row => [
+        `${row.transactionHash.toLowerCase()}:${row.logIndex}`,row,
+      ]));
+      const pending = indexed.filter(row => !claimed.has(`${row.transactionHash.toLowerCase()}:${row.logIndex}`));
+      for (const row of indexed) {
+        const existing = claimed.get(`${row.transactionHash.toLowerCase()}:${row.logIndex}`);
+        if (existing && existing.userId !== input.userId) {
+          throw new Error("Indexed deposit already claimed by another user");
+        }
+      }
+      const balances = await this.getBalancesInTransaction(tx,input.userId);
+      const accounted = Object.values(balances).reduce((n,value)=>n+value,0n);
+      if (pending.length === 0) {
+        if (accounted > input.liveVaultShares) throw new Error("Ledger exceeds live vault shares");
+        return {credited:0,shares:0n};
+      }
+      let total = 0n;
+      for (const row of pending) {
+        if (!row.sharesAtomic || BigInt(row.sharesAtomic) <= 0n ||
+            !/^0x[0-9a-fA-F]{64}$/.test(row.transactionHash) ||
+            row.logIndex < 0) {
+          throw new Error("Pending indexed deposit lacks exact share evidence");
+        }
+        total += BigInt(row.sharesAtomic);
+      }
+      const decision = planFreshDepositAttribution({
+        mintedShares:total,currentVaultShares:input.liveVaultShares,ledgerShares:accounted,
+      });
+      if (decision.kind !== "CREDIT") {
+        // A prior reconciliation cannot be safely rewritten as fresh funding.
+        throw new Error("Unclaimed deposit is already reflected; provenance is ambiguous");
+      }
+      for (const row of pending) {
+        const amount = BigInt(row.sharesAtomic!);
+        const eventId = await this.writeEventInTransaction(tx,{
+          userId:input.userId,kind:"VAULT_CREDIT",
+          key:`verified-deposit:${input.chainId}:${vault.toLowerCase()}:${row.transactionHash.toLowerCase()}:${row.logIndex}`,
+          legs:[{bucket:"UNASSIGNED",deltaShares:amount}],
+          verifiedDeposit:true,
+        });
+        await tx.insert(allocationDepositClaims).values({
+          id:randomUUID(),userId:input.userId,ledgerEventId:eventId,
+          chainId:input.chainId,vaultAddress:vault,
+          transactionHash:row.transactionHash.toLowerCase(),logIndex:row.logIndex,
+          sharesAtomic:amount.toString(),status:"CREDITED",createdAt:new Date(),
+        });
+      }
+      await this.assertVaultParityInTransaction(tx,input.userId,input.liveVaultShares);
+      return {credited:pending.length,shares:total};
+    });
+  }
+
   async recordVaultChange(input: {
     userId: string; kind: CreditDebit; shares: bigint; key: string;
     bucket?: AllocationBucketKey;
