@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { planVaultReconciliation } from "../domain/allocation-reconciliation.js";
 import type { KeptDatabase } from "../db/client.js";
 import {
   allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, allocationShareLots, users,
@@ -102,6 +103,27 @@ export class AllocationLedgerStore {
     ];
     assertLedgerEvent("TRANSFER", legs);
     return this.writeEventInTransaction(tx, {userId:input.userId,kind:"TRANSFER",key:input.key,legs});
+  }
+
+  /** Apply an observed vault balance atomically after verified opening. */
+  async reconcileToVaultShares(input: {
+    userId: string; liveShares: bigint; key: string;
+  }): Promise<string | null> {
+    if (!input.key.trim()) throw new Error("Reconciliation key required");
+    return this.db.transaction(async tx => {
+      const [owner] = await tx.select({id: users.id}).from(users)
+        .where(eq(users.id, input.userId)).for("update");
+      if (!owner) throw new Error("Unknown ledger owner");
+      if (!(await this.hasOpeningInTransaction(tx, input.userId))) {
+        throw new Error("Allocation ledger has no verified opening event");
+      }
+      const balances = await this.getBalancesInTransaction(tx, input.userId);
+      const plan = planVaultReconciliation(balances, input.liveShares);
+      if (!plan) return null;
+      return this.writeEventInTransaction(tx, {
+        userId: input.userId, key: input.key, kind: plan.kind, legs: plan.legs,
+      });
+    });
   }
 
   async recordVaultChange(input: {
