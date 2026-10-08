@@ -703,6 +703,7 @@ export function useBankWithdrawalOrderController({
         api,
         ensureTransactionNetwork,
         fiatEnabled,
+        getAccessToken,
         getProvider,
         orderStore,
         transferStore,
