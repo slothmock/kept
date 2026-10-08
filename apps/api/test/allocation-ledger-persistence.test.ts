@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { connectDatabase, type DatabaseConnection } from "../src/db/client.js";
 import { AllocationLedgerStore } from "../src/persistence/allocation-ledger-store.js";
+import { KeptPersistenceService } from "../src/persistence/service.js";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test";
 let connection: DatabaseConnection;
@@ -124,6 +125,36 @@ describe.sequential("allocation ledger persistence", () => {
       await expect(store.assertVaultParityInTransaction(tx, userId, 19n))
         .rejects.toThrow("out of sync");
     });
+  });
+
+  it("preflights ledger cutover without changing existing goal allocations", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n,
+      reader: {
+        readShares: async () => 100n,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    const request = {
+      userId,
+      walletAddress: "0x0000000000000000000000000000000000000001",
+    };
+    await expect(service.assertGoalAllocationCutoverReady(request)).rejects.toThrow(/opening/);
+    await store.openPositions({
+      userId, positions: {UNASSIGNED: 100n}, key: "verified-opening",
+    });
+    await service.assertGoalAllocationCutoverReady(request);
+    await store.transfer({
+      userId, from: "UNASSIGNED", to: `GOAL:${goalId}`,
+      shares: 20n, key: "unmirrored-transfer",
+    });
+    await expect(service.assertGoalAllocationCutoverReady(request)).rejects.toThrow(/mismatch/);
+    const legacy = await connection.pool.query(
+      "SELECT count(*)::integer AS count FROM goal_share_allocations WHERE user_id=$1", [userId],
+    );
+    expect(legacy.rows[0].count).toBe(0);
   });
 
   it("rejects ownership violations", async () => {
