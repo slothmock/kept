@@ -2,6 +2,7 @@ import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {connectDatabase,type DatabaseConnection} from "../src/db/client.js";
 import {AllocationLedgerStore} from "../src/persistence/allocation-ledger-store.js";
+import {KeptPersistenceService} from "../src/persistence/service.js";
 
 const url = process.env.TEST_DATABASE_URL ??
   "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test";
@@ -34,6 +35,28 @@ async function fixture() {
 }
 
 describe.sequential("atomic verified vault deposit claim",()=>{
+  it("reads live vault shares internally rather than accepting a supplied balance",async()=>{
+    const {userId,claim}=await fixture();
+    let reads=0;
+    const service=new KeptPersistenceService(connection.db,{
+      chainId:143n,
+      reader:{
+        readShares:async()=>{reads++;return 20n;},
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    });
+    const input={
+      userId,
+      walletAddress:address,
+      vaultAddress:vault,
+      transactionHash:claim.transactionHash,
+      logIndex:claim.logIndex,
+    };
+    const result=await service.claimVerifiedVaultDeposit(input);
+    expect(result.status).toBe("CREDITED");
+    expect(reads).toBe(1);
+    expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:20n});
+  });
   it("credits verified shares and lineage once across idempotent replay",async()=>{
     const {userId,claim}=await fixture();
     const first=await ledger.claimIndexedDeposit(claim);
