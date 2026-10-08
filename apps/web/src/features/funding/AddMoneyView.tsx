@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { ArrowLeft, CheckCircle2, ShieldCheck, WalletCards } from "lucide-react";
 
+import type { AccessTokenProvider } from "@/api/http-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AddFundsChoiceView } from "@/features/funding/components/AddFundsChoiceView";
@@ -18,6 +19,7 @@ type FundingView =
 
 interface AddMoneyViewProps {
   readonly walletAddress: string | null;
+  readonly getAccessToken: AccessTokenProvider;
   readonly fiatEnabled: boolean;
   readonly availableCashReady: boolean;
   readonly readSolanaFundingBalances: (
@@ -32,6 +34,7 @@ interface AddMoneyViewProps {
 
 export function AddMoneyView({
   walletAddress,
+  getAccessToken,
   fiatEnabled,
   availableCashReady,
   readSolanaFundingBalances,
@@ -52,7 +55,9 @@ export function AddMoneyView({
     executeExternalFunding,
     clearExecutionFeedback,
     resetExecution,
-  } = useFundingExecutionController();
+  } = useFundingExecutionController({
+    getAccessToken,
+  });
 
   const {
     fiatStatus,
@@ -81,6 +86,7 @@ export function AddMoneyView({
     resetPreview,
   } = useFundingPreviewController({
     clearExecutionFeedback,
+    getAccessToken,
   });
 
   const {
