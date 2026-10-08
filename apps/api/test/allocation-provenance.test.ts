@@ -48,3 +48,12 @@ describe("allocation provenance", () => {
     expect(countFirstGoalAllocations(moveProvenanceLots([legacy], "UNASSIGNED", b, 25n).moved, b)).toBe(0n);
   });
 });
+
+describe('conservative opening eligibility', () => {
+  it('does not treat unknown historical opening holdings as fresh savings', () => {
+    const moved = moveProvenanceLots([{
+      bucket:'UNASSIGNED', shares:10n,originEventId:'cutover',originKind:'OPENING',visitedGoals:[],
+    }], 'UNASSIGNED',a,10n);
+    expect(countFirstGoalAllocations(moved.moved,a)).toBe(0n);
+  });
+});
