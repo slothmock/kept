@@ -7,6 +7,9 @@ import type {
   Session,
 } from "@/app/providers/session";
 import {
+  Link,
+} from "react-router-dom";
+import {
   Button,
 } from "@/components/ui/button";
 import {
@@ -45,17 +48,24 @@ export function PrivateStagingAccessPage({
             </p>
           ) : null}
 
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-6"
-            onClick={() => {
-              void session.logout();
-            }}
-          >
-            <LogOut className="size-4" />
-            Sign out
-          </Button>
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                void session.logout();
+              }}
+            >
+              <LogOut className="size-4" />
+              Sign out
+            </Button>
+
+            <Button
+              render={<Link to="/waitlist" />}
+            >
+              Join the waitlist
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
