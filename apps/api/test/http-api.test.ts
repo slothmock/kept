@@ -364,6 +364,114 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("rejects intents proxy requests from untrusted origins", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        webOrigin:
+          "https://staging.keptfinance.app",
+        auroraIntents: {
+          baseUrl:
+            "https://intents.example/",
+          apiKey:
+            "test-key",
+        },
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/intents-connect/quote",
+      headers: {
+        origin:
+          "https://attacker.example",
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: {
+        code: "FORBIDDEN",
+      },
+    });
+
+    await app.close();
+  });
+
+  it("rate limits intents proxy requests per client", async () => {
+    const originalFetch =
+      globalThis.fetch;
+
+    globalThis.fetch =
+      vi.fn(async () =>
+        new Response("{}", {
+          status: 200,
+          headers: {
+            "content-type":
+              "application/json",
+          },
+        }),
+      ) as typeof fetch;
+
+    try {
+      const app = buildApp(
+        buildDependencies(),
+        {
+          webOrigin:
+            "https://staging.keptfinance.app",
+          intentsProxyRateLimit: {
+            maxRequests: 1,
+            windowMs: 60_000,
+          },
+          auroraIntents: {
+            baseUrl:
+              "https://intents.example/",
+            apiKey:
+              "test-key",
+          },
+        },
+      );
+
+      const first = await app.inject({
+        method: "GET",
+        url: "/api/intents-connect/quote",
+        headers: {
+          origin:
+            "https://staging.keptfinance.app",
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+      });
+
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: "GET",
+        url: "/api/intents-connect/quote",
+        headers: {
+          origin:
+            "https://staging.keptfinance.app",
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+      });
+
+      expect(second.statusCode).toBe(429);
+      expect(second.headers["retry-after"])
+        .toBeDefined();
+      expect(second.json()).toEqual({
+        error: {
+          code: "RATE_LIMITED",
+        },
+      });
+
+      await app.close();
+    } finally {
+      globalThis.fetch =
+        originalFetch;
+    }
+  });
+
   it("returns the aggregated dashboard read model in one authenticated request", async () => {
     const dependencies = buildDependencies();
 
