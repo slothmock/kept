@@ -29,6 +29,35 @@ describe.sequential('persisted allocation lineage', () => {
     expect(result.rows[0]?.ever_goal_allocated).toBe(true);
     expect(result.rows[0]?.shares_atomic).toBe('25');
   });
+  it('persists immutable pre-transfer history through recycling and idempotent replay', async () => {
+    const {userId,a} = await owner();
+    await store.openPositions({userId, positions:{UNASSIGNED:20n},key:'opening'});
+    const first = await store.transfer({userId,from:'UNASSIGNED',to:a,shares:12n,key:'assign'});
+    await store.transfer({userId,from:a,to:'UNASSIGNED',shares:12n,key:'unassign'});
+    expect(await store.transfer({userId,from:'UNASSIGNED',to:a,shares:12n,key:'assign'})).toBe(first);
+    const rows = await connection.pool.query<{
+      event_id:string; origin_kind:string; was_ever_goal_allocated:boolean; shares_atomic:string;
+      source_kind:string; destination_kind:string;
+    }>(`
+      SELECT m.event_id, m.origin_kind, m.was_ever_goal_allocated, m.shares_atomic::text,
+        src.bucket_kind AS source_kind, dest.bucket_kind AS destination_kind
+      FROM allocation_transfer_lot_movements m
+      JOIN allocation_buckets src ON src.id=m.source_bucket_id
+      JOIN allocation_buckets dest ON dest.id=m.destination_bucket_id
+      WHERE m.user_id=$1 ORDER BY m.created_at,m.id
+    `,[userId]);
+    expect(rows.rows).toHaveLength(2);
+    const firstMovement = rows.rows.find(row => row.event_id === first);
+    expect(firstMovement).toMatchObject({
+      origin_kind:'OPENING',was_ever_goal_allocated:false,shares_atomic:'12',
+      source_kind:'UNASSIGNED',destination_kind:'GOAL',
+    });
+    const recycled = rows.rows.find(row => row.event_id !== first);
+    expect(recycled).toMatchObject({
+      origin_kind:'OPENING',was_ever_goal_allocated:true,shares_atomic:'12',
+      source_kind:'GOAL',destination_kind:'UNASSIGNED',
+    });
+  });
   it('preserves exact share conservation between lots and ledger balances', async () => {
     const {userId,a} = await owner();
     await store.recordVaultChange({userId,kind:'VAULT_CREDIT',shares:50n,key:'credit'});
