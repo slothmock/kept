@@ -1095,6 +1095,40 @@ export class KeptPersistenceService {
     });
   }
 
+  /**
+   * Mirror an already initialized allocation in the same DB transaction.
+   * Legacy remains authoritative for API reads and commitment verification.
+   */
+  private async mirrorGoalAllocationIfReady(
+    transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0],
+    repository: KeptRepository,
+    input: {
+      readonly userId: string;
+      readonly vaultShares: bigint;
+      readonly from: `GOAL:${string}` | "UNASSIGNED";
+      readonly to: `GOAL:${string}` | "UNASSIGNED";
+      readonly shares: bigint;
+      readonly idempotencyKey: string;
+    },
+  ): Promise<void> {
+    const ledger = new AllocationLedgerStore(this.db);
+    if (!(await ledger.hasOpeningInTransaction(transaction, input.userId))) return;
+    await ledger.assertVaultParityInTransaction(transaction, input.userId, input.vaultShares);
+    await ledger.transferInTransaction(transaction, {
+      userId: input.userId, from: input.from, to: input.to,
+      shares: input.shares, key: input.idempotencyKey,
+    });
+    const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+    const balances = await ledger.getBalancesInTransaction(transaction, input.userId);
+    assertAllocationCutoverParity({
+      hasOpening: true, liveVaultShares: input.vaultShares,
+      legacyGoalShares: Object.fromEntries(legacy.map(row => [
+        row.goalId, BigInt(row.allocatedSharesAtomic),
+      ])),
+      ledgerBalances: balances,
+    });
+  }
+
   async getGoalAllocation(
     userId: string,
     goalId: string,
@@ -1159,7 +1193,7 @@ export class KeptPersistenceService {
       "goal:share-allocation:append",
       idempotencyKey,
       request,
-      async (repository) => {
+      async (repository, transaction) => {
         await repository.lockGoalsForOwner(input.userId);
         if (!(await repository.findGoalForOwner(input.userId, input.goalId))) {
           throw new NotFoundError("Savings goal");
@@ -1192,6 +1226,15 @@ export class KeptPersistenceService {
           transactionHash: null,
           createdAt: new Date(),
         });
+        if (delta !== 0n) {
+          await this.mirrorGoalAllocationIfReady(transaction, repository, {
+            userId: input.userId, vaultShares: shares,
+            from: delta > 0n ? "UNASSIGNED" : `GOAL:${input.goalId}`,
+            to: delta > 0n ? `GOAL:${input.goalId}` : "UNASSIGNED",
+            shares: delta > 0n ? delta : -delta,
+            idempotencyKey: `goal-allocation:${idempotencyKey}`,
+          });
+        }
         return this.toGoalAllocationDto(input.goalId, nextGoalAllocation, nextTotalAllocation, shares);
       },
     );
@@ -1231,7 +1274,7 @@ export class KeptPersistenceService {
       "goal:share-reallocation",
       idempotencyKey,
       request,
-      async (repository) => {
+      async (repository, transaction) => {
         /*
          * Use the same owner-wide goal lock as normal
          * allocation changes. This serializes changes
@@ -1341,6 +1384,14 @@ export class KeptPersistenceService {
           reason: "reallocation",
           transactionHash: null,
           createdAt: now,
+        });
+
+        await this.mirrorGoalAllocationIfReady(transaction, repository, {
+          userId: input.userId, vaultShares: shares,
+          from: `GOAL:${input.fromGoalId}`,
+          to: `GOAL:${input.toGoalId}`,
+          shares: amount,
+          idempotencyKey: `goal-reallocation:${idempotencyKey}`,
         });
 
         return {
@@ -1992,7 +2043,7 @@ export class KeptPersistenceService {
     scope: string,
     idempotencyKey: string,
     request: unknown,
-    operation: (repository: KeptRepository) => Promise<T>,
+    operation: (repository: KeptRepository, transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0]) => Promise<T>,
   ): Promise<T> {
     const key = requireNonBlank(idempotencyKey, "idempotencyKey");
     const requestHash = hashRequest(request);
@@ -2025,7 +2076,7 @@ export class KeptPersistenceService {
         return existing.responseBody as unknown as T;
       }
 
-      const result = await operation(repository);
+      const result = await operation(repository, transaction);
       const serializedResult = toJsonValue(result);
       await repository.completeIdempotency(id, serializedResult);
       return serializedResult as unknown as T;
