@@ -291,6 +291,70 @@ describe.sequential("allocation ledger persistence", () => {
     expect(await store.getBalances(userId)).toEqual({});
   });
 
+  it("automatically reconciles an initialized ledger when reading a goal", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    let live = 100n;
+    const walletAddress = "0x0000000000000000000000000000000000000001";
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => live,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    await service.allocateGoalShares({
+      userId, goalId, walletAddress, shareDeltaAtomic: "70",
+      reason: "manual", idempotencyKey: "allocation-before-opening",
+    });
+    await store.openPositions({
+      userId, key: "cutover",
+      positions: {UNASSIGNED: 30n, [`GOAL:${goalId}`]: 70n},
+    });
+
+    live = 40n;
+    const allocation = await service.getGoalAllocation(userId, goalId, walletAddress);
+    expect(allocation?.allocatedSharesAtomic).toBe("40");
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED: 0n, [`GOAL:${goalId}`]: 40n,
+    });
+    await service.assertGoalAllocationCutoverReady({userId, walletAddress});
+    const events = await connection.pool.query<{count:string}>(
+      "SELECT count(*)::text AS count FROM allocation_ledger_events WHERE user_id=$1 AND event_kind='RECONCILIATION_DEBIT'",
+      [userId],
+    );
+    expect(events.rows[0]?.count).toBe("1");
+    await service.getGoalAllocation(userId, goalId, walletAddress);
+    const repeated = await connection.pool.query<{count:string}>(
+      "SELECT count(*)::text AS count FROM allocation_ledger_events WHERE user_id=$1 AND event_kind='RECONCILIATION_DEBIT'",
+      [userId],
+    );
+    expect(repeated.rows[0]?.count).toBe("1");
+  });
+
+  it("reconciles initialized ledger before processing a new goal allocation", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    let live = 100n;
+    const walletAddress = "0x0000000000000000000000000000000000000001";
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => live,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    await store.openPositions({userId, positions: {UNASSIGNED: 100n}, key: "cutover"});
+    live = 70n;
+    const result = await service.allocateGoalShares({
+      userId, goalId, walletAddress, shareDeltaAtomic: "20",
+      reason: "manual", idempotencyKey: "after-external-withdrawal",
+    });
+    expect(result.allocatedSharesAtomic).toBe("20");
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED: 50n, [`GOAL:${goalId}`]: 20n,
+    });
+    await service.assertGoalAllocationCutoverReady({userId, walletAddress});
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
