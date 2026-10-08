@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useState,
   type FormEvent,
 } from "react";
@@ -34,10 +33,17 @@ export function WaitlistPage({
   readonly session: Session;
 }) {
   const [
-    email,
-    setEmail,
+    emailOverride,
+    setEmailOverride,
   ] =
-    useState("");
+    useState<
+      string | null
+    >(null);
+
+  const email =
+    emailOverride
+    ?? session.email
+    ?? "";
 
   const [
     submitting,
@@ -58,23 +64,6 @@ export function WaitlistPage({
     useState<
       string | null
     >(null);
-
-  useEffect(
-    () => {
-      if (
-        !email
-        && session.email
-      ) {
-        setEmail(
-          session.email,
-        );
-      }
-    },
-    [
-      email,
-      session.email,
-    ],
-  );
 
   async function submit(
     event:
@@ -242,7 +231,7 @@ export function WaitlistPage({
                     submitting
                   }
                   onChange={(event) => {
-                    setEmail(
+                    setEmailOverride(
                       event.target.value,
                     );
                     setError(
