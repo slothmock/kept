@@ -12,11 +12,11 @@ beforeAll(()=>{connection=connectDatabase(url);ledger=new AllocationLedgerStore(
 beforeEach(async()=>{await connection.pool.query("TRUNCATE users CASCADE");});
 afterAll(async()=>{await connection?.close();});
 const vault = "0x" + "1".repeat(40);
-const address = "0x" + "2".repeat(40);
 const chainId = 143n;
 
 async function fixture() {
   const userId=randomUUID();
+  const address="0x"+randomUUID().replaceAll("-","").padStart(40,"0");
   const hash="0x"+randomUUID().replaceAll("-","").padEnd(64,"0");
   await connection.pool.query("INSERT INTO users(id,privy_user_id,created_at,updated_at) VALUES($1,$2,now(),now())",[userId,`privy:${userId}`]);
   await connection.pool.query(
@@ -48,7 +48,7 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     });
     const input={
       userId,
-      walletAddress:address,
+      walletAddress:claim.ownerAddress,
       transactionHash:claim.transactionHash,
       logIndex:claim.logIndex,
     };
@@ -79,9 +79,9 @@ describe.sequential("atomic verified vault deposit claim",()=>{
         (id,chain_id,vault_address,account_address,event_type,assets_atomic,
          shares_atomic,block_number,transaction_hash,log_index,created_at)
        VALUES ($1,143,$2,$3,'DEPOSIT',29,30,101,$4,0,now())`,
-      [randomUUID(),vault,address,secondHash],
+      [randomUUID(),vault,claim.ownerAddress,secondHash],
     );
-    const input={userId,chainId,vaultAddress:vault,ownerAddress:address,liveVaultShares:50n};
+    const input={userId,chainId,vaultAddress:vault,ownerAddress:claim.ownerAddress,liveVaultShares:50n};
     await expect(ledger.claimIndexedDeposit({...claim,liveVaultShares:50n}))
       .rejects.toThrow(/uniquely attributed/);
     expect(await ledger.claimIndexedDepositBatch(input)).toEqual({credited:2,shares:50n});
@@ -99,12 +99,12 @@ describe.sequential("atomic verified vault deposit claim",()=>{
   });
 
   it("rejects a partially reconciled deposit batch without writing claims",async()=>{
-    const {userId}=await fixture();
+    const {userId,claim}=await fixture();
     await ledger.recordVaultChange({
       userId,kind:"RECONCILIATION_CREDIT",shares:10n,key:"prior-reconciliation",
     });
     await expect(ledger.claimIndexedDepositBatch({
-      userId,chainId,vaultAddress:vault,ownerAddress:address,liveVaultShares:20n,
+      userId,chainId,vaultAddress:vault,ownerAddress:claim.ownerAddress,liveVaultShares:20n,
     })).rejects.toThrow(/uniquely attributed/);
     const claims=await connection.pool.query(
       "SELECT id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
