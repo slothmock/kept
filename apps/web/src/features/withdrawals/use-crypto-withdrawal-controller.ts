@@ -570,6 +570,7 @@ export function useCryptoWithdrawalController({
 
               const runner =
                 createKeptIntentsRunner({
+                  getAccessToken,
                   sourceAddress:
                     account,
                   family:
