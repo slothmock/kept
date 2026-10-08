@@ -619,14 +619,28 @@ describe.sequential("commitment persistence and lifecycle", () => {
   it("lists only the requesting user's commitments in newest-first order", async () => {
     const owner = await createUser("owner");
     const other = await createUser("other");
-    const goal = await createGoal(owner.id);
+    const firstGoal = await createGoal(owner.id);
+    const secondGoal = await createGoal(owner.id);
     const otherGoal = await createGoal(other.id);
-    const first = await createDraft(owner.id, goal.id);
-    const second = await createDraft(owner.id, goal.id);
+    const first = await createDraft(owner.id, firstGoal.id);
+    const second = await createDraft(owner.id, secondGoal.id);
     await createDraft(other.id, otherGoal.id);
 
     await expect(service.listCommitments(owner.id)).resolves.toEqual([second, first]);
     await expect(service.listCommitments(other.id)).resolves.toHaveLength(1);
+  });
+
+  it("rejects a second current commitment of the same type on one goal", async () => {
+    const owner = await createUser("owner");
+    const goal = await createGoal(owner.id);
+
+    await createDraft(owner.id, goal.id);
+
+    await expect(
+      createDraft(owner.id, goal.id),
+    ).rejects.toThrow(
+      "This goal already has a current commitment of this type",
+    );
   });
 
   it("activates through the domain lifecycle and persists the incremented version", async () => {
@@ -949,7 +963,8 @@ describe.sequential("commitment persistence and lifecycle", () => {
       );
     }
 
-    const invalidDraft = await createDraft(owner.id, goal.id);
+    const invalidGoal = await createGoal(owner.id);
+    const invalidDraft = await createDraft(owner.id, invalidGoal.id);
     await connection.pool.query(
       "UPDATE user_commitments SET parameters = '{\"targetAmountAtomic\":\"0\",\"periodDays\":7}' WHERE id = $1",
       [invalidDraft.id],

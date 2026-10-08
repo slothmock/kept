@@ -33,6 +33,7 @@ interface CreateCommitmentDialogProps {
   readonly open: boolean;
   readonly goal: GoalDto | null;
   readonly draft: CommitmentDto | null;
+  readonly currentCommitments: readonly CommitmentDto[];
   readonly submitting: boolean;
   readonly status: string | null;
   readonly error: string | null;
@@ -51,6 +52,7 @@ export function CreateCommitmentDialog({
   open,
   goal,
   draft,
+  currentCommitments,
   submitting,
   status,
   error,
@@ -61,6 +63,16 @@ export function CreateCommitmentDialog({
     useState<CommitmentCode | null>(null);
 
   const [target, setTarget] = useState("");
+
+  const weeklySavingsAlreadyAdded =
+    currentCommitments.some(
+      (commitment) =>
+        commitment.definition.code === "WEEKLY_SAVINGS_V1"
+        && (
+          commitment.state === "DRAFT"
+          || commitment.state === "ACTIVE"
+        ),
+    );
 
   function resetForm() {
     setCode(null);
@@ -147,6 +159,8 @@ export function CreateCommitmentDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
+                disabled={weeklySavingsAlreadyAdded}
+                aria-disabled={weeklySavingsAlreadyAdded}
                 aria-pressed={
                   code ===
                   "WEEKLY_SAVINGS_V1"
@@ -158,10 +172,12 @@ export function CreateCommitmentDialog({
                 }
                 className={cn(
                   "rounded-xl border p-4 text-left transition",
-                  code ===
-                    "WEEKLY_SAVINGS_V1"
-                    ? "border-primary bg-accent/60 ring-1 ring-primary/20"
-                    : "hover:bg-muted/50",
+                  weeklySavingsAlreadyAdded
+                    ? "cursor-not-allowed opacity-60"
+                    : code ===
+                        "WEEKLY_SAVINGS_V1"
+                      ? "border-primary bg-accent/60 ring-1 ring-primary/20"
+                      : "hover:bg-muted/50",
                 )}
               >
                 <PiggyBank className="mb-3 size-5 text-primary" />
@@ -173,6 +189,15 @@ export function CreateCommitmentDialog({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {COMMITMENT_OPTIONS.WEEKLY_SAVINGS_V1.description}
                 </p>
+
+                {weeklySavingsAlreadyAdded ? (
+                  <Badge
+                    variant="secondary"
+                    className="mt-3"
+                  >
+                    Already added
+                  </Badge>
+                ) : null}
               </button>
 
               <button
