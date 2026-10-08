@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { connectDatabase, type DatabaseConnection } from "../src/db/client.js";
+import { listIndexedDepositCandidates } from "../src/persistence/indexed-vault-deposits.js";
 
 const url = process.env.TEST_DATABASE_URL ??
   "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test";
@@ -42,6 +43,35 @@ describe("vault activity share indexing schema", () => {
     );
     expect(row.rows[0]?.shares_atomic).toBeNull();
     await connection.pool.query("DELETE FROM vault_activity_events WHERE id=$1",[id]);
+  });
+
+  it("lists only share-bearing deposits for the exact chain, vault and owner", async () => {
+    const vault = "0x" + "1".repeat(40);
+    const owner = "0x" + "2".repeat(40);
+    const hash = "0x" + randomUUID().replaceAll("-", "").padEnd(64,"0");
+    const id = randomUUID();
+    const otherId = randomUUID();
+    const insert = `INSERT INTO vault_activity_events
+      (id,chain_id,vault_address,account_address,event_type,assets_atomic,
+       shares_atomic,block_number,transaction_hash,log_index,created_at)
+      VALUES ($1,143,$2,$3,$4,198,$5,100,$6,$7,now())`;
+    try {
+      await connection.pool.query(insert,[id,vault,owner,"DEPOSIT","200",hash,10]);
+      await connection.pool.query(insert,[otherId,vault,owner,"WITHDRAW","10",hash,11]);
+      const found = await listIndexedDepositCandidates(connection.db,{
+        chainId:143n,vaultAddress:vault,ownerAddress:owner,
+      });
+      const candidate = found.find(row => row.transactionHash === hash && row.logIndex === 10);
+      expect(candidate).toMatchObject({
+        chainId:143n,shares:200n,assets:198n,blockNumber:100n,logIndex:10,
+      });
+      expect(found.some(row => row.transactionHash === hash && row.logIndex === 11)).toBe(false);
+      expect((await listIndexedDepositCandidates(connection.db,{
+        chainId:1n,vaultAddress:vault,ownerAddress:owner,
+      })).some(row => row.transactionHash === hash)).toBe(false);
+    } finally {
+      await connection.pool.query("DELETE FROM vault_activity_events WHERE id IN ($1,$2)",[id,otherId]);
+    }
   });
 
   it("rejects negative share amounts", async () => {
