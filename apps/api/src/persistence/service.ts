@@ -6,6 +6,8 @@ import {
 } from "@kept/commitment-catalogue";
 
 import type { KeptDatabase } from "../db/client.js";
+import { assertAllocationCutoverParity } from "../domain/allocation-cutover.js";
+import { AllocationLedgerStore } from "./allocation-ledger-store.js";
 import {
   decodeOnchainCommitmentId,
   encodeOnchainCommitmentId,
@@ -1064,6 +1066,33 @@ export class KeptPersistenceService {
         return mapTransaction(transaction);
       },
     );
+  }
+
+  /**
+   * Read-only ledger cutover preflight. Does not activate the ledger,
+   * mutate legacy allocations, or infer historical provenance.
+   */
+  async assertGoalAllocationCutoverReady(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<void> {
+    const { shares } = await this.readVaultShares(input.walletAddress);
+    await this.db.transaction(async (transaction) => {
+      const repository = new KeptRepository(transaction);
+      await repository.lockGoalsForOwner(input.userId);
+      const ledger = new AllocationLedgerStore(this.db);
+      const hasOpening = await ledger.hasOpeningInTransaction(transaction, input.userId);
+      const balances = await ledger.getBalancesInTransaction(transaction, input.userId);
+      const legacyRows = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+      assertAllocationCutoverParity({
+        hasOpening,
+        liveVaultShares: shares,
+        legacyGoalShares: Object.fromEntries(legacyRows.map(row => [
+          row.goalId, BigInt(row.allocatedSharesAtomic),
+        ])),
+        ledgerBalances: balances,
+      });
+    });
   }
 
   async getGoalAllocation(
