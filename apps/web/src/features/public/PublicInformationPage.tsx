@@ -41,9 +41,16 @@ const pageContent: Record<PublicInformationPageKind, PublicInformationContent> =
         ],
       },
       {
+        title: "Waitlist emails",
+        body: [
+          "If you join the Kept waitlist, we store your email address so we can send launch and product availability updates. Waitlist signup does not create a Kept financial account or wallet.",
+          "You can ask us to remove your waitlist email at any time. We do not use waitlist signup as consent for unrelated marketing.",
+        ],
+      },
+      {
         title: "Before launch",
         body: [
-          "This page explains the intended privacy approach for the local demo. A full privacy notice will be published before launch, including confirmed providers, purposes, retention periods and deletion choices.",
+          "A full privacy notice will be published before the live product launches, including confirmed providers, purposes, retention periods and deletion choices.",
         ],
       },
     ],

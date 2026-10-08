@@ -61,6 +61,12 @@ export const accountTransactionStatusEnum = pgEnum(
   ],
 );
 
+export const waitlistSignups = pgTable("waitlist_signups", {
+  id: uuid("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey(),
   privyUserId: text("privy_user_id").notNull().unique(),
@@ -441,6 +447,7 @@ export const idempotencyRecords = pgTable(
 );
 
 export const schema = {
+  waitlistSignups,
   users,
   wallets,
   savingsGoals,

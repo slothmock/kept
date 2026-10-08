@@ -28,6 +28,12 @@ import {
 import {
   PublicInformationPage,
 } from "@/features/public/PublicInformationPage";
+import {
+  WaitlistPage,
+} from "@/features/public/WaitlistPage";
+import {
+  readPublicLaunchMode,
+} from "@/features/public/launch-mode";
 
 function ProtectedRoute({
   session,
@@ -112,6 +118,78 @@ export function AppRoutes({
   readonly session:
     Session;
 }) {
+  const launchMode =
+    readPublicLaunchMode(
+      import.meta.env,
+    );
+
+  if (
+    launchMode
+    === "waitlist"
+  ) {
+    return (
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Navigate
+              to="/waitlist"
+              replace
+            />
+          }
+        />
+
+        <Route
+          path="/waitlist"
+          element={
+            <WaitlistPage
+              session={
+                session
+              }
+            />
+          }
+        />
+
+        <Route
+          path="/privacy"
+          element={
+            <PublicInformationPage
+              page="privacy"
+            />
+          }
+        />
+
+        <Route
+          path="/terms"
+          element={
+            <PublicInformationPage
+              page="terms"
+            />
+          }
+        />
+
+        <Route
+          path="/verification"
+          element={
+            <PublicInformationPage
+              page="verification"
+            />
+          }
+        />
+
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/waitlist"
+              replace
+            />
+          }
+        />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route
@@ -122,6 +200,17 @@ export function AppRoutes({
               session
             }
           />
+        }
+      />
+
+      <Route
+        path="/waitlist"
+        element={
+          <WaitlistPage
+              session={
+                session
+              }
+            />
         }
       />
 

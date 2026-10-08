@@ -11,6 +11,7 @@ import {
   savingsGoals,
   userCommitments,
   users,
+  waitlistSignups,
   wallets,
 } from "../db/schema.js";
 
@@ -38,6 +39,23 @@ export interface CommitmentRecord {
 
 export class KeptRepository {
   constructor(private readonly db: PersistenceExecutor) { }
+
+  async joinWaitlist(input: {
+    readonly id: string;
+    readonly email: string;
+    readonly now: Date;
+  }): Promise<void> {
+    await this.db
+      .insert(waitlistSignups)
+      .values({
+        id: input.id,
+        email: input.email,
+        createdAt: input.now,
+      })
+      .onConflictDoNothing({
+        target: waitlistSignups.email,
+      });
+  }
 
   async createUser(input: {
     readonly id: string;

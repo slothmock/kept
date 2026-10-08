@@ -85,6 +85,7 @@ function buildDependencies(
         : null,
 
     persistence: {
+      joinWaitlist: vi.fn(async () => undefined),
       createUser: async () => user,
 
       ensureEmbeddedWallet: vi.fn(async () => ({
@@ -298,6 +299,108 @@ describe("Kept HTTP API", () => {
     const response = await app.inject({ method: "GET", url: "/health" });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "ok" });
+    await app.close();
+  });
+
+  it("accepts public waitlist signups without authentication", async () => {
+    const joinWaitlist =
+      vi.fn(
+        async () => undefined,
+      );
+
+    const app =
+      buildApp(
+        buildDependencies({
+          persistence: {
+            ...buildDependencies()
+              .persistence,
+            joinWaitlist,
+          },
+        }),
+      );
+
+    const response =
+      await app.inject({
+        method: "POST",
+        url: "/v1/waitlist",
+        payload: {
+          email:
+            "person@example.com",
+        },
+      });
+
+    expect(
+      response.statusCode,
+    ).toBe(204);
+
+    expect(
+      joinWaitlist,
+    ).toHaveBeenCalledWith({
+      email:
+        "person@example.com",
+    });
+
+    await app.close();
+  });
+
+  it("rate limits public waitlist signups by client IP", async () => {
+    const app =
+      buildApp(
+        buildDependencies(),
+        {
+          waitlistRateLimit: {
+            maxRequests: 1,
+            windowMs:
+              60_000,
+          },
+        },
+      );
+
+    const first =
+      await app.inject({
+        method: "POST",
+        url: "/v1/waitlist",
+        headers: {
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+        payload: {
+          email:
+            "one@example.com",
+        },
+      });
+
+    const second =
+      await app.inject({
+        method: "POST",
+        url: "/v1/waitlist",
+        headers: {
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+        payload: {
+          email:
+            "two@example.com",
+        },
+      });
+
+    expect(
+      first.statusCode,
+    ).toBe(204);
+
+    expect(
+      second.statusCode,
+    ).toBe(429);
+
+    expect(
+      second.json(),
+    ).toEqual({
+      error: {
+        code:
+          "RATE_LIMITED",
+      },
+    });
+
     await app.close();
   });
 
