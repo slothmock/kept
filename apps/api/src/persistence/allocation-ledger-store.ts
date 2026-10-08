@@ -111,14 +111,6 @@ export class AllocationLedgerStore {
           .from(allocationLedgerEvents)
           .where(eq(allocationLedgerEvents.userId, input.userId)).limit(1);
         if (prior) throw new Error("Ledger has already been initialized");
-      } else {
-        const [opening] = await tx.select({id: allocationLedgerEvents.id})
-          .from(allocationLedgerEvents)
-          .where(and(eq(allocationLedgerEvents.userId, input.userId),
-            eq(allocationLedgerEvents.eventKind, "OPENING"))).limit(1);
-        // Explicit opening is required only at cutover. New zero-balance
-        // accounts can start with a vault credit instead.
-        void opening;
       }
       const bucketRows = new Map<AllocationBucketKey, typeof allocationBuckets.$inferSelect>();
       for (const leg of input.legs) {
