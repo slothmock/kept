@@ -109,20 +109,25 @@ export class AllocationLedgerStore {
   async reconcileToVaultShares(input: {
     userId: string; liveShares: bigint; key: string;
   }): Promise<string | null> {
+    return this.db.transaction(tx => this.reconcileToVaultSharesInTransaction(tx, input));
+  }
+
+  /** Join the caller's lock and commit boundary. */
+  async reconcileToVaultSharesInTransaction(tx: LedgerTransaction, input: {
+    userId: string; liveShares: bigint; key: string;
+  }): Promise<string | null> {
     if (!input.key.trim()) throw new Error("Reconciliation key required");
-    return this.db.transaction(async tx => {
-      const [owner] = await tx.select({id: users.id}).from(users)
-        .where(eq(users.id, input.userId)).for("update");
-      if (!owner) throw new Error("Unknown ledger owner");
-      if (!(await this.hasOpeningInTransaction(tx, input.userId))) {
-        throw new Error("Allocation ledger has no verified opening event");
-      }
-      const balances = await this.getBalancesInTransaction(tx, input.userId);
-      const plan = planVaultReconciliation(balances, input.liveShares);
-      if (!plan) return null;
-      return this.writeEventInTransaction(tx, {
-        userId: input.userId, key: input.key, kind: plan.kind, legs: plan.legs,
-      });
+    const [owner] = await tx.select({id: users.id}).from(users)
+      .where(eq(users.id, input.userId)).for("update");
+    if (!owner) throw new Error("Unknown ledger owner");
+    if (!(await this.hasOpeningInTransaction(tx, input.userId))) {
+      throw new Error("Allocation ledger has no verified opening event");
+    }
+    const balances = await this.getBalancesInTransaction(tx, input.userId);
+    const plan = planVaultReconciliation(balances, input.liveShares);
+    if (!plan) return null;
+    return this.writeEventInTransaction(tx, {
+      userId: input.userId, key: input.key, kind: plan.kind, legs: plan.legs,
     });
   }
 
