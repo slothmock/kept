@@ -519,6 +519,8 @@ export function DashboardPage(props: DashboardPageProps) {
 
     walletAddress,
 
+    getAccessToken,
+
     loadRecentTransactions,
 
     readSolanaFundingBalances,
