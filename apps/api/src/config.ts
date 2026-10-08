@@ -17,6 +17,7 @@ export interface ApiConfig {
   readonly auroraIntentsBaseUrl: string;
   readonly auroraIntentsApiKey: string;
   readonly fiatEnabled: boolean;
+  readonly stagingAllowedPrivyUserIds: readonly string[] | null;
   readonly moonPay?: {
     readonly publishableKey: string;
     readonly secretKey: string;
@@ -87,6 +88,41 @@ function requirePrivateKey(
   }
 
   return value as `0x${string}`;
+}
+
+function parseStagingAllowedPrivyUserIds(
+  environment: NodeJS.ProcessEnv,
+): readonly string[] | null {
+  const raw =
+    environment.STAGING_ALLOWED_PRIVY_USER_IDS
+      ?.trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const userIds = [
+    ...new Set(
+      raw
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (userIds.length === 0) {
+    return null;
+  }
+
+  for (const userId of userIds) {
+    if (!userId.startsWith("did:privy:")) {
+      throw new Error(
+        "STAGING_ALLOWED_PRIVY_USER_IDS must contain comma-separated Privy user IDs",
+      );
+    }
+  }
+
+  return userIds;
 }
 
 function parsePort(value: string | undefined): number {
@@ -222,6 +258,11 @@ export function loadApiConfig(
   const fiatEnabled =
     environment.VITE_FIAT_ENABLED?.trim() === "true";
 
+  const stagingAllowedPrivyUserIds =
+    parseStagingAllowedPrivyUserIds(
+      environment,
+    );
+
   const moonPay =
     fiatEnabled
       ? {
@@ -265,6 +306,7 @@ export function loadApiConfig(
     auroraIntentsBaseUrl,
     auroraIntentsApiKey,
     fiatEnabled,
+    stagingAllowedPrivyUserIds,
     ...(moonPay ? { moonPay } : {}),
   };
 }
