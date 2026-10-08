@@ -5,6 +5,7 @@ import {
   Download,
   Gift,
   History,
+  ExternalLink,
 } from "lucide-react";
 import {
   useEffect,
@@ -26,6 +27,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SignOutAction } from "@/features/account/components/SignOutAction";
 import { consumerErrorMessage } from "@/lib/consumer-error";
 import { diagnostics } from "@/lib/diagnostics";
+import {
+  networkName,
+  transactionExplorerUrl,
+} from "@/lib/network-display";
 
 const USDC_SCALE = 1_000_000n;
 
@@ -185,7 +190,7 @@ function downloadStatement(
       "Status",
       "Amount",
       "Asset",
-      "Chain ID",
+      "Network",
       "Transaction hash",
       "External reference",
     ],
@@ -196,9 +201,16 @@ function downloadStatement(
       transaction.status,
       transaction.amountAtomic,
       transaction.asset,
-      transaction.chainId ?? "",
+      networkName(transaction.chainId) ?? "",
       transaction.transactionHash ?? "",
-      transaction.externalReference ?? "",
+      transaction.externalReference
+        && (
+          !transaction.transactionHash
+          || transaction.externalReference.trim().toLowerCase()
+            !== transaction.transactionHash.trim().toLowerCase()
+        )
+          ? transaction.externalReference
+          : "",
     ]),
   ];
 
@@ -499,11 +511,31 @@ function ActivityGroup({
             const expanded =
               expandedId === transaction.id;
 
+            const externalReference =
+              transaction.externalReference?.trim() ?? "";
+
+            const transactionHash =
+              transaction.transactionHash?.trim() ?? "";
+
+            const showExternalReference =
+              externalReference.length > 0
+              && (
+                transactionHash.length === 0
+                || externalReference.toLowerCase()
+                  !== transactionHash.toLowerCase()
+              );
+
+            const explorerUrl =
+              transactionExplorerUrl(
+                transaction.chainId,
+                transaction.transactionHash,
+              );
+
             const hasDetails =
               Boolean(
                 transaction.chainId
                 || transaction.transactionHash
-                || transaction.externalReference
+                || showExternalReference
                 || transaction.goalId,
               );
 
@@ -578,7 +610,10 @@ function ActivityGroup({
                     {transaction.chainId ? (
                       <Detail
                         label="Network"
-                        value={transaction.chainId}
+                        value={
+                          networkName(transaction.chainId)
+                          ?? "Unknown network"
+                        }
                       />
                     ) : null}
 
@@ -590,16 +625,16 @@ function ActivityGroup({
                     ) : null}
 
                     {transaction.transactionHash ? (
-                      <Detail
-                        label="Transaction hash"
+                      <TransactionHashDetail
                         value={transaction.transactionHash}
+                        explorerUrl={explorerUrl}
                       />
                     ) : null}
 
-                    {transaction.externalReference ? (
+                    {showExternalReference ? (
                       <Detail
                         label="External reference"
-                        value={transaction.externalReference}
+                        value={externalReference}
                       />
                     ) : null}
                   </div>
@@ -625,6 +660,41 @@ function Detail({
       <p className="text-muted-foreground">
         {label}
       </p>
+
+      <p className="mt-1 break-all font-medium text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+
+function TransactionHashDetail({
+  value,
+  explorerUrl,
+}: {
+  readonly value: string;
+  readonly explorerUrl: string | null;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <p className="text-muted-foreground">
+          Transaction hash
+        </p>
+
+        {explorerUrl ? (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+          >
+            View on Explorer
+            <ExternalLink className="size-3" />
+          </a>
+        ) : null}
+      </div>
 
       <p className="mt-1 break-all font-medium text-foreground">
         {value}
