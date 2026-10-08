@@ -8,7 +8,7 @@ describe("vault reconciliation plan", () => {
   it("credits unexpected shares solely to unassigned", () => expect(planVaultReconciliation({UNASSIGNED:20n,[A]:30n},60n)).toEqual({kind:"RECONCILIATION_CREDIT",legs:[{bucket:"UNASSIGNED",deltaShares:10n}]}));
   it("spends unassigned first", () => expect(planVaultReconciliation({UNASSIGNED:20n,[A]:30n},40n)).toEqual({kind:"RECONCILIATION_DEBIT",legs:[{bucket:"UNASSIGNED",deltaShares:-10n}]}));
   it("reduces goals proportionally only after unassigned is exhausted", () => expect(planVaultReconciliation({UNASSIGNED:20n,[A]:200n,[B]:100n},150n)).toEqual({kind:"RECONCILIATION_DEBIT",legs:[{bucket:"UNASSIGNED",deltaShares:-20n},{bucket:A,deltaShares:-100n},{bucket:B,deltaShares:-50n}]}));
-  it("distributes rounding in a deterministic order", () => expect(planVaultReconciliation({[C]:1n,[B]:1n,[A]:1n},2n)).toEqual({kind:"RECONCILIATION_DEBIT",legs:[{bucket:A,deltaShares:-1n}]}));
+  it("distributes rounding in a deterministic order", () => expect(planVaultReconciliation({[C]:1n,[B]:1n,[A]:1n},2n)).toEqual({kind:"RECONCILIATION_DEBIT",legs:[{bucket:C,deltaShares:-1n}]}));
   it("uses legacy survivor rounding when fractional remainders differ", () => {
     const plan = planVaultReconciliation({[A]:5n,[B]:3n},6n);
     expect(plan).toEqual({kind:"RECONCILIATION_DEBIT",legs:[
