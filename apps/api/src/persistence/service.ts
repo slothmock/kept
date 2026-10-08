@@ -1448,6 +1448,28 @@ export class KeptPersistenceService {
           throw new PersistenceValidationError("Commitment definition version is not active");
         }
 
+        const existingCommitments =
+          await repository.listCommitmentsForGoal(
+            input.userId,
+            input.goalId,
+          );
+
+        const duplicateCurrentCommitment =
+          existingCommitments.some(
+            (existing) =>
+              existing.definitionId === persistedDefinition.id
+              && (
+                existing.state === "DRAFT"
+                || existing.state === "ACTIVE"
+              ),
+          );
+
+        if (duplicateCurrentCommitment) {
+          throw new PersistenceValidationError(
+            "This goal already has a current commitment of this type",
+          );
+        }
+
         const epochStart = parseTimestamp(input.epochStart, "epochStart");
         const epochEnd = parseTimestamp(input.epochEnd, "epochEnd");
         const verificationDeadline = parseTimestamp(
