@@ -89,11 +89,6 @@ export function StagingAccessBoundary({
           return;
         }
 
-        setAccessState({
-          kind:
-            "checking",
-        });
-
         try {
           const client =
             createAuthenticatedJsonClient({
@@ -204,6 +199,10 @@ export function StagingAccessBoundary({
               type="button"
               className="mt-6"
               onClick={() => {
+                setAccessState({
+                  kind:
+                    "checking",
+                });
                 void verifyAccess();
               }}
             >
