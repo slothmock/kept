@@ -1069,6 +1069,32 @@ export class KeptPersistenceService {
   }
 
   /**
+   * Prepare a clean pre-launch account. This never imports legacy allocations
+   * and only initializes after confirming the live vault position is empty.
+   */
+  async initializeFreshAllocationLedger(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<void> {
+    const { shares } = await this.readVaultShares(input.walletAddress);
+    if (shares !== 0n) {
+      throw new Error("Cannot clean-start an account holding vault shares");
+    }
+    await this.db.transaction(async transaction => {
+      const repository = new KeptRepository(transaction);
+      await repository.lockGoalsForOwner(input.userId);
+      const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+      if (legacy.length > 0) {
+        throw new Error("Cannot clean-start an account with legacy goal allocations");
+      }
+      const ledger = new AllocationLedgerStore(this.db);
+      await ledger.initializeEmptyAccountInTransaction(transaction, {
+        userId: input.userId, key: "clean-start:empty-account",
+      });
+    });
+  }
+
+  /**
    * Reconcile an explicitly initialized account against the live vault in
    * one transaction, alongside legacy goal reductions. Uninitialized accounts
    * remain exclusively on the legacy path.
