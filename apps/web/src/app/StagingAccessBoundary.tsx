@@ -137,7 +137,11 @@ export function StagingAccessBoundary({
 
   useEffect(
     () => {
-      void verifyAccess();
+      queueMicrotask(
+        () => {
+          void verifyAccess();
+        },
+      );
     },
     [
       verifyAccess,
