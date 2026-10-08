@@ -333,6 +333,8 @@ const persistence = new KeptPersistenceService(
   {
     chainId: BigInt(config.monadChainId),
 
+    vaultAddress: config.keptSavingsVaultAddress,
+
     reader: vaultShares,
   },
   config.commitmentWindowOverrideSeconds,
