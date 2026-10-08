@@ -239,6 +239,58 @@ describe.sequential("allocation ledger persistence", () => {
     expect(credit.rows.every(row => row.origin_kind !== "EXTERNAL_DEPOSIT")).toBe(true);
   });
 
+  it("reconciles initialized legacy and ledger goal positions together", async () => {
+    const userId = await user();
+    const goalA = await goal(userId);
+    const goalB = await goal(userId);
+    let live = 10n;
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => live,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    const walletAddress = "0x0000000000000000000000000000000000000001";
+    const allocate = async (goalId: string, amount: string, key: string) =>
+      service.allocateGoalShares({
+        userId, goalId, walletAddress, shareDeltaAtomic: amount,
+        reason: "manual", idempotencyKey: key,
+      });
+    await allocate(goalA, "5", "before-opening-a");
+    await allocate(goalB, "3", "before-opening-b");
+    await store.openPositions({
+      userId, key: "opening",
+      positions: {UNASSIGNED: 2n, [`GOAL:${goalA}`]: 5n, [`GOAL:${goalB}`]: 3n},
+    });
+    live = 6n;
+    expect(await service.reconcileInitializedGoalLedger({userId, walletAddress})).toBe(true);
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED: 0n, [`GOAL:${goalA}`]: 4n, [`GOAL:${goalB}`]: 2n,
+    });
+    await service.assertGoalAllocationCutoverReady({userId, walletAddress});
+    const legacyA = await service.getGoalAllocation(userId, goalA, walletAddress);
+    expect(legacyA?.allocatedSharesAtomic).toBe("4");
+    live = 12n;
+    expect(await service.reconcileInitializedGoalLedger({userId, walletAddress})).toBe(true);
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED: 6n, [`GOAL:${goalA}`]: 4n, [`GOAL:${goalB}`]: 2n,
+    });
+  });
+
+  it("keeps uninitialized users on the legacy reconciliation path", async () => {
+    const userId = await user();
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => 12n,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    expect(await service.reconcileInitializedGoalLedger({
+      userId, walletAddress: "0x0000000000000000000000000000000000000001",
+    })).toBe(false);
+    expect(await store.getBalances(userId)).toEqual({});
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
