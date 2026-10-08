@@ -35,6 +35,53 @@ async function goal(userId: string) {
 }
 
 describe.sequential("allocation ledger persistence", () => {
+  it("initializes a genuinely empty account without inventing opening shares", async () => {
+    const userId = await user();
+    const walletAddress = "0x0000000000000000000000000000000000000001";
+    const service = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => 0n,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    await service.initializeFreshAllocationLedger({userId,walletAddress});
+    expect(await store.getBalances(userId)).toEqual({});
+    const rows = await connection.pool.query<{event_kind:string}>(
+      "SELECT event_kind FROM allocation_ledger_events WHERE user_id=$1",[userId],
+    );
+    expect(rows.rows).toEqual([{event_kind:"OPENING"}]);
+    await expect(service.initializeFreshAllocationLedger({userId,walletAddress}))
+      .rejects.toThrow(/already initialized/);
+  });
+
+  it("rejects clean initialization when the vault or legacy allocations are nonempty", async () => {
+    const walletAddress = "0x0000000000000000000000000000000000000001";
+    const funded = await user();
+    const fundedService = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => 7n,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    await expect(fundedService.initializeFreshAllocationLedger({userId:funded,walletAddress}))
+      .rejects.toThrow(/holding vault shares/);
+    expect(await store.getBalances(funded)).toEqual({});
+    const userId = await user();
+    const goalId = await goal(userId);
+    await connection.pool.query(
+      "INSERT INTO goal_share_allocations (id,user_id,goal_id,share_delta_atomic,reason,created_at) VALUES ($1,$2,$3,1,'manual',now())",
+      [randomUUID(),userId,goalId],
+    );
+    const emptyService = new KeptPersistenceService(connection.db, {
+      chainId: 143n, reader: {
+        readShares: async () => 0n,
+        convertToAssets: async (shares: bigint) => shares,
+      },
+    });
+    await expect(emptyService.initializeFreshAllocationLedger({userId,walletAddress}))
+      .rejects.toThrow(/legacy goal allocations/);
+  });
+
   it("credits unassigned shares and atomically moves shares into a goal", async () => {
     const userId = await user();
     const goalId = await goal(userId);
