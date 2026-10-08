@@ -106,20 +106,17 @@ function parseStagingAllowedPrivyUserIds(
       raw
         .split(",")
         .map((value) => value.trim())
-        .filter(Boolean),
+        .filter(Boolean)
+        .map((value) =>
+          value.startsWith("did:privy:")
+            ? value
+            : `did:privy:${value}`
+        ),
     ),
   ];
 
   if (userIds.length === 0) {
     return null;
-  }
-
-  for (const userId of userIds) {
-    if (!userId.startsWith("did:privy:")) {
-      throw new Error(
-        "STAGING_ALLOWED_PRIVY_USER_IDS must contain comma-separated Privy user IDs",
-      );
-    }
   }
 
   return userIds;
