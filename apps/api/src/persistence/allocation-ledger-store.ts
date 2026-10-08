@@ -9,6 +9,8 @@ import {
   type AllocationEventKind,
 } from "../domain/allocation-ledger.js";
 
+type LedgerTransaction = Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0];
+
 type CreditDebit = "VAULT_CREDIT" | "VAULT_DEBIT" | "RECONCILIATION_CREDIT" | "RECONCILIATION_DEBIT";
 
 /**
@@ -64,6 +66,20 @@ export class AllocationLedgerStore {
     return this.writeEvent({userId: input.userId, kind: "TRANSFER", key: input.key, legs});
   }
 
+  /** Join the API idempotency transaction; do not open a nested transaction. */
+  async transferInTransaction(tx: LedgerTransaction, input: {
+    userId: string; from: AllocationBucketKey; to: AllocationBucketKey;
+    shares: bigint; key: string;
+  }): Promise<string> {
+    if (input.shares <= 0n) throw new Error("Transfer shares must be positive");
+    const legs = [
+      {bucket: input.from, deltaShares: -input.shares},
+      {bucket: input.to, deltaShares: input.shares},
+    ];
+    assertLedgerEvent("TRANSFER", legs);
+    return this.writeEventInTransaction(tx, {userId:input.userId,kind:"TRANSFER",key:input.key,legs});
+  }
+
   async recordVaultChange(input: {
     userId: string; kind: CreditDebit; shares: bigint; key: string;
     bucket?: AllocationBucketKey;
@@ -81,7 +97,14 @@ export class AllocationLedgerStore {
     legs: readonly {bucket: AllocationBucketKey; deltaShares: bigint}[];
   }): Promise<string> {
     if (!input.key.trim()) throw new Error("Ledger idempotency key required");
-    return this.db.transaction(async tx => {
+    return this.db.transaction(async tx => this.writeEventInTransaction(tx, input));
+  }
+
+  private async writeEventInTransaction(tx: LedgerTransaction, input: {
+    userId: string; kind: AllocationEventKind; key: string;
+    legs: readonly {bucket: AllocationBucketKey; deltaShares: bigint}[];
+  }): Promise<string> {
+    if (!input.key.trim()) throw new Error("Ledger idempotency key required");
       // Lock the owner rather than an optionally absent bucket, so concurrent
       // credits, debits and transfers cannot observe the same opening balance.
       const [owner] = await tx.select({id: users.id}).from(users)
@@ -207,6 +230,5 @@ export class AllocationLedgerStore {
         }
       }
       return id;
-    });
   }
 }
