@@ -64,6 +64,13 @@
       "when": 1791490000000,
       "tag": "0008_allocation_ledger_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791491000000,
+      "tag": "0009_allocation_share_lots",
+      "breakpoints": true
     }
   ]
 }
