@@ -561,6 +561,7 @@ export class KeptPersistenceService {
     private readonly vaultShares?: {
       readonly reader: VaultShareBalanceReader;
       readonly chainId: bigint;
+      readonly vaultAddress?: string;
     },
     private readonly commitmentWindowOverrideSeconds?: number,
   ) { }
@@ -1077,17 +1078,16 @@ export class KeptPersistenceService {
   async claimVerifiedVaultDeposit(input: {
     readonly userId: string;
     readonly walletAddress: string;
-    readonly vaultAddress: string;
     readonly transactionHash: string;
     readonly logIndex: number;
   }): Promise<{status:"CREDITED"|"ALREADY_REFLECTED";eventId:string|null}> {
-    if (!this.vaultShares) throw new Error("Vault share reader is not configured");
+    if (!this.vaultShares?.vaultAddress) throw new Error("Trusted vault address is not configured");
     const {shares} = await this.readVaultShares(input.walletAddress);
     const ledger = new AllocationLedgerStore(this.db);
     return ledger.claimIndexedDeposit({
       userId:input.userId,
       chainId:this.vaultShares.chainId,
-      vaultAddress:input.vaultAddress,
+      vaultAddress:this.vaultShares.vaultAddress,
       ownerAddress:input.walletAddress,
       transactionHash:input.transactionHash,
       logIndex:input.logIndex,
