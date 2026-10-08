@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 
 import {
   getCommitmentDefinition,
