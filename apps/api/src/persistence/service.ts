@@ -1081,30 +1081,46 @@ export class KeptPersistenceService {
     return this.db.transaction(async transaction => {
       const repository = new KeptRepository(transaction);
       await repository.lockGoalsForOwner(input.userId);
-      const ledger = new AllocationLedgerStore(this.db);
-      if (!(await ledger.hasOpeningInTransaction(transaction, input.userId))) return false;
-      const oldRows = await repository.listPositiveGoalAllocationsForOwner(input.userId);
-      const oldBalances = await ledger.getBalancesInTransaction(transaction, input.userId);
-      const beforeTotal = Object.values(oldBalances).reduce((sum, n) => sum + n, 0n);
-      assertAllocationCutoverParity({
-        hasOpening: true,
-        liveVaultShares: beforeTotal,
-        legacyGoalShares: Object.fromEntries(oldRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
-        ledgerBalances: oldBalances,
-      });
-      await this.reconcileGoalAllocationsToVaultBalance(repository, input.userId, shares);
-      await ledger.reconcileToVaultSharesInTransaction(transaction, {
-        userId: input.userId, liveShares: shares, key: `vault-reconciliation:${randomUUID()}`,
-      });
-      const newRows = await repository.listPositiveGoalAllocationsForOwner(input.userId);
-      const newBalances = await ledger.getBalancesInTransaction(transaction, input.userId);
-      assertAllocationCutoverParity({
-        hasOpening: true, liveVaultShares: shares,
-        legacyGoalShares: Object.fromEntries(newRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
-        ledgerBalances: newBalances,
-      });
-      return true;
+      return this.reconcileGoalAndLedgerInTransaction(transaction, repository, input.userId, shares);
     });
+  }
+
+  /**
+   * Reconcile legacy allocations and initialized ledger buckets under
+   * the caller's existing transaction and user-wide goal lock.
+   */
+  private async reconcileGoalAndLedgerInTransaction(
+    transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0],
+    repository: KeptRepository,
+    userId: string,
+    shares: bigint,
+  ): Promise<boolean> {
+    const ledger = new AllocationLedgerStore(this.db);
+    const hasOpening = await ledger.hasOpeningInTransaction(transaction, userId);
+    if (!hasOpening) {
+      await this.reconcileGoalAllocationsToVaultBalance(repository, userId, shares);
+      return false;
+    }
+    const oldRows = await repository.listPositiveGoalAllocationsForOwner(userId);
+    const oldBalances = await ledger.getBalancesInTransaction(transaction, userId);
+    const beforeTotal = Object.values(oldBalances).reduce((sum, n) => sum + n, 0n);
+    assertAllocationCutoverParity({
+      hasOpening: true, liveVaultShares: beforeTotal,
+      legacyGoalShares: Object.fromEntries(oldRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
+      ledgerBalances: oldBalances,
+    });
+    await this.reconcileGoalAllocationsToVaultBalance(repository, userId, shares);
+    await ledger.reconcileToVaultSharesInTransaction(transaction, {
+      userId, liveShares: shares, key: `vault-reconciliation:${randomUUID()}`,
+    });
+    const newRows = await repository.listPositiveGoalAllocationsForOwner(userId);
+    const newBalances = await ledger.getBalancesInTransaction(transaction, userId);
+    assertAllocationCutoverParity({
+      hasOpening: true, liveVaultShares: shares,
+      legacyGoalShares: Object.fromEntries(newRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
+      ledgerBalances: newBalances,
+    });
+    return true;
   }
 
   /**
@@ -1191,10 +1207,8 @@ export class KeptPersistenceService {
         return null;
       }
 
-      await this.reconcileGoalAllocationsToVaultBalance(
-        repository,
-        userId,
-        shares,
+      await this.reconcileGoalAndLedgerInTransaction(
+        transaction, repository, userId, shares,
       );
 
       const allocationTotals =
@@ -1239,10 +1253,8 @@ export class KeptPersistenceService {
         }
         const { shares } = await this.readVaultShares(input.walletAddress);
 
-        await this.reconcileGoalAllocationsToVaultBalance(
-          repository,
-          input.userId,
-          shares,
+        await this.reconcileGoalAndLedgerInTransaction(
+          transaction, repository, input.userId, shares,
         );
 
         const allocationTotals = await repository.getAllocationTotals(input.userId, input.goalId);
@@ -1345,6 +1357,9 @@ export class KeptPersistenceService {
 
         const { shares } = await this.readVaultShares(
           input.walletAddress,
+        );
+        await this.reconcileGoalAndLedgerInTransaction(
+          transaction, repository, input.userId, shares,
         );
 
         const fromTotals =
