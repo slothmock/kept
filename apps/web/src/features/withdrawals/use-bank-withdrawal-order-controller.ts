@@ -14,6 +14,9 @@ import type {
   MoonPayOfframpOrderDto,
 } from "@/api/kept-api";
 import type {
+  AccessTokenProvider,
+} from "@/api/http-client";
+import type {
   EthereumProvider,
 } from "@/wallet/evm-wallet";
 import {
@@ -49,6 +52,9 @@ import {
 interface UseBankWithdrawalOrderControllerInput {
   readonly api:
     KeptApi | null;
+
+  readonly getAccessToken:
+    AccessTokenProvider;
 
   readonly fiatEnabled:
     boolean;
@@ -100,6 +106,7 @@ export interface BankWithdrawalOrderController {
 
 export function useBankWithdrawalOrderController({
   api,
+  getAccessToken,
   fiatEnabled,
   account,
   ensureTransactionNetwork,
@@ -593,6 +600,7 @@ export function useBankWithdrawalOrderController({
 
           const runner =
             createKeptIntentsRunner({
+              getAccessToken,
               sourceAddress:
                 account,
               family:
@@ -695,6 +703,7 @@ export function useBankWithdrawalOrderController({
         api,
         ensureTransactionNetwork,
         fiatEnabled,
+        getAccessToken,
         getProvider,
         orderStore,
         transferStore,

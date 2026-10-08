@@ -77,6 +77,9 @@ describe("API configuration", () => {
       fiatEnabled:
         true,
 
+      stagingAllowedPrivyUserIds:
+        null,
+
       moonPay: {
         baseUrl:
           "https://widget.moonpay.example",
@@ -91,6 +94,21 @@ describe("API configuration", () => {
       commitmentWindowOverrideSeconds:
         undefined,
     });
+  });
+
+  it("normalizes staging Privy user allowlist entries", () => {
+    const config = loadApiConfig({
+      ...requiredEnvironment,
+      STAGING_ALLOWED_PRIVY_USER_IDS:
+        "cmtxnzv2t02ci0bij5nstridh,did:privy:second-user",
+    });
+
+    expect(
+      config.stagingAllowedPrivyUserIds,
+    ).toEqual([
+      "did:privy:cmtxnzv2t02ci0bij5nstridh",
+      "did:privy:second-user",
+    ]);
   });
 
   it("does not require MoonPay configuration when fiat is disabled", () => {

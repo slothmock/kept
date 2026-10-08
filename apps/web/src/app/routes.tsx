@@ -6,6 +6,9 @@ import {
 } from "react-router-dom";
 
 import { AppShell } from "@/app/layout/AppShell";
+import {
+  StagingAccessBoundary,
+} from "@/app/StagingAccessBoundary";
 import type {
   Session,
 } from "@/app/providers/session";
@@ -46,7 +49,15 @@ function ProtectedRoute({
     );
   }
 
-  return children;
+  return (
+    <StagingAccessBoundary
+      session={
+        session
+      }
+    >
+      {children}
+    </StagingAccessBoundary>
+  );
 }
 
 function DashboardRoute({

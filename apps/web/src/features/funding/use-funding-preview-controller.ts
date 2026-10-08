@@ -6,6 +6,10 @@ import {
     parseUnits,
 } from "viem";
 
+import type {
+    AccessTokenProvider,
+} from "@/api/http-client";
+
 import {
     readChainId,
     restoreChain,
@@ -67,10 +71,14 @@ interface PreviewFundingRouteInput {
 interface UseFundingPreviewControllerInput {
     readonly clearExecutionFeedback:
     () => void;
+
+    readonly getAccessToken:
+    AccessTokenProvider;
 }
 
 export function useFundingPreviewController({
     clearExecutionFeedback,
+    getAccessToken,
 }: UseFundingPreviewControllerInput) {
     const [
         amount,
@@ -304,6 +312,7 @@ export function useFundingPreviewController({
                         family ===
                             "sol"
                             ? createKeptIntentsRunner({
+                                getAccessToken,
                                 sourceAddress:
                                     externalWallet.address,
                                 family:
@@ -312,6 +321,7 @@ export function useFundingPreviewController({
                                     solanaProvider!,
                             })
                             : createKeptIntentsRunner({
+                                getAccessToken,
                                 sourceAddress:
                                     externalWallet.address,
                                 family:
@@ -411,6 +421,7 @@ export function useFundingPreviewController({
             [
                 amount,
                 clearExecutionFeedback,
+                getAccessToken,
                 previewing,
             ],
         );

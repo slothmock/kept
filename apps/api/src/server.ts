@@ -525,6 +525,9 @@ const app = buildApp(
     webOrigin:
       config.webOrigin,
 
+    stagingAllowedPrivyUserIds:
+      config.stagingAllowedPrivyUserIds,
+
     auroraIntents: {
       baseUrl:
         config.auroraIntentsBaseUrl,

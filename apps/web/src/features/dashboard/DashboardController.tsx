@@ -643,6 +643,8 @@ export function DashboardController({ session }: { readonly session: Session }) 
     execute: executeCryptoTransfer,
   } = useCryptoWithdrawalController({
     api,
+    getAccessToken:
+      session.getAccessToken,
     account,
     config,
     position:
@@ -677,6 +679,8 @@ export function DashboardController({ session }: { readonly session: Session }) 
     confirm: confirmBankWithdrawal,
   } = useBankWithdrawalController({
     api,
+    getAccessToken:
+      session.getAccessToken,
     fiatEnabled,
     account,
     config,
@@ -833,6 +837,10 @@ onSignOut={async () => {
     >
       <DashboardPage
         walletAddress={wallet.address}
+
+        getAccessToken={
+          session.getAccessToken
+        }
 
         loadRecentTransactions={
           loadRecentTransactions

@@ -4,6 +4,10 @@ import {
 } from "react";
 
 import type {
+    AccessTokenProvider,
+} from "@/api/http-client";
+
+import type {
     KeptEvmWallet,
 } from "@/wallet/evm-wallet";
 import {
@@ -56,7 +60,12 @@ interface ExecuteExternalFundingInput {
     FundingAsset | null;
 }
 
-export function useFundingExecutionController() {
+export function useFundingExecutionController({
+    getAccessToken,
+}: {
+    readonly getAccessToken:
+    AccessTokenProvider;
+}) {
     const [
         executing,
         setExecuting,
@@ -184,6 +193,7 @@ export function useFundingExecutionController() {
 
                     const runner =
                         createKeptIntentsRunner({
+                            getAccessToken,
                             sourceAddress:
                                 wallet.address,
                             family:
@@ -258,6 +268,7 @@ export function useFundingExecutionController() {
             },
             [
                 executing,
+                getAccessToken,
             ],
         );
 
@@ -357,6 +368,7 @@ export function useFundingExecutionController() {
                         family ===
                             "sol"
                             ? createKeptIntentsRunner({
+                                getAccessToken,
                                 sourceAddress:
                                     externalWallet.address,
                                 family:
@@ -365,6 +377,7 @@ export function useFundingExecutionController() {
                                     solanaProvider!,
                             })
                             : createKeptIntentsRunner({
+                                getAccessToken,
                                 sourceAddress:
                                     externalWallet.address,
                                 family:
@@ -450,6 +463,7 @@ export function useFundingExecutionController() {
             },
             [
                 executing,
+                getAccessToken,
             ],
         );
 

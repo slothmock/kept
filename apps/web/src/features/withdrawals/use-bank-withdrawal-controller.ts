@@ -13,6 +13,9 @@ import type {
   KeptApi,
 } from "@/api/kept-api";
 import type {
+  AccessTokenProvider,
+} from "@/api/http-client";
+import type {
   TransactionSender,
 } from "@/wallet/blockchain";
 import {
@@ -62,6 +65,9 @@ import {
 interface UseBankWithdrawalControllerInput {
   readonly api:
     KeptApi | null;
+
+  readonly getAccessToken:
+    AccessTokenProvider;
 
   readonly fiatEnabled:
     boolean;
@@ -146,6 +152,7 @@ export interface BankWithdrawalController {
 
 export function useBankWithdrawalController({
   api,
+  getAccessToken,
   fiatEnabled,
   account,
   config,
@@ -204,6 +211,7 @@ export function useBankWithdrawalController({
   const order =
     useBankWithdrawalOrderController({
       api,
+      getAccessToken,
       fiatEnabled,
       account,
       ensureTransactionNetwork,
@@ -689,6 +697,7 @@ export function useBankWithdrawalController({
 
                         const runner =
                           createKeptIntentsRunner({
+                            getAccessToken,
                             sourceAddress:
                               account,
                             family:
@@ -847,6 +856,7 @@ export function useBankWithdrawalController({
         config,
         ensureTransactionNetwork,
         fiatEnabled,
+        getAccessToken,
         getProvider,
         order,
         position,
