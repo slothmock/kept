@@ -1095,6 +1095,20 @@ export class KeptPersistenceService {
     });
   }
 
+  /** Batch confirmed deposits before generic vault-share reconciliation. */
+  async claimVerifiedVaultDeposits(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<{credited:number;shares:bigint}> {
+    if (!this.vaultShares?.vaultAddress) throw new Error("Trusted vault address is not configured");
+    const {shares} = await this.readVaultShares(input.walletAddress);
+    return new AllocationLedgerStore(this.db).claimIndexedDepositBatch({
+      userId:input.userId,chainId:this.vaultShares.chainId,
+      vaultAddress:this.vaultShares.vaultAddress,
+      ownerAddress:input.walletAddress,liveVaultShares:shares,
+    });
+  }
+
   /**
    * Prepare a clean pre-launch account. This never imports legacy allocations
    * and only initializes after confirming the live vault position is empty.
