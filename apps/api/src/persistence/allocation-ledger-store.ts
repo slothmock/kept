@@ -21,7 +21,11 @@ export class AllocationLedgerStore {
   constructor(private readonly db: KeptDatabase) {}
 
   async getBalances(userId: string): Promise<Record<string, bigint>> {
-    const rows = await this.db.select({
+    return this.db.transaction(tx => this.getBalancesInTransaction(tx, userId));
+  }
+
+  async getBalancesInTransaction(tx: LedgerTransaction, userId: string): Promise<Record<string, bigint>> {
+    const rows = await tx.select({
       kind: allocationBuckets.bucketKind,
       goalId: allocationBuckets.goalId,
       total: sql<string>`coalesce(sum(${allocationLedgerEntries.shareDeltaAtomic}), 0)`,
@@ -33,6 +37,26 @@ export class AllocationLedgerStore {
       row.kind === "UNASSIGNED" ? "UNASSIGNED" : `GOAL:${row.goalId}`,
       BigInt(row.total),
     ]));
+  }
+
+  /** Check whether the account was explicitly initialized. */
+  async hasOpeningInTransaction(tx: LedgerTransaction, userId: string): Promise<boolean> {
+    const [opening] = await tx.select({id: allocationLedgerEvents.id})
+      .from(allocationLedgerEvents)
+      .where(and(eq(allocationLedgerEvents.userId, userId), eq(allocationLedgerEvents.eventKind, "OPENING")))
+      .limit(1);
+    return opening !== undefined;
+  }
+
+  /** Reject stale ledger balances until a verified vault reconciliation occurs. */
+  async assertVaultParityInTransaction(tx: LedgerTransaction, userId: string, vaultShares: bigint): Promise<void> {
+    if (vaultShares < 0n) throw new Error("Negative live vault shares");
+    const balances = await this.getBalancesInTransaction(tx, userId);
+    const sum = Object.values(balances).reduce((total, value) => {
+      if (value < 0n) throw new Error("Negative ledger bucket balance");
+      return total + value;
+    }, 0n);
+    if (sum !== vaultShares) throw new Error("Ledger and live vault shares are out of sync");
   }
 
   /**
