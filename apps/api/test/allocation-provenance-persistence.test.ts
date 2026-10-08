@@ -58,6 +58,19 @@ describe.sequential('persisted allocation lineage', () => {
       source_kind:'GOAL',destination_kind:'UNASSIGNED',
     });
   });
+  it('rejects updates and deletes of historical transfer evidence', async () => {
+    const {userId,a} = await owner();
+    await store.openPositions({userId, positions:{UNASSIGNED:10n},key:'opening'});
+    const eventId = await store.transfer({userId,from:'UNASSIGNED',to:a,shares:5n,key:'assignment'});
+    await expect(connection.pool.query(
+      'UPDATE allocation_transfer_lot_movements SET shares_atomic=1 WHERE event_id=$1',
+      [eventId],
+    )).rejects.toThrow(/immutable/);
+    await expect(connection.pool.query(
+      'DELETE FROM allocation_transfer_lot_movements WHERE event_id=$1',
+      [eventId],
+    )).rejects.toThrow(/immutable/);
+  });
   it('preserves exact share conservation between lots and ledger balances', async () => {
     const {userId,a} = await owner();
     await store.recordVaultChange({userId,kind:'VAULT_CREDIT',shares:50n,key:'credit'});
