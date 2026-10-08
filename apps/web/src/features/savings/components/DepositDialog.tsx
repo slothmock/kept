@@ -132,7 +132,16 @@ export function DepositDialog({
                       return;
                     }
 
-                    onAmountChange(formatUsdcPrecise(availableBalance));
+                    const maxSavingsAmount =
+                      availableBalance
+                      * 9_980n
+                      / 10_000n;
+
+                    onAmountChange(
+                      formatUsdcPrecise(
+                        maxSavingsAmount,
+                      ),
+                    );
                   }}
                 >
                   Max
@@ -202,11 +211,21 @@ export function DepositDialog({
                 <span className="text-label font-medium">You&apos;ll add</span>
 
                 <p className="text-h3 font-semibold tabular-nums">
-                  {formatUsdcPrecise(quoteState.quote.expectedNetAssets)}{" "}
+                  {formatUsdcPrecise(quoteState.quote.assets)}{" "}
                   <span className="text-label font-medium text-muted-foreground">
                     USDC
                   </span>
                 </p>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-4">
+                <span className="text-caption text-muted-foreground">
+                  Total from available cash
+                </span>
+
+                <span className="text-label font-medium tabular-nums">
+                  {formatUsdcPrecise(quoteState.quote.grossAssets)} USDC
+                </span>
               </div>
 
               {quoteState.quote.performanceFeeBps > 0n && (

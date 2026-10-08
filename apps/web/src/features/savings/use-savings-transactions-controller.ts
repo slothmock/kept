@@ -276,12 +276,15 @@ export function useSavingsTransactionsController({
           return false;
         }
 
+        const grossAssets =
+          depositQuoteState.quote.grossAssets;
+
         if (
-          parsedAmount.assets
+          grossAssets
             > position.usdcBalance
         ) {
           setDepositError(
-            "Enter an amount no greater than your available cash.",
+            "You do not have enough available cash to cover this amount and the 0.2% deposit fee.",
           );
 
           return false;
@@ -299,7 +302,7 @@ export function useSavingsTransactionsController({
             receiver:
               account,
             assets:
-              parsedAmount.assets,
+              grossAssets,
             chainId:
               config.chainId,
           });
@@ -325,7 +328,7 @@ export function useSavingsTransactionsController({
                     allowance:
                       position.allowance,
                     assets:
-                      parsedAmount.assets,
+                      grossAssets,
                     approval,
                     deposit,
                     beforeSend:
