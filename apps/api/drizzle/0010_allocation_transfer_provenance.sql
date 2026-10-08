@@ -23,3 +23,14 @@ CREATE INDEX "allocation_transfer_lot_movements_owner_time_idx"
   ON "allocation_transfer_lot_movements"("user_id","created_at","event_id");
 CREATE INDEX "allocation_transfer_lot_movements_event_idx"
   ON "allocation_transfer_lot_movements"("event_id");
+
+-- Historical verifier evidence cannot be revised or removed.
+CREATE FUNCTION prevent_allocation_transfer_provenance_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'historical allocation transfer provenance is immutable';
+END;
+$$;
+CREATE TRIGGER allocation_transfer_provenance_immutable
+  BEFORE UPDATE OR DELETE ON "allocation_transfer_lot_movements"
+  FOR EACH ROW EXECUTE FUNCTION prevent_allocation_transfer_provenance_mutation();
