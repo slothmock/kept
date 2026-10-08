@@ -12,11 +12,15 @@ import {
 } from "@aurora-is-near/intents-connect-wallet/solana";
 
 import type {
+    AccessTokenProvider,
+} from "@/api/http-client";
+
+import type {
     EthereumProvider,
 } from "@/wallet/evm-wallet";
 
 import {
-    intentsConnectApi,
+    createAuthenticatedIntentsConnectApi,
 } from "./aurora-api";
 
 import {
@@ -81,6 +85,11 @@ function createIntentsSolanaWallet(input: {
 }
 
 type CreateKeptIntentsRunnerInput =
+    {
+        readonly getAccessToken:
+        AccessTokenProvider;
+    }
+    & (
     | {
         readonly sourceAddress:
         string;
@@ -103,18 +112,23 @@ type CreateKeptIntentsRunnerInput =
 
         readonly rpcUrl?:
         string;
-    };
+    }
+    );
 
 export function createKeptIntentsRunner(
     input: CreateKeptIntentsRunnerInput,
 ) {
+    const api =
+        createAuthenticatedIntentsConnectApi(
+            input.getAccessToken,
+        );
+
     if (
         input.family ===
         "sol"
     ) {
         return createExecutionRunner({
-            api:
-                intentsConnectApi,
+            api,
 
             wallet:
                 createIntentsSolanaWallet({
