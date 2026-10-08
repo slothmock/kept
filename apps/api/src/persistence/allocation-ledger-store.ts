@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { KeptDatabase } from "../db/client.js";
 import {
-  allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, users,
+  allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, allocationShareLots, users,
 } from "../db/schema.js";
 import {
   assertLedgerEvent, assertNonnegativeBalances, type AllocationBucketKey,
@@ -155,6 +155,57 @@ export class AllocationLedgerStore {
         // UNKNOWN is intentionally non-qualifying until lineage is implemented.
         originKind: input.kind === "OPENING" ? "OPENING" : "UNKNOWN", originEventId: input.kind === "OPENING" ? id : null, createdAt: now,
       })));
+      // Persist the attribution carried by each share lot in the SAME
+      // transaction as the event and its balanced entries.
+      const consumed: (typeof allocationShareLots.$inferInsert)[] = [];
+      for (const leg of input.legs.filter(leg => leg.deltaShares < 0n)) {
+        let outstanding = -leg.deltaShares;
+        const sourceId = bucketRows.get(leg.bucket)!.id;
+        const lots = await tx.select().from(allocationShareLots)
+          .where(and(eq(allocationShareLots.userId, input.userId),eq(allocationShareLots.bucketId, sourceId)))
+          .orderBy(asc(allocationShareLots.createdAt),asc(allocationShareLots.id));
+        for (const lot of lots) {
+          if (outstanding === 0n) break;
+          const available = BigInt(lot.sharesAtomic);
+          const taken = outstanding < available ? outstanding : available;
+          outstanding -= taken;
+          if (taken === available) {
+            await tx.delete(allocationShareLots).where(eq(allocationShareLots.id, lot.id));
+          } else {
+            await tx.update(allocationShareLots).set({sharesAtomic:(available-taken).toString()})
+              .where(eq(allocationShareLots.id, lot.id));
+          }
+          consumed.push({
+            id:randomUUID(),userId:input.userId,bucketId:sourceId,
+            originEventId:lot.originEventId,originKind:lot.originKind,
+            sharesAtomic:taken.toString(),everGoalAllocated:lot.everGoalAllocated,
+            firstGoalId:lot.firstGoalId,createdAt:now,
+          });
+        }
+        if (outstanding !== 0n) throw new Error("Provenance lots do not cover ledger debit");
+      }
+      for (const leg of input.legs.filter(leg => leg.deltaShares > 0n)) {
+        const destBucket = bucketRows.get(leg.bucket)!;
+        if (input.kind === "TRANSFER") {
+          if (consumed.reduce((n,lot)=>n+BigInt(lot.sharesAtomic),0n) !== leg.deltaShares) {
+            throw new Error("Provenance transfer shares differ from ledger entry");
+          }
+          await tx.insert(allocationShareLots).values(consumed.map(lot => ({
+            ...lot,id:randomUUID(),bucketId:destBucket.id,
+            everGoalAllocated:lot.everGoalAllocated || destBucket.bucketKind === "GOAL",
+            firstGoalId:lot.firstGoalId ?? (destBucket.bucketKind === "GOAL" ? destBucket.goalId : null),
+          })));
+        } else {
+          await tx.insert(allocationShareLots).values({
+            id:randomUUID(),userId:input.userId,bucketId:destBucket.id,
+            originEventId:id,originKind:input.kind === "OPENING" ? "OPENING" : "UNKNOWN",
+            sharesAtomic:leg.deltaShares.toString(),
+            everGoalAllocated:destBucket.bucketKind === "GOAL",
+            firstGoalId:destBucket.bucketKind === "GOAL" ? destBucket.goalId : null,
+            createdAt:now,
+          });
+        }
+      }
       return id;
     });
   }
