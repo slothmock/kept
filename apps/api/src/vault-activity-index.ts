@@ -167,6 +167,7 @@ function decodeIndexedLog(
   readonly type: "DEPOSIT" | "WITHDRAW";
   readonly owner: Address;
   readonly assets: bigint;
+  readonly shares: bigint;
   readonly blockNumber: bigint;
   readonly transactionHash: Hex;
   readonly logIndex: number;
@@ -204,10 +205,15 @@ function decodeIndexedLog(
     const assets =
       decoded.args.assets;
 
+    const shares =
+      decoded.args.shares;
+
     if (
       typeof owner !== "string"
       || typeof assets !== "bigint"
+      || typeof shares !== "bigint"
       || assets < 0n
+      || shares < 0n
     ) {
       throw new Error(
         "Vault activity log is incomplete",
@@ -222,6 +228,7 @@ function decodeIndexedLog(
       owner:
         getAddress(owner),
       assets,
+      shares,
       blockNumber:
         log.blockNumber,
       transactionHash:
@@ -407,6 +414,8 @@ export function createVaultActivityIndex(input: {
                   row.type,
                 assetsAtomic:
                   row.assets.toString(),
+                sharesAtomic:
+                  row.shares.toString(),
                 blockNumber:
                   row.blockNumber,
                 transactionHash:
