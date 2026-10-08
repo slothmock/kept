@@ -27,23 +27,26 @@ export function planVaultReconciliation(
   const goals = rows.filter(([key, shares]) => key.startsWith("GOAL:") && shares > 0n);
   const totalGoals = goals.reduce((sum, [, shares]) => sum + shares, 0n);
   if (toRemove > totalGoals || totalGoals === 0n) throw new Error("Withdrawal exceeds goal holdings");
+  // Match the existing legacy reconciliation rule: floor survivor shares,
+  // then assign leftover survivor shares in stable goal-id order.
+  const survivors = totalGoals - toRemove;
   const portions = goals.map(([bucket, shares]) => ({
     bucket: bucket as AllocationBucketKey,
     shares,
-    remove: shares * toRemove / totalGoals,
-    remainder: shares * toRemove % totalGoals,
+    target: shares * survivors / totalGoals,
   }));
-  let left = toRemove - portions.reduce((sum, p) => sum + p.remove, 0n);
-  const ranked = [...portions].sort((a,b) => a.remainder === b.remainder
-    ? a.bucket.localeCompare(b.bucket)
-    : a.remainder > b.remainder ? -1 : 1);
-  for (const portion of ranked) {
-    if (left === 0n) break;
-    if (portion.remove < portion.shares) {portion.remove += 1n; left -= 1n;}
+  let remainder = survivors - portions.reduce((sum, p) => sum + p.target, 0n);
+  for (const portion of portions) {
+    if (remainder === 0n) break;
+    if (portion.target < portion.shares) {
+      portion.target += 1n;
+      remainder -= 1n;
+    }
   }
-  if (left !== 0n) throw new Error("Could not distribute integer share remainder");
-  for (const portion of portions) if (portion.remove > 0n) {
-    legs.push({bucket: portion.bucket, deltaShares: -portion.remove});
+  if (remainder !== 0n) throw new Error("Could not distribute integer share remainder");
+  for (const portion of portions) {
+    const removed = portion.shares - portion.target;
+    if (removed > 0n) legs.push({bucket: portion.bucket, deltaShares: -removed});
   }
   if (legs.reduce((sum, leg) => sum + leg.deltaShares, 0n) !== liveShares - current) {
     throw new Error("Reconciliation does not conserve shares");
