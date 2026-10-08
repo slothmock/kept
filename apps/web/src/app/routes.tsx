@@ -142,7 +142,11 @@ export function AppRoutes({
         <Route
           path="/waitlist"
           element={
-            <WaitlistPage />
+            <WaitlistPage
+              session={
+                session
+              }
+            />
           }
         />
 
@@ -202,7 +206,11 @@ export function AppRoutes({
       <Route
         path="/waitlist"
         element={
-          <WaitlistPage />
+          <WaitlistPage
+              session={
+                session
+              }
+            />
         }
       />
 
