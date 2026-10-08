@@ -12,10 +12,7 @@ import {
 describe("Intents proxy authenticated fetch", () => {
   it("adds the Privy bearer token only for Kept proxy requests", async () => {
     const fetcher = vi.fn(
-      async (
-        _input: RequestInfo | URL,
-        _init?: RequestInit,
-      ) =>
+      async () =>
         new Response("{}", {
           status: 200,
         }),
