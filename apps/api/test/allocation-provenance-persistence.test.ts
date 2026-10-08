@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { connectDatabase, type DatabaseConnection } from '../src/db/client.js';
 import { AllocationLedgerStore } from '../src/persistence/allocation-ledger-store.js';
+import { readAllocationProvenanceMovements } from '../src/persistence/allocation-provenance-reader.js';
 
 const url = process.env.TEST_DATABASE_URL ?? 'postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test';
 let connection: DatabaseConnection;
@@ -70,6 +71,18 @@ describe.sequential('persisted allocation lineage', () => {
       'DELETE FROM allocation_transfer_lot_movements WHERE event_id=$1',
       [eventId],
     )).rejects.toThrow(/immutable/);
+  });
+  it('reads historical source-lot movements without promoting opening shares', async () => {
+    const {userId,a} = await owner();
+    const startAt = new Date(Date.now() - 60_000);
+    await store.openPositions({userId,positions:{UNASSIGNED:20n},key:'opening'});
+    await store.transfer({userId,from:'UNASSIGNED',to:a,shares:12n,key:'assign'});
+    const endAt = new Date(Date.now() + 60_000);
+    const movements = await readAllocationProvenanceMovements(connection.db,{userId,startAt,endAt});
+    expect(movements).toHaveLength(1);
+    expect(movements[0]).toMatchObject({
+      source:'UNASSIGNED',destination:a,shares:12n,verifiedFreshUnassigned:false,
+    });
   });
   it('preserves exact share conservation between lots and ledger balances', async () => {
     const {userId,a} = await owner();
