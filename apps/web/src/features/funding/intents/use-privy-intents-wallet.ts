@@ -6,7 +6,7 @@ import {
 import type {
     EthereumProvider,
     KeptEvmWallet,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 
 import {
     createIntentsEvmWallet,

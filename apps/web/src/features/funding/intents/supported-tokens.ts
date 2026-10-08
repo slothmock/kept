@@ -33,33 +33,15 @@ const SUPPORTED_SOURCE_CHAINS =
         ...SUPPORTED_SOLANA_FUNDING_CHAINS,
     ]);
 
-export interface FundingAsset {
-    readonly assetId:
-    string;
+import type {
+    FundingAsset,
+    KeptFundingAssets,
+} from "@/features/funding/intents/core/funding-assets";
 
-    readonly symbol:
-    string;
-
-    readonly blockchain:
-    string;
-
-    readonly contractAddress:
-    string | null;
-
-    readonly decimals:
-    number;
-
-    readonly kind:
-    "native" | "token";
-}
-
-export interface KeptFundingAssets {
-    readonly origins:
-    readonly FundingAsset[];
-
-    readonly destination:
-    FundingAsset;
-}
+export type {
+    FundingAsset,
+    KeptFundingAssets,
+} from "@/features/funding/intents/core/funding-assets";
 
 function toFundingAsset(
     token:
@@ -204,4 +186,24 @@ export async function resolveKeptFundingAssets():
             },
         );
     }
+}
+export async function resolveKeptWithdrawalAsset(input: {
+    readonly blockchain: string;
+    readonly symbol: string;
+}): Promise<FundingAsset> {
+    const result = await intentsConnectApi.listSupportedTokens();
+    const token = result.out?.find(
+        (candidate) =>
+            candidate.blockchain === input.blockchain
+            && candidate.symbol === input.symbol,
+    );
+    const asset = toFundingAsset(token);
+
+    if (!asset) {
+        throw new Error(
+            `${input.symbol} on ${input.blockchain} is not currently supported for withdrawals.`,
+        );
+    }
+
+    return asset;
 }

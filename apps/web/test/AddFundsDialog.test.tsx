@@ -16,7 +16,7 @@ import {
     vi,
 } from "vitest";
 
-import { AddFundsDialog } from "../src/features/funding/AddFundsDialog.js";
+import { AddFundsDialog } from "../src/features/funding/components/AddFundsDialog.js";
 
 const {
     getProvider,
@@ -46,7 +46,7 @@ const {
 }));
 
 vi.mock(
-    "../src/chain/evm-wallet.js",
+    "../src/wallet/evm-wallet.js",
     () => ({
         useKeptEvmWallet:
             () => ({
@@ -158,7 +158,7 @@ vi.mock(
 );
 
 vi.mock(
-    "../src/features/funding/PrivyFundingButton.js",
+    "../src/features/funding/components/PrivyFundingButton.js",
     () => ({
         PrivyFundingButton:
             () => (
@@ -233,8 +233,47 @@ beforeEach(() => {
 
     previewKeptFunding.mockResolvedValue({
         preview: {
-            estimatedDuration:
-                37,
+            execution: {
+                id:
+                    "preview-execution",
+
+                status:
+                    "CREATED",
+
+                quote: {
+                    amount:
+                        "20000000",
+
+                    amountIn:
+                        "20000000",
+
+                    amountOut:
+                        "19900000",
+
+                    minAmountOut:
+                        "19800000",
+
+                    depositAddress:
+                        "0x2222222222222222222222222222222222222222",
+
+                    depositMemo:
+                        null,
+                },
+
+                details: {
+                    intermediaryAddress:
+                        "0x3333333333333333333333333333333333333333",
+
+                    networkFee:
+                        "100000",
+
+                    estimatedTime:
+                        "2 minutes",
+                },
+
+                steps:
+                    [],
+            },
         },
     });
 
@@ -526,10 +565,44 @@ describe(
                 );
 
                 expect(
-                    screen.getByText(
-                        "Your transfer route is ready.",
+                    screen.getByRole(
+                        "tab",
+                        {
+                            name:
+                                "Transfer",
+                        },
                     ),
                 ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "You're sending",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Review transfer",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "You'll receive at least",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.queryByLabelText(
+                        "Amount",
+                    ),
+                ).toBeNull();
+
+                expect(
+                    screen.queryByText(
+                        "Source wallet",
+                    ),
+                ).toBeNull();
 
                 expect(
                     screen.getByRole(
@@ -544,7 +617,7 @@ describe(
         );
 
         it(
-            "invalidates the preview when the amount changes",
+            "keeps route mechanics behind the More info tab",
             async () => {
                 renderDialog();
 
@@ -558,13 +631,10 @@ describe(
                     ),
                 );
 
-                const amountInput =
+                fireEvent.change(
                     await screen.findByLabelText(
                         "Amount",
-                    );
-
-                fireEvent.change(
-                    amountInput,
+                    ),
                     {
                         target: {
                             value:
@@ -583,43 +653,171 @@ describe(
                     ),
                 );
 
-                await waitFor(
-                    () => {
-                        expect(
-                            screen.getByRole(
-                                "button",
-                                {
-                                    name:
-                                        "Confirm transfer",
-                                },
-                            ),
-                        ).toBeTruthy();
-                    },
-                );
-
-                fireEvent.change(
-                    amountInput,
+                await screen.findByRole(
+                    "button",
                     {
-                        target: {
-                            value:
-                                "25",
-                        },
+                        name:
+                            "Confirm transfer",
                     },
                 );
 
                 expect(
-                    screen.queryByRole(
-                        "button",
+                    screen.getByRole(
+                        "tab",
                         {
                             name:
-                                "Confirm transfer",
+                                "Transfer",
                         },
+                    ).getAttribute(
+                        "aria-selected",
                     ),
-                ).toBeNull();
+                ).toBe(
+                    "true",
+                );
+
+                expect(
+                    screen.getByText(
+                        "You're sending",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "19.8 USDC",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "2 minutes",
+                    ),
+                ).toBeTruthy();
 
                 expect(
                     screen.queryByText(
-                        "Your transfer route is ready.",
+                        "Slippage tolerance",
+                    ),
+                ).toBeNull();
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "tab",
+                        {
+                            name:
+                                "More info",
+                        },
+                    ),
+                );
+
+                expect(
+                    await screen.findByText(
+                        "Expected amount",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "19.9 USDC",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Provider fee",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "0.1 USDC",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Slippage tolerance",
+                    ),
+                ).toBeTruthy();
+
+                expect(
+                    screen.getByText(
+                        "Destination network",
+                    ),
+                ).toBeTruthy();
+            },
+        );
+
+        it(
+            "returns from review to edit the transfer",
+            async () => {
+                renderDialog();
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Transfer crypto",
+                        },
+                    ),
+                );
+
+                fireEvent.change(
+                    await screen.findByLabelText(
+                        "Amount",
+                    ),
+                    {
+                        target: {
+                            value:
+                                "20",
+                        },
+                    },
+                );
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Continue",
+                        },
+                    ),
+                );
+
+                await screen.findByText(
+                    "Review transfer",
+                );
+
+                expect(
+                    screen.queryByLabelText(
+                        "Amount",
+                    ),
+                ).toBeNull();
+
+                fireEvent.click(
+                    screen.getByRole(
+                        "button",
+                        {
+                            name:
+                                "Back",
+                        },
+                    ),
+                );
+
+                const amountInput =
+                    await screen.findByLabelText(
+                        "Amount",
+                    );
+
+                expect(
+                    (amountInput as HTMLInputElement).value,
+                ).toBe(
+                    "20",
+                );
+
+                expect(
+                    screen.queryByText(
+                        "Review transfer",
                     ),
                 ).toBeNull();
 
@@ -794,7 +992,7 @@ describe(
                         "button",
                         {
                             name:
-                                "Deposit available cash",
+                                "Use available cash",
                         },
                     ),
                 );

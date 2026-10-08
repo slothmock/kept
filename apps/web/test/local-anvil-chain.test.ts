@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createLocalAnvilChain } from "../src/chain/local-anvil-chain.js";
+import { createLocalAnvilChain } from "../src/wallet/local-anvil-chain.js";
 
 describe("createLocalAnvilChain", () => {
   it("uses the same validated RPC URL as vault reads", () => {

@@ -1,0 +1,39 @@
+name: Source snapshot
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create source archive
+        run: |
+          tar             --exclude=.git             --exclude='*.tsbuildinfo'             -czf "$RUNNER_TEMP/source-snapshot.tar.gz" .
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-snapshot-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/source-snapshot.tar.gz
+          retention-days: 1
+          if-no-files-found: error

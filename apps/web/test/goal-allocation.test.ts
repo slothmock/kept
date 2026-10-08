@@ -23,16 +23,52 @@ const allocation = {
 };
 
 describe("goal allocation funding", () => {
-  it("converts goal and aggregate shares through the vault without assuming parity", async () => {
-    const readContract = vi.fn(async (request: unknown) => {
-      const shares = (request as { args: readonly [bigint] }).args[0];
-      return shares * 2n / 1_000_000n;
-    });
+  it("batches goal and aggregate share conversions on Monad without assuming parity", async () => {
+    const multicall =
+      vi.fn(
+        async (
+          input: unknown,
+        ) => {
+          const contracts =
+            (
+              input as {
+                contracts:
+                  readonly {
+                    args:
+                      readonly [bigint];
+                  }[];
+              }
+            ).contracts;
+
+          return contracts.map(
+            (
+              contract,
+            ) =>
+              contract.args[0]
+              * 2n
+              / 1_000_000n,
+          );
+        },
+      );
+
+    const readContract =
+      vi.fn(
+        async () => {
+          throw new Error(
+            "unexpected direct read",
+          );
+        },
+      );
 
     const funding = await readGoalFunding({
       allocations: [allocation, { ...allocation, goalId: "goal-2", allocatedSharesAtomic: "50000000000000" }],
-      publicClient: { readContract },
+      publicClient: {
+        readContract,
+        multicall,
+      },
       vault,
+      chainId:
+        10_143,
     });
 
     expect(funding.totalAllocatedAssets).toBe(200_000_000n);
@@ -41,7 +77,12 @@ describe("goal allocation funding", () => {
       allocatedShares: 50_000_000_000_000n,
       allocatedAssets: 100_000_000n,
     });
-    expect(readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "convertToAssets" }));
+
+    expect(multicall)
+      .toHaveBeenCalledTimes(1);
+
+    expect(readContract)
+      .not.toHaveBeenCalled();
   });
 
   it("calculates zero, partial, and over-target progress without hiding the balance", () => {

@@ -46,5 +46,6 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0"
-  }
+  },
+  "packageManager": "npm@10.9.7"
 }

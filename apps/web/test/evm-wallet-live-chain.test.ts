@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { observeProviderChainId } from "../src/chain/evm-wallet.js";
+import { observeProviderChainId } from "../src/wallet/evm-wallet.js";
 
 describe("live EVM wallet chain", () => {
   it("reports the initial provider chain and later chainChanged events", async () => {

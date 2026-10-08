@@ -167,15 +167,20 @@ const savingsPerformance = createSavingsPerformanceReader({
 });
 
 const savingsCurrentAssets = {
-  async read(account: string): Promise<bigint> {
+  async read(
+    account: string,
+    blockNumber?: bigint,
+  ): Promise<bigint> {
     const shares =
       await vaultShares.readShares(
         account,
+        blockNumber,
       );
 
     return vaultShares
       .convertToAssets(
         shares,
+        blockNumber,
       );
   },
 };
@@ -439,6 +444,7 @@ const stagingFaucet =
                   recipient,
                   STAGING_FAUCET_AMOUNT_ASSETS,
                 ],
+                chain: null,
               });
 
           const receipt =
@@ -504,12 +510,11 @@ const app = buildApp(
     commitmentSettlementVerifier:
       settlementVerifier,
 
-    moonPay: {
-      publishableKey: config.moonPayPublishableKey,
-
-      secretKey: config.moonPaySecretKey,
-      baseUrl: config.moonPayBaseUrl,
-    },
+    ...(config.moonPay
+      ? {
+        moonPay: config.moonPay,
+      }
+      : {}),
   },
   {
     solanaRpc: {
@@ -519,6 +524,9 @@ const app = buildApp(
 
     webOrigin:
       config.webOrigin,
+
+    stagingAllowedPrivyUserIds:
+      config.stagingAllowedPrivyUserIds,
 
     auroraIntents: {
       baseUrl:

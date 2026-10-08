@@ -1,24 +1,15 @@
-import { PrivyProvider } from "@privy-io/react-auth";
-import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
-import { MoonPayProvider } from "@moonpay/moonpay-react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+
 import {
-  arbitrum,
-  base,
-  mainnet,
-  optimism,
-  type Chain,
-} from "@privy-io/chains";
-import { monad } from "viem/chains";
-
-import { KeptApp } from "@/KeptApp";
-import { createLocalAnvilChain } from "@/chain/local-anvil-chain";
-import { createMonadTestnetChain } from "@/chain/monad-testnet-chain";
+  AppProviders,
+} from "@/app/providers/AppProviders";
+import {
+  resolveAppBootstrap,
+} from "@/app/bootstrap-config";
+import { App } from "@/app/App";
 import { diagnostics } from "@/lib/diagnostics";
-import { readVaultConfig } from "@/vault/config";
 
-import "@/styles.css";
+import "@/styles/globals.css";
 
 window.addEventListener(
   "error",
@@ -43,44 +34,6 @@ window.addEventListener(
   },
 );
 
-const privyAppId =
-  import.meta.env
-    .VITE_PRIVY_APP_ID;
-
-const moonPayPublishableKey =
-  import.meta.env
-    .VITE_MOONPAY_PUBLISHABLE_KEY;
-
-const vaultConfig =
-  readVaultConfig(
-    import.meta.env,
-  );
-
-const keptChain:
-  Chain =
-  vaultConfig?.chainId === 31_337
-    ? createLocalAnvilChain(
-      vaultConfig.rpcUrl,
-    )
-    : vaultConfig?.chainId === 10_143
-      ? createMonadTestnetChain(
-        vaultConfig.rpcUrl,
-      )
-      : monad;
-
-const supportedChains:
-  Chain[] = [
-    keptChain,
-    base,
-    mainnet,
-    arbitrum,
-    optimism,
-  ];
-
-const defaultChain: Chain = keptChain;
-
-const solanaWalletConnectors = toSolanaWalletConnectors();
-
 const root =
   document.getElementById(
     "root",
@@ -92,50 +45,25 @@ if (!root) {
   );
 }
 
-if (!privyAppId) {
+const bootstrap =
+  resolveAppBootstrap(
+    import.meta.env,
+  );
+
+if (
+  bootstrap.kind ===
+  "error"
+) {
   root.textContent =
-    "VITE_PRIVY_APP_ID is required to start Kept.";
-} else if (!moonPayPublishableKey) {
-  root.textContent =
-    "VITE_MOONPAY_PUBLISHABLE_KEY is required to start Kept.";
+    bootstrap.message;
 } else {
   createRoot(root).render(
-    <PrivyProvider
-      appId={
-        privyAppId
+    <AppProviders
+      config={
+        bootstrap.config
       }
-      config={{
-        loginMethods: [
-          "email",
-        ],
-
-        supportedChains,
-
-        defaultChain,
-
-        appearance: {
-          walletChainType: "ethereum-and-solana",
-        },
-
-        externalWallets: {
-          solana: {
-            connectors: solanaWalletConnectors,
-          },
-        },
-
-        embeddedWallets: {
-          ethereum: {
-            createOnLogin:
-              "users-without-wallets",
-          },
-        },
-      }}
     >
-      <MoonPayProvider apiKey={moonPayPublishableKey} debug={import.meta.env.DEV}>
-        <BrowserRouter>
-          <KeptApp />
-        </BrowserRouter>
-      </MoonPayProvider>
-    </PrivyProvider>,
+      <App />
+    </AppProviders>,
   );
 }

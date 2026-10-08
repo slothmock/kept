@@ -21,7 +21,7 @@ import type {
   GoalDto,
 } from "../src/api/kept-api.js";
 
-import { GoalDetailsDialog } from "../src/features/goals/GoalDetailsDialog.js";
+import { GoalDetailsDialog } from "../src/features/goals/components/GoalDetailsDialog.js";
 
 const goal: GoalDto = {
   id: "goal-1",

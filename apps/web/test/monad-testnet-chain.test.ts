@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createMonadTestnetChain } from "../src/chain/monad-testnet-chain.js";
+import { createMonadTestnetChain } from "../src/wallet/monad-testnet-chain.js";
 
 describe("createMonadTestnetChain", () => {
   it("uses the configured Monad testnet RPC URL", () => {

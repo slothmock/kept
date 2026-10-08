@@ -4,7 +4,6 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   getAddress,
-  type Address,
   type Hex,
 } from "viem";
 
@@ -16,7 +15,7 @@ import {
   commitmentManagerAbi,
   confirmCommitmentCreation,
   referenceIdForCommitment,
-} from "../src/commitments/commitment-manager.js";
+} from "../src/features/commitments/commitment-manager.js";
 
 const manager = getAddress("0x1111111111111111111111111111111111111111");
 const owner = getAddress("0x2222222222222222222222222222222222222222");

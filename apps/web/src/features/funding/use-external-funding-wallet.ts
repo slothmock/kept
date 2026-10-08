@@ -1,6 +1,5 @@
 import {
     useCallback,
-    useEffect,
     useMemo,
     useState,
 } from "react";
@@ -11,7 +10,7 @@ import {
 } from "@privy-io/react-auth";
 
 import {
-    useSolanaWallets,
+    useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
 
 import {
@@ -26,7 +25,7 @@ import type {
 
 import type {
     EthereumProvider,
-} from "@/chain/evm-wallet";
+} from "@/wallet/evm-wallet";
 
 export type ExternalWalletFamily =
     | "evm"
@@ -59,8 +58,11 @@ export interface ExternalFundingWallet {
     readonly availableWallets:
     readonly ExternalFundingWalletOption[];
 
-    connect():
-        void;
+    connect(
+        family?:
+            ExternalWalletFamily,
+    ):
+        Promise<void>;
 
     select(
         address: string,
@@ -129,7 +131,8 @@ export function useExternalFundingWallet():
                     (
                         wallet,
                     ) =>
-                        wallet.walletClientType !==
+                        wallet.standardWallet.name
+                            .toLowerCase() !==
                         "privy",
                 ),
             [
@@ -163,7 +166,7 @@ export function useExternalFundingWallet():
                             wallet.address,
 
                         walletName:
-                            wallet.walletClientType,
+                            wallet.standardWallet.name,
 
                         family:
                             "sol",
@@ -176,31 +179,43 @@ export function useExternalFundingWallet():
             ],
         );
 
-    useEffect(
-        () => {
-            if (
-                selectedKey ||
-                availableWallets.length !== 1
-            ) {
-                return;
-            }
+    const effectiveSelectedKey =
+        useMemo(
+            () => {
+                if (
+                    selectedKey &&
+                    availableWallets.some(
+                        (
+                            wallet,
+                        ) =>
+                            `${wallet.family}:${wallet.address}` ===
+                            selectedKey,
+                    )
+                ) {
+                    return selectedKey;
+                }
 
-            const onlyWallet =
-                availableWallets[0];
+                if (
+                    availableWallets.length ===
+                    1
+                ) {
+                    const wallet =
+                        availableWallets[0];
 
-            if (
-                onlyWallet
-            ) {
-                setSelectedKey(
-                    `${onlyWallet.family}:${onlyWallet.address}`,
-                );
-            }
-        },
-        [
-            availableWallets,
-            selectedKey,
-        ],
-    );
+                    if (
+                        wallet
+                    ) {
+                        return `${wallet.family}:${wallet.address}`;
+                    }
+                }
+
+                return null;
+            },
+            [
+                availableWallets,
+                selectedKey,
+            ],
+        );
 
     const selectedOption =
         useMemo(
@@ -210,12 +225,12 @@ export function useExternalFundingWallet():
                         wallet,
                     ) =>
                         `${wallet.family}:${wallet.address}` ===
-                        selectedKey,
+                        effectiveSelectedKey,
                 ) ??
                 null,
             [
                 availableWallets,
-                selectedKey,
+                effectiveSelectedKey,
             ],
         );
 
@@ -261,8 +276,44 @@ export function useExternalFundingWallet():
 
     const connect =
         useCallback(
-            () => {
-                void connectWallet({
+            async (
+                family?:
+                    ExternalWalletFamily,
+            ) => {
+                if (
+                    family ===
+                    "sol"
+                ) {
+                    await connectWallet({
+                        walletChainType:
+                            "solana-only",
+
+                        walletList: [
+                            "solflare",
+                            "phantom",
+                            "backpack",
+                            "jupiter",
+                            "detected_solana_wallets",
+                            "wallet_connect_qr_solana",
+                        ],
+                    });
+
+                    return;
+                }
+
+                if (
+                    family ===
+                    "evm"
+                ) {
+                    await connectWallet({
+                        walletChainType:
+                            "ethereum-only",
+                    });
+
+                    return;
+                }
+
+                await connectWallet({
                     walletChainType:
                         "ethereum-and-solana",
                 });
@@ -284,12 +335,23 @@ export function useExternalFundingWallet():
                     availableWallets.find(
                         (
                             wallet,
-                        ) =>
-                            wallet.address === address &&
-                            (
-                                !family ||
-                                wallet.family === family
-                            ),
+                        ) => {
+                            if (
+                                family &&
+                                wallet.family !==
+                                family
+                            ) {
+                                return false;
+                            }
+
+                            return wallet.family ===
+                                "evm"
+                                ? wallet.address
+                                    .toLowerCase() ===
+                                    address.toLowerCase()
+                                : wallet.address ===
+                                    address;
+                        },
                     );
 
                 if (

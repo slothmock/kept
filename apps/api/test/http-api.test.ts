@@ -52,6 +52,26 @@ function buildDependencies(
 ): ApiDependencies {
   let currentCommitment: CommitmentDto = commitment;
 
+  let currentMoonPayOrder = {
+    id: "moonpay-order-1",
+    amountAtomic: "20000000",
+    baseCurrencyCode: "usdc_base",
+    moonPayTransactionId: null as string | null,
+    depositWalletAddress: null as string | null,
+    depositWalletTag: null as string | null,
+    transferReference: null as string | null,
+    fundsSentAt: null as string | null,
+    status: "pending_widget" as
+      | "pending_widget"
+      | "ready"
+      | "funds_sent"
+      | "completed"
+      | "failed"
+      | "cancelled",
+    createdAt: "2026-10-03T00:00:00.000Z",
+    updatedAt: "2026-10-03T00:00:00.000Z",
+  };
+
   return {
     chainId: 143,
 
@@ -65,6 +85,7 @@ function buildDependencies(
         : null,
 
     persistence: {
+      joinWaitlist: vi.fn(async () => undefined),
       createUser: async () => user,
 
       ensureEmbeddedWallet: vi.fn(async () => ({
@@ -83,6 +104,45 @@ function buildDependencies(
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],
       listTransactions: async () => [],
+      createMoonPayOfframpOrder: vi.fn(async (input) => {
+        currentMoonPayOrder = {
+          ...currentMoonPayOrder,
+          amountAtomic: input.amountAtomic,
+          moonPayTransactionId: null,
+          depositWalletAddress: null,
+          depositWalletTag: null,
+          status: "pending_widget",
+        };
+        return currentMoonPayOrder;
+      }),
+      getMoonPayOfframpOrder: vi.fn(async (_userId, id) =>
+        id === currentMoonPayOrder.id ? currentMoonPayOrder : null
+      ),
+      recordMoonPayOfframpWebhook: vi.fn(async (input) => {
+        currentMoonPayOrder = {
+          ...currentMoonPayOrder,
+          moonPayTransactionId: input.moonPayTransactionId,
+          baseCurrencyCode: input.baseCurrencyCode,
+          depositWalletAddress: input.depositWalletAddress,
+          depositWalletTag: input.depositWalletTag ?? null,
+          status: input.status ?? "ready",
+          updatedAt: "2026-10-03T00:01:00.000Z",
+        };
+        return currentMoonPayOrder;
+      }),
+      markMoonPayOfframpFundsSent: vi.fn(async (input) => {
+        if (input.orderId !== currentMoonPayOrder.id) {
+          throw new Error("unknown MoonPay order");
+        }
+        currentMoonPayOrder = {
+          ...currentMoonPayOrder,
+          transferReference: input.transferReference,
+          fundsSentAt: "2026-10-03T00:02:00.000Z",
+          status: "funds_sent",
+          updatedAt: "2026-10-03T00:02:00.000Z",
+        };
+        return currentMoonPayOrder;
+      }),
       recordTransaction: async (input) => ({
         id: "transaction-1",
         type: "savings_deposit" as const,
@@ -93,6 +153,7 @@ function buildDependencies(
         goalId: input.goalId ?? null,
         chainId: input.chainId?.toString() ?? null,
         transactionHash: input.transactionHash ?? null,
+        externalReference: input.externalReference ?? null,
         createdAt: "2026-09-30T00:00:00.000Z",
       }),
       archiveGoal: async () => ({
@@ -176,6 +237,9 @@ function buildDependencies(
     savingsMarketStatus: {
       readStatus:
         async () => ({
+          tvlAssetsAtomic:
+            "0",
+
           suppliedAssetsAtomic:
             "0",
 
@@ -200,6 +264,7 @@ function buildDependencies(
       baseUrl: "https://api.moonpay.example",
       publishableKey: "moonpay-publishable-key",
       secretKey: "moonpay-secret-key",
+      webhookKey: "moonpay-webhook-key",
     },
 
     savingsPerformance: {
@@ -237,6 +302,108 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("accepts public waitlist signups without authentication", async () => {
+    const joinWaitlist =
+      vi.fn(
+        async () => undefined,
+      );
+
+    const app =
+      buildApp(
+        buildDependencies({
+          persistence: {
+            ...buildDependencies()
+              .persistence,
+            joinWaitlist,
+          },
+        }),
+      );
+
+    const response =
+      await app.inject({
+        method: "POST",
+        url: "/v1/waitlist",
+        payload: {
+          email:
+            "person@example.com",
+        },
+      });
+
+    expect(
+      response.statusCode,
+    ).toBe(204);
+
+    expect(
+      joinWaitlist,
+    ).toHaveBeenCalledWith({
+      email:
+        "person@example.com",
+    });
+
+    await app.close();
+  });
+
+  it("rate limits public waitlist signups by client IP", async () => {
+    const app =
+      buildApp(
+        buildDependencies(),
+        {
+          waitlistRateLimit: {
+            maxRequests: 1,
+            windowMs:
+              60_000,
+          },
+        },
+      );
+
+    const first =
+      await app.inject({
+        method: "POST",
+        url: "/v1/waitlist",
+        headers: {
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+        payload: {
+          email:
+            "one@example.com",
+        },
+      });
+
+    const second =
+      await app.inject({
+        method: "POST",
+        url: "/v1/waitlist",
+        headers: {
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+        payload: {
+          email:
+            "two@example.com",
+        },
+      });
+
+    expect(
+      first.statusCode,
+    ).toBe(204);
+
+    expect(
+      second.statusCode,
+    ).toBe(429);
+
+    expect(
+      second.json(),
+    ).toEqual({
+      error: {
+        code:
+          "RATE_LIMITED",
+      },
+    });
+
+    await app.close();
+  });
+
   it("bootstraps the authenticated Privy user", async () => {
     const app = buildApp(buildDependencies());
     const response = await app.inject({ method: "GET", url: "/v1/me", headers: auth });
@@ -253,18 +420,299 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("rejects authenticated users outside the staging allowlist", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        stagingAllowedPrivyUserIds: [
+          "did:privy:allowed-user",
+        ],
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/goals",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: {
+        code: "STAGING_ACCESS_DENIED",
+      },
+    });
+
+    await app.close();
+  });
+
+  it("allows authenticated users on the staging allowlist", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        stagingAllowedPrivyUserIds: [
+          user.privyUserId,
+        ],
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/goals",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it("rejects unauthenticated intents proxy requests", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        webOrigin:
+          "https://staging.keptfinance.app",
+        auroraIntents: {
+          baseUrl:
+            "https://intents.example/",
+          apiKey:
+            "test-key",
+        },
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/intents-connect/quote",
+      headers: {
+        origin:
+          "https://staging.keptfinance.app",
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: "UNAUTHENTICATED",
+      },
+    });
+
+    await app.close();
+  });
+
+  it("rejects intents proxy requests from untrusted origins", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        webOrigin:
+          "https://staging.keptfinance.app",
+        auroraIntents: {
+          baseUrl:
+            "https://intents.example/",
+          apiKey:
+            "test-key",
+        },
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/intents-connect/quote",
+      headers: {
+        ...auth,
+        origin:
+          "https://attacker.example",
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: {
+        code: "FORBIDDEN",
+      },
+    });
+
+    await app.close();
+  });
+
+  it("rate limits intents proxy requests per client", async () => {
+    const originalFetch =
+      globalThis.fetch;
+
+    globalThis.fetch =
+      vi.fn(async () =>
+        new Response("{}", {
+          status: 200,
+          headers: {
+            "content-type":
+              "application/json",
+          },
+        }),
+      ) as typeof fetch;
+
+    try {
+      const app = buildApp(
+        buildDependencies(),
+        {
+          webOrigin:
+            "https://staging.keptfinance.app",
+          intentsProxyRateLimit: {
+            maxRequests: 1,
+            windowMs: 60_000,
+          },
+          auroraIntents: {
+            baseUrl:
+              "https://intents.example/",
+            apiKey:
+              "test-key",
+          },
+        },
+      );
+
+      const first = await app.inject({
+        method: "GET",
+        url: "/api/intents-connect/quote",
+        headers: {
+          ...auth,
+          origin:
+            "https://staging.keptfinance.app",
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+      });
+
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: "GET",
+        url: "/api/intents-connect/quote",
+        headers: {
+          ...auth,
+          origin:
+            "https://staging.keptfinance.app",
+          "x-forwarded-for":
+            "203.0.113.10",
+        },
+      });
+
+      expect(second.statusCode).toBe(429);
+      expect(second.headers["retry-after"])
+        .toBeDefined();
+      expect(second.json()).toEqual({
+        error: {
+          code: "RATE_LIMITED",
+        },
+      });
+
+      await app.close();
+    } finally {
+      globalThis.fetch =
+        originalFetch;
+    }
+  });
+
+  it("returns the aggregated dashboard read model in one authenticated request", async () => {
+    const dependencies = buildDependencies();
+
+    const listGoals = vi.spyOn(
+      dependencies.persistence,
+      "listGoals",
+    );
+
+    const listCommitments = vi.spyOn(
+      dependencies.persistence,
+      "listCommitments",
+    );
+
+    const getGoalAllocation = vi.spyOn(
+      dependencies.persistence,
+      "getGoalAllocation",
+    );
+
+    const readPerformance = vi.spyOn(
+      dependencies.savingsPerformance,
+      "readPerformance",
+    );
+
+    const readStatus = vi.spyOn(
+      dependencies.savingsMarketStatus,
+      "readStatus",
+    );
+
+    const app = buildApp(
+      dependencies,
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/dashboard",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    expect(response.json()).toEqual({
+      goals: [goal],
+      commitments: [commitment],
+      allocations: {
+        [goal.id]: {
+          goalId: goal.id,
+          allocatedSharesAtomic: "0",
+          totalVaultSharesAtomic: "0",
+          totalAllocatedSharesAtomic: "0",
+          unallocatedSharesAtomic: "0",
+        },
+      },
+      savings: {
+        performance: {
+          kind: "ready",
+          data: {
+            depositedAssetsAtomic: "0",
+            withdrawnAssetsAtomic: "0",
+            netContributionsAtomic: "0",
+            currentAssetsAtomic: "0",
+            earningsAssetsAtomic: "0",
+          },
+        },
+        marketStatus: {
+          kind: "ready",
+          data: {
+            tvlAssetsAtomic: "0",
+            suppliedAssetsAtomic: "0",
+            supplyCapAssetsAtomic: null,
+            availableToDepositAtomic: null,
+            availableToWithdrawAtomic: "0",
+            grossApyBps: "0",
+            netApyBps: "0",
+          },
+        },
+      },
+    });
+
+    expect(listGoals).toHaveBeenCalledTimes(1);
+    expect(listCommitments).toHaveBeenCalledTimes(1);
+    expect(getGoalAllocation).toHaveBeenCalledTimes(1);
+    expect(readPerformance).toHaveBeenCalledTimes(1);
+    expect(readStatus).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
   it("returns authenticated MoonPay client parameters", async () => {
     const app = buildApp(buildDependencies());
     const allowedIp = await app.inject({
       method: "GET",
       url: "/v1/moonpay/allowed-ip",
-      headers: { ...auth, "x-forwarded-for": "198.51.100.4, 10.0.0.1" },
+      headers: {
+        ...auth,
+        "cf-connecting-ip": "198.51.100.4",
+        "x-forwarded-for": "10.0.0.8, 10.0.0.1",
+      },
     });
     expect(allowedIp.statusCode).toBe(200);
     expect(allowedIp.json()).toEqual({
-      allowedIpAddress: createHmac("sha256", "moonpay-secret-key")
-        .update("198.51.100.4")
-        .digest("base64"),
+      allowedIpAddress: "198.51.100.4",
     });
 
     const url = "https://widget.moonpay.example/?apiKey=key&currencyCode=usd";
@@ -280,6 +728,193 @@ describe("Kept HTTP API", () => {
         .update(new URL(url).search)
         .digest("base64"),
     });
+    await app.close();
+  });
+
+  it("creates a persistent MoonPay off-ramp order and correlates the widget URL", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies, { webOrigin: "https://kept.example" });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/offramp-url",
+      headers: {
+        ...auth,
+        "cf-connecting-ip": "198.51.100.4",
+        "x-forwarded-for": "10.0.0.8",
+      },
+      payload: { amount: "20.00" },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const result = response.json<{ url: string; orderId: string }>();
+    const parsed = new URL(result.url);
+
+    expect(result.orderId).toBe("moonpay-order-1");
+    expect(dependencies.persistence.createMoonPayOfframpOrder).toHaveBeenCalledWith({
+      userId: user.id,
+      amountAtomic: "20000000",
+    });
+    expect(parsed.searchParams.get("baseCurrencyCode")).toBe("usdc_base");
+    expect(parsed.searchParams.get("baseCurrencyAmount")).toBe("20.00");
+    expect(parsed.searchParams.get("lockAmount")).toBe("true");
+    expect(parsed.searchParams.get("apiKey")).toBe("moonpay-publishable-key");
+    expect(parsed.searchParams.get("externalTransactionId")).toBe("moonpay-order-1");
+    expect(parsed.searchParams.get("redirectURL")).toBe(
+      "https://kept.example/dashboard?moonpayOrderId=moonpay-order-1",
+    );
+    expect(parsed.searchParams.get("allowedIpAddress")).toBe(
+      "198.51.100.4",
+    );
+
+    const unsignedUrl = new URL(parsed);
+    unsignedUrl.searchParams.delete("signature");
+
+    expect(parsed.searchParams.get("signature")).toBe(
+      createHmac("sha256", "moonpay-secret-key")
+        .update(unsignedUrl.search)
+        .digest("base64"),
+    );
+
+    await app.close();
+  });
+
+  it("returns MoonPay off-ramp order state only through authenticated ownership", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/moonpay/offramp-orders/moonpay-order-1",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "moonpay-order-1",
+      status: "pending_widget",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: null,
+    });
+    expect(dependencies.persistence.getMoonPayOfframpOrder).toHaveBeenCalledWith(
+      user.id,
+      "moonpay-order-1",
+    );
+
+    await app.close();
+  });
+
+  it("stores the Base deposit address only from a valid signed MoonPay webhook", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+    const body = JSON.stringify({
+      type: "sell_transaction_created",
+      data: {
+        id: "moonpay-transaction-1",
+        externalTransactionId: "moonpay-order-1",
+        baseCurrency: { code: "usdc_base" },
+        depositWallet: {
+          walletAddress: "0x00000000000000000000000000000000000000A1",
+        },
+      },
+    });
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHmac("sha256", "moonpay-webhook-key")
+      .update(`${timestamp}.${body}`)
+      .digest("hex");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/webhook",
+      headers: {
+        "content-type": "application/json",
+        "moonpay-signature-v2": `t=${timestamp},s=${signature}`,
+      },
+      payload: body,
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(dependencies.persistence.recordMoonPayOfframpWebhook).toHaveBeenCalledWith({
+      orderId: "moonpay-order-1",
+      moonPayTransactionId: "moonpay-transaction-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      depositWalletTag: null,
+      status: "ready",
+    });
+
+    await app.close();
+  });
+
+  it("marks a verified owned MoonPay order as funds sent", async () => {
+    const dependencies = buildDependencies();
+    await dependencies.persistence.recordMoonPayOfframpWebhook({
+      orderId: "moonpay-order-1",
+      moonPayTransactionId: "moonpay-transaction-1",
+      baseCurrencyCode: "usdc_base",
+      depositWalletAddress: "0x00000000000000000000000000000000000000A1",
+      status: "ready",
+    });
+
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/offramp-orders/moonpay-order-1/submitted",
+      headers: auth,
+      payload: { transferReference: "aurora-execution-1" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "moonpay-order-1",
+      status: "funds_sent",
+      transferReference: "aurora-execution-1",
+    });
+    expect(dependencies.persistence.markMoonPayOfframpFundsSent).toHaveBeenCalledWith({
+      userId: user.id,
+      orderId: "moonpay-order-1",
+      transferReference: "aurora-execution-1",
+    });
+
+    await app.close();
+  });
+
+  it("does not expose MoonPay routes when fiat is disabled", async () => {
+    const {
+      moonPay: _moonPay,
+      ...dependencies
+    } = buildDependencies();
+
+    const app =
+      buildApp(dependencies);
+
+    const response =
+      await app.inject({
+        method: "GET",
+        url: "/v1/moonpay/allowed-ip",
+        headers: auth,
+      });
+
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it("rejects MoonPay webhooks with an invalid signature", async () => {
+    const dependencies = buildDependencies();
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/moonpay/webhook",
+      headers: {
+        "content-type": "application/json",
+        "moonpay-signature-v2": "t=1,s=deadbeef",
+      },
+      payload: JSON.stringify({ type: "sell_transaction_created", data: {} }),
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(dependencies.persistence.recordMoonPayOfframpWebhook).not.toHaveBeenCalled();
+
     await app.close();
   });
 
@@ -364,6 +999,7 @@ describe("Kept HTTP API", () => {
       goalId: goal.id,
       chainId: "143",
       transactionHash: "0xdeposit",
+      externalReference: "0xdeposit",
       createdAt: "2026-09-30T00:00:00.000Z",
     };
     const dependencies = buildDependencies();
@@ -834,4 +1470,88 @@ describe("Kept HTTP API", () => {
     ]);
     await app.close();
   });
+  it("calculates indexed savings earnings from one confirmed block snapshot", async () => {
+    const wallet =
+      "0x0000000000000000000000000000000000000001";
+
+    const snapshotBlock = 120n;
+
+    const readAccountActivity = vi.fn(
+      async (
+        _account: string,
+        throughBlock?: bigint,
+      ) =>
+        throughBlock === snapshotBlock
+          ? {
+            depositedAssets: 100_000_000n,
+            withdrawnAssets: 50_000_000n,
+            netAssets: 50_000_000n,
+          }
+          : {
+            depositedAssets: 100_000_000n,
+            withdrawnAssets: 0n,
+            netAssets: 100_000_000n,
+          },
+    );
+
+    const readCurrentAssets = vi.fn(
+      async (
+        _account: string,
+        atBlock?: bigint,
+      ) =>
+        atBlock === snapshotBlock
+          ? 60_000_000n
+          : 10_000_000n,
+    );
+
+    const app = buildApp(
+      buildDependencies({
+        chainId: 10_143,
+        savingsCurrentAssets: {
+          read: readCurrentAssets,
+        },
+        savingsActivityIndex: {
+          isReady: () => true,
+          status: () => ({
+            ready: true,
+            startBlock: 1n,
+            currentBlock: snapshotBlock,
+            targetBlock: 122n,
+            progressPercent: 100,
+          }),
+          readAccountActivity,
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/savings/performance",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      depositedAssetsAtomic: "100000000",
+      withdrawnAssetsAtomic: "50000000",
+      netContributionsAtomic: "50000000",
+      currentAssetsAtomic: "60000000",
+      earningsAssetsAtomic: "10000000",
+    });
+
+    expect(readAccountActivity)
+      .toHaveBeenCalledWith(
+        wallet,
+        snapshotBlock,
+      );
+
+    expect(readCurrentAssets)
+      .toHaveBeenCalledWith(
+        wallet,
+        snapshotBlock,
+      );
+
+    await app.close();
+  });
+
 });

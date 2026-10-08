@@ -6,6 +6,8 @@ import Fastify, {
 
 import type { Hex } from "viem";
 
+import { Transform } from "node:stream";
+
 import cors from "@fastify/cors";
 
 import {
@@ -16,6 +18,12 @@ import {
 } from "./persistence/errors.js";
 
 import type { KeptPersistenceService, UserDto } from "./persistence/index.js";
+
+import {
+  parseMoonPaySellWebhook,
+  parseUsdcAmountToAtomic,
+  verifyMoonPayWebhookSignature,
+} from "./moonpay-offramp.js";
 
 import type { JsonValue } from "./domain/commitments/index.js";
 
@@ -55,6 +63,7 @@ export interface ApiDependencies {
 
   readonly persistence: Pick<
     KeptPersistenceService,
+    | "joinWaitlist"
     | "createUser"
     | "ensureEmbeddedWallet"
     | "createGoal"
@@ -71,6 +80,10 @@ export interface ApiDependencies {
     | "cancelCommitment"
     | "listTransactions"
     | "recordTransaction"
+    | "createMoonPayOfframpOrder"
+    | "getMoonPayOfframpOrder"
+    | "recordMoonPayOfframpWebhook"
+    | "markMoonPayOfframpFundsSent"
   >;
 
   readonly commitmentSettlementVerifier?: CommitmentSettlementVerifier;
@@ -80,6 +93,7 @@ export interface ApiDependencies {
   readonly savingsCurrentAssets?: {
     readonly read: (
       account: string,
+      blockNumber?: bigint,
     ) => Promise<bigint>;
   };
 
@@ -94,6 +108,7 @@ export interface ApiDependencies {
     };
     readonly readAccountActivity: (
       account: string,
+      throughBlock?: bigint,
     ) => Promise<{
       readonly depositedAssets: bigint;
       readonly withdrawnAssets: bigint;
@@ -112,16 +127,26 @@ export interface ApiDependencies {
     }>;
   };
 
-  readonly moonPay: {
+  readonly moonPay?: {
     readonly baseUrl: string;
     readonly publishableKey: string;
     readonly secretKey: string;
+    readonly webhookKey: string;
   };
 }
 
 export interface BuildAppOptions {
   readonly enableLogging?: boolean;
   readonly webOrigin?: string;
+  readonly stagingAllowedPrivyUserIds?: readonly string[] | null;
+  readonly intentsProxyRateLimit?: {
+    readonly maxRequests: number;
+    readonly windowMs: number;
+  };
+  readonly waitlistRateLimit?: {
+    readonly maxRequests: number;
+    readonly windowMs: number;
+  };
 
   readonly auroraIntents?: {
     readonly baseUrl: string;
@@ -197,6 +222,18 @@ function canonicalizeClientIp(
 function getCustomerIp(
   request: FastifyRequest,
 ): string {
+  const cloudflareClientIp =
+    request.headers["cf-connecting-ip"];
+
+  if (
+    typeof cloudflareClientIp
+    === "string"
+  ) {
+    return canonicalizeClientIp(
+      cloudflareClientIp,
+    );
+  }
+
   const trueClientIp =
     request.headers["true-client-ip"];
 
@@ -244,6 +281,10 @@ interface AuthenticatedRequest extends FastifyRequest {
   user: UserDto;
 
   identity: AuthenticatedIdentity;
+}
+
+interface RawBodyRequest extends FastifyRequest {
+  rawBody?: string;
 }
 
 function asAuthenticatedRequest(request: FastifyRequest): AuthenticatedRequest {
@@ -546,6 +587,7 @@ const CLIENT_TRANSACTION_TYPES = [
   "SAVINGS_DEPOSIT",
   "SAVINGS_WITHDRAWAL",
   "CRYPTO_WITHDRAWAL",
+  "FIAT_WITHDRAWAL",
 ] as const;
 
 type ClientTransactionType =
@@ -606,11 +648,30 @@ async function handle<T>(
 
 const SAVINGS_PERFORMANCE_CACHE_TTL_MS = 5_000;
 
+const SAVINGS_MARKET_STATUS_CACHE_TTL_MS = 15_000;
+
 export function buildApp(
   dependencies: ApiDependencies,
 
   options: BuildAppOptions = {},
 ): FastifyInstance {
+  const waitlistRequests =
+    new Map<
+      string,
+      {
+        count: number;
+        resetAt: number;
+      }
+    >();
+
+  const waitlistRateLimit =
+    options.waitlistRateLimit
+    ?? {
+      maxRequests: 10,
+      windowMs:
+        60 * 60 * 1_000,
+    };
+
   const savingsPerformanceCache =
     new Map<
       string,
@@ -620,6 +681,339 @@ export function buildApp(
       }
     >();
 
+  let savingsMarketStatusCache: {
+    readonly expiresAt: number;
+    readonly promise: ReturnType<
+      SavingsMarketStatusReader["readStatus"]
+    >;
+  } | null = null;
+
+  const readSavingsPerformanceFor =
+    async (
+      auth: AuthenticatedRequest,
+    ): Promise<SavingsPerformanceDto> => {
+      if (!auth.identity.wallet) {
+        throw new NotFoundError(
+          "Privy embedded wallet",
+        );
+      }
+
+      const cacheKey =
+        auth.identity.wallet
+          .toLowerCase();
+
+      const now =
+        Date.now();
+
+      const cached =
+        savingsPerformanceCache
+          .get(
+            cacheKey,
+          );
+
+      if (
+        cached
+        && cached.expiresAt > now
+      ) {
+        return cached.promise;
+      }
+
+      const nowMilliseconds =
+        Math.floor(
+          now / 1_000,
+        ) * 1_000;
+
+      const promise =
+        dependencies.chainId
+          === 10_143
+        && dependencies
+          .savingsCurrentAssets
+        && dependencies
+          .savingsActivityIndex
+          ? (async () => {
+            if (
+              !dependencies
+                .savingsActivityIndex!
+                .isReady()
+            ) {
+              const syncStatus =
+                dependencies
+                  .savingsActivityIndex!
+                  .status();
+
+              throw new SavingsHistorySynchronizingError({
+                progressPercent:
+                  syncStatus.progressPercent,
+                currentBlock:
+                  syncStatus.currentBlock,
+                targetBlock:
+                  syncStatus.targetBlock,
+              });
+            }
+
+            const snapshotStatus =
+              dependencies
+                .savingsActivityIndex!
+                .status();
+
+            const snapshotBlock =
+              snapshotStatus
+                .currentBlock;
+
+            if (
+              snapshotBlock ===
+              null
+            ) {
+              throw new SavingsHistorySynchronizingError({
+                progressPercent:
+                  snapshotStatus.progressPercent,
+                currentBlock:
+                  snapshotStatus.currentBlock,
+                targetBlock:
+                  snapshotStatus.targetBlock,
+              });
+            }
+
+            const [
+              activity,
+              currentAssets,
+            ] =
+              await Promise.all([
+                dependencies
+                  .savingsActivityIndex!
+                  .readAccountActivity(
+                    auth.identity
+                      .wallet!,
+                    snapshotBlock,
+                  ),
+
+                dependencies
+                  .savingsCurrentAssets!
+                  .read(
+                    auth.identity
+                      .wallet!,
+                    snapshotBlock,
+                  ),
+              ]);
+
+            const earningsAssets =
+              currentAssets
+              + activity
+                .withdrawnAssets
+              - activity
+                .depositedAssets;
+
+            return {
+              depositedAssetsAtomic:
+                activity
+                  .depositedAssets
+                  .toString(),
+
+              withdrawnAssetsAtomic:
+                activity
+                  .withdrawnAssets
+                  .toString(),
+
+              netContributionsAtomic:
+                activity
+                  .netAssets
+                  .toString(),
+
+              currentAssetsAtomic:
+                currentAssets
+                  .toString(),
+
+              earningsAssetsAtomic:
+                earningsAssets
+                  .toString(),
+            };
+          })()
+          : dependencies
+            .savingsPerformance
+            .readPerformance({
+              account:
+                auth.identity
+                  .wallet,
+
+              startAt:
+                new Date(0),
+
+              endAt:
+                new Date(
+                  nowMilliseconds,
+                ),
+            });
+
+      savingsPerformanceCache
+        .set(
+          cacheKey,
+          {
+            expiresAt:
+              now
+              + SAVINGS_PERFORMANCE_CACHE_TTL_MS,
+
+            promise,
+          },
+        );
+
+      try {
+        return await promise;
+      } catch (error) {
+        const current =
+          savingsPerformanceCache
+            .get(
+              cacheKey,
+            );
+
+        if (
+          current?.promise
+            === promise
+        ) {
+          savingsPerformanceCache
+            .delete(
+              cacheKey,
+            );
+        }
+
+        throw error;
+      }
+    };
+
+  const readSavingsMarketStatus =
+    async () => {
+      const now =
+        Date.now();
+
+      if (
+        savingsMarketStatusCache
+        && savingsMarketStatusCache
+          .expiresAt > now
+      ) {
+        return savingsMarketStatusCache
+          .promise;
+      }
+
+      const promise =
+        dependencies
+          .savingsMarketStatus
+          .readStatus();
+
+      savingsMarketStatusCache = {
+        expiresAt:
+          now
+          + SAVINGS_MARKET_STATUS_CACHE_TTL_MS,
+
+        promise,
+      };
+
+      try {
+        return await promise;
+      } catch (error) {
+        if (
+          savingsMarketStatusCache
+            ?.promise === promise
+        ) {
+          savingsMarketStatusCache =
+            null;
+        }
+
+        throw error;
+      }
+    };
+
+  const listReconciledCommitments =
+    async (
+      userId: string,
+    ) => {
+      const commitments =
+        await dependencies
+          .persistence
+          .listCommitments(
+            userId,
+          );
+
+      return Promise.all(
+        commitments.map(
+          async (
+            commitment,
+          ) => {
+            if (
+              commitment.state
+                !== "ACTIVE"
+              || !commitment
+                .onchainCommitmentId
+            ) {
+              return commitment;
+            }
+
+            if (
+              !dependencies
+                .commitmentSettlementVerifier
+            ) {
+              throw new CommitmentSettlementUnavailableError();
+            }
+
+            const settlement =
+              await settlementRequest(
+                () =>
+                  dependencies
+                    .commitmentSettlementVerifier!
+                    .inspect({
+                      offchainCommitmentId:
+                        commitment.id,
+
+                      onchainCommitmentId:
+                        commitment
+                          .onchainCommitmentId!,
+
+                      startAt:
+                        new Date(
+                          commitment
+                            .epochStart,
+                        ),
+
+                      endAt:
+                        new Date(
+                          commitment
+                            .epochEnd,
+                        ),
+                    }),
+              );
+
+            const targetState =
+              (
+                {
+                  2: "COMPLETED",
+                  3: "FAILED",
+                  4: "CANCELLED",
+                } as const
+              )[settlement.status as 2 | 3 | 4];
+
+            if (
+              settlement.status
+                === 1
+            ) {
+              return commitment;
+            }
+
+            if (
+              !targetState
+            ) {
+              throw new CommitmentSettlementMismatchError(
+                "Onchain commitment has an invalid active lifecycle status",
+              );
+            }
+
+            return {
+              ...commitment,
+              state:
+                targetState,
+            };
+          },
+        ),
+      );
+    };
+
   const app = Fastify({
     logger: options.enableLogging
       ? { redact: ["req.headers.authorization"] }
@@ -628,12 +1022,66 @@ export function buildApp(
 
   const webOrigin = options.webOrigin ?? "http://localhost:5173";
 
+  const allowedOrigins =
+    allowedWebOrigins(webOrigin);
+
+  const intentsProxyRateLimit =
+    options.intentsProxyRateLimit
+    ?? {
+      maxRequests: 120,
+      windowMs: 60_000,
+    };
+
+  const intentsProxyRequests =
+    new Map<
+      string,
+      {
+        count: number;
+        resetAt: number;
+      }
+    >();
+
   app.register(cors, {
-    origin: allowedWebOrigins(webOrigin),
+    origin: allowedOrigins,
 
     methods: ["GET", "POST"],
 
     allowedHeaders: ["authorization", "content-type", "idempotency-key", "ngrok-skip-browser-warning"],
+  });
+
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    if (
+      !dependencies.moonPay
+      || !request.url.startsWith("/v1/moonpay/webhook")
+    ) {
+      return payload;
+    }
+
+    const chunks: Buffer[] = [];
+    let receivedEncodedLength = 0;
+
+    const transform = new Transform({
+      transform(chunk, _encoding, callback) {
+        const buffer = Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk);
+
+        chunks.push(buffer);
+        receivedEncodedLength += buffer.length;
+        callback(null, buffer);
+      },
+      flush(callback) {
+        (request as RawBodyRequest).rawBody = Buffer.concat(chunks).toString("utf8");
+        callback();
+      },
+    });
+
+    Object.defineProperty(transform, "receivedEncodedLength", {
+      get: () => receivedEncodedLength,
+    });
+
+    payload.pipe(transform);
+    return transform;
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -688,8 +1136,12 @@ export function buildApp(
   app.addHook("onRequest", async (request, reply) => {
     if (
       request.url === "/health" ||
-      request.url.startsWith(
-        "/api/intents-connect",
+      request.url === "/v1/waitlist" ||
+      (
+        dependencies.moonPay
+        && request.url.startsWith(
+          "/v1/moonpay/webhook",
+        )
       )
     ) {
       return;
@@ -711,6 +1163,33 @@ export function buildApp(
         .code(401)
 
         .send({ error: { code: "UNAUTHENTICATED" } });
+
+      return reply;
+    }
+
+    if (
+      options.stagingAllowedPrivyUserIds
+      && !options.stagingAllowedPrivyUserIds
+        .includes(identity.privyUserId)
+    ) {
+      request.log.warn(
+        {
+          errorCode:
+            "STAGING_ACCESS_DENIED",
+          privyUserId:
+            identity.privyUserId,
+        },
+        "Staging API access denied",
+      );
+
+      await reply
+        .code(403)
+        .send({
+          error: {
+            code:
+              "STAGING_ACCESS_DENIED",
+          },
+        });
 
       return reply;
     }
@@ -746,6 +1225,132 @@ export function buildApp(
     }
   });
 
+  app.post(
+    "/v1/waitlist",
+    async (
+      request,
+      reply,
+    ) => {
+      let clientIp: string;
+
+      try {
+        clientIp =
+          getCustomerIp(
+            request,
+          );
+      } catch {
+        return reply
+          .code(400)
+          .send({
+            error: {
+              code:
+                "VALIDATION_ERROR",
+            },
+          });
+      }
+
+      const now =
+        Date.now();
+
+      if (
+        waitlistRequests.size
+        > 10_000
+      ) {
+        for (
+          const [
+            key,
+            value,
+          ]
+          of waitlistRequests
+        ) {
+          if (
+            value.resetAt
+            <= now
+          ) {
+            waitlistRequests.delete(
+              key,
+            );
+          }
+        }
+      }
+
+      const existing =
+        waitlistRequests.get(
+          clientIp,
+        );
+
+      if (
+        !existing
+        || existing.resetAt
+          <= now
+      ) {
+        waitlistRequests.set(
+          clientIp,
+          {
+            count: 1,
+            resetAt:
+              now
+              + waitlistRateLimit
+                .windowMs,
+          },
+        );
+      } else if (
+        existing.count
+        >= waitlistRateLimit
+          .maxRequests
+      ) {
+        reply.header(
+          "retry-after",
+          Math.max(
+            1,
+            Math.ceil(
+              (
+                existing.resetAt
+                - now
+              ) / 1_000,
+            ),
+          ).toString(),
+        );
+
+        return reply
+          .code(429)
+          .send({
+            error: {
+              code:
+                "RATE_LIMITED",
+            },
+          });
+      } else {
+        existing.count += 1;
+      }
+
+      return handle(
+        request,
+        reply,
+        async () => {
+          const body =
+            requireObject(
+              request.body,
+            );
+
+          await dependencies
+            .persistence
+            .joinWaitlist({
+              email:
+                requireString(
+                  body,
+                  "email",
+                ),
+            });
+
+          return reply
+            .code(204)
+            .send();
+        },
+      );
+    },
+  );
+
   app.all(
     "/api/intents-connect/*",
     async (request, reply) => {
@@ -761,6 +1366,93 @@ export function buildApp(
                 "SERVICE_UNAVAILABLE",
             },
           });
+      }
+
+      const origin =
+        request.headers.origin;
+
+      if (
+        typeof origin !== "string"
+        || !allowedOrigins.includes(origin)
+      ) {
+        request.log.warn(
+          {
+            errorCode:
+              "INTENTS_PROXY_ORIGIN_DENIED",
+          },
+          "Aurora Intents proxy origin denied",
+        );
+
+        return reply
+          .code(403)
+          .send({
+            error: {
+              code:
+                "FORBIDDEN",
+            },
+          });
+      }
+
+      let clientIp: string;
+
+      try {
+        clientIp =
+          getCustomerIp(request);
+      } catch {
+        return reply
+          .code(400)
+          .send({
+            error: {
+              code:
+                "VALIDATION_ERROR",
+            },
+          });
+      }
+
+      const now = Date.now();
+      const existing =
+        intentsProxyRequests.get(clientIp);
+
+      if (
+        !existing
+        || existing.resetAt <= now
+      ) {
+        intentsProxyRequests.set(
+          clientIp,
+          {
+            count: 1,
+            resetAt:
+              now
+              + intentsProxyRateLimit.windowMs,
+          },
+        );
+      } else if (
+        existing.count
+        >= intentsProxyRateLimit.maxRequests
+      ) {
+        reply.header(
+          "retry-after",
+          Math.max(
+            1,
+            Math.ceil(
+              (
+                existing.resetAt
+                - now
+              ) / 1_000,
+            ),
+          ).toString(),
+        );
+
+        return reply
+          .code(429)
+          .send({
+            error: {
+              code:
+                "RATE_LIMITED",
+            },
+          });
+      } else {
+        existing.count += 1;
       }
 
       const suffix =
@@ -1208,44 +1900,220 @@ export function buildApp(
     },
   );
 
-  app.get(
-    "/v1/moonpay/allowed-ip",
-    async (
-      request,
-      reply,
-    ) =>
-      handle(
+  const moonPay =
+    dependencies.moonPay;
+
+  if (moonPay) {
+    app.get(
+      "/v1/moonpay/allowed-ip",
+      async (
         request,
         reply,
-        async () => {
-          const secretKey =
-            dependencies.moonPay
-              .secretKey;
-
-          const clientIp =
-            getCustomerIp(request);
-
-          const allowedIpAddress =
-            createHmac(
-              "sha256",
-              secretKey,
-            )
-              .update(
+      ) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const clientIp =
+              getCustomerIp(request);
+  
+            return {
+              allowedIpAddress:
                 clientIp,
-              )
-              .digest(
-                "base64",
+            };
+          },
+        ),
+    );
+  
+    app.post(
+      "/v1/moonpay/offramp-url",
+      async (request, reply) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const body = requireObject(request.body);
+            const amount = requireString(body, "amount");
+            const auth = asAuthenticatedRequest(request);
+  
+            const order = await dependencies.persistence.createMoonPayOfframpOrder({
+              userId: auth.user.id,
+              amountAtomic: parseUsdcAmountToAtomic(amount),
+            });
+  
+            const customerIp = getCustomerIp(request);
+  
+            const url = new URL(moonPay.baseUrl);
+            url.searchParams.set("apiKey", moonPay.publishableKey);
+            url.searchParams.set("baseCurrencyCode", "usdc_base");
+            url.searchParams.set("baseCurrencyAmount", amount);
+            url.searchParams.set("lockAmount", "true");
+            url.searchParams.set("allowedIpAddress", customerIp);
+            url.searchParams.set("externalTransactionId", order.id);
+  
+            const primaryOrigin = allowedWebOrigins(webOrigin)[0];
+            if (primaryOrigin) {
+              const redirectUrl = new URL("/dashboard", primaryOrigin);
+              redirectUrl.searchParams.set("moonpayOrderId", order.id);
+              url.searchParams.set("redirectURL", redirectUrl.toString());
+            }
+  
+            const signature = createHmac("sha256", moonPay.secretKey)
+              .update(url.search)
+              .digest("base64");
+  
+            url.searchParams.set("signature", signature);
+  
+            return {
+              url: url.toString(),
+              orderId: order.id,
+            };
+          },
+        ),
+    );
+  
+    app.get(
+      "/v1/moonpay/offramp-orders/:id",
+      async (request, reply) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const params = requireObject(request.params);
+            const id = requireString(params, "id");
+            const auth = asAuthenticatedRequest(request);
+            const order = await dependencies.persistence.getMoonPayOfframpOrder(
+              auth.user.id,
+              id,
+            );
+  
+            if (!order) {
+              throw new NotFoundError("MoonPay off-ramp order");
+            }
+  
+            return order;
+          },
+        ),
+    );
+  
+    app.post(
+      "/v1/moonpay/offramp-orders/:id/submitted",
+      async (request, reply) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const params = requireObject(request.params);
+            const body = requireObject(request.body);
+            const auth = asAuthenticatedRequest(request);
+  
+            return dependencies.persistence.markMoonPayOfframpFundsSent({
+              userId: auth.user.id,
+              orderId: requireString(params, "id"),
+              transferReference: requireString(body, "transferReference"),
+            });
+          },
+        ),
+    );
+  
+    app.post(
+      "/v1/moonpay/webhook",
+      async (request, reply) => {
+        const rawBody = (request as RawBodyRequest).rawBody;
+        const signatureHeader = request.headers["moonpay-signature-v2"];
+        const signature = Array.isArray(signatureHeader)
+          ? signatureHeader[0]
+          : signatureHeader;
+  
+        if (
+          !rawBody
+          || !verifyMoonPayWebhookSignature({
+            rawBody,
+            signatureHeader: signature,
+            webhookKey: moonPay.webhookKey,
+          })
+        ) {
+          return reply.code(401).send({
+            error: { code: "INVALID_WEBHOOK_SIGNATURE" },
+          });
+        }
+  
+        const event = parseMoonPaySellWebhook(request.body);
+  
+        if (!event) {
+          return reply.code(204).send();
+        }
+  
+        try {
+          await dependencies.persistence.recordMoonPayOfframpWebhook(event);
+        } catch (error) {
+          if (error instanceof NotFoundError) {
+            request.log.warn(
+              { moonPayTransactionId: event.moonPayTransactionId },
+              "MoonPay webhook did not match a Kept off-ramp order",
+            );
+  
+            return reply.code(204).send();
+          }
+  
+          throw error;
+        }
+  
+        return reply.code(204).send();
+      },
+    );
+  
+    app.post(
+      "/v1/moonpay/sign",
+      async (
+        request,
+        reply,
+      ) =>
+        handle(
+          request,
+          reply,
+          async () => {
+            const body =
+              requireObject(
+                request.body,
               );
+  
+            const url =
+              requireString(
+                body,
+                "url",
+              );
+  
+            const parsed =
+              new URL(
+                url,
+              );
+  
+            const signature =
+              createHmac(
+                "sha256",
+                moonPay.secretKey,
+              )
+                .update(
+                  parsed.search,
+                )
+                .digest(
+                  "base64",
+                );
+  
+            return {
+              signature,
+            };
+          },
+        ),
+    );
+  
+  }
 
-          return {
-            allowedIpAddress,
-          };
-        },
-      ),
-  );
+  app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 
-  app.post(
-    "/v1/moonpay/offramp-url",
+  app.get(
+    "/v1/dashboard",
     async (
       request,
       reply,
@@ -1254,145 +2122,167 @@ export function buildApp(
         request,
         reply,
         async () => {
-          const body =
-            requireObject(
-              request.body,
-            );
-
-          const amount =
-            requireString(
-              body,
-              "amount",
-            );
-
-          const secretKey =
-            dependencies.moonPay
-              .secretKey;
-
-          const publishableKey =
-            dependencies.moonPay
-              .publishableKey;
-
-          const customerIp =
-            getCustomerIp(
+          const auth =
+            asAuthenticatedRequest(
               request,
             );
 
-          const ipHash =
-            createHmac(
-              "sha256",
-              secretKey,
+          if (
+            !auth.identity.wallet
+          ) {
+            throw new NotFoundError(
+              "Privy embedded wallet",
+            );
+          }
+
+          const performancePromise =
+            readSavingsPerformanceFor(
+              auth,
             )
-              .update(
-                customerIp,
+              .then(
+                (
+                  performance,
+                ) => ({
+                  kind:
+                    "ready" as const,
+                  data:
+                    performance,
+                }),
               )
-              .digest(
-                "base64",
+              .catch(
+                (
+                  error,
+                ) => {
+                  if (
+                    error
+                    instanceof SavingsHistorySynchronizingError
+                  ) {
+                    return {
+                      kind:
+                        "synchronizing" as const,
+                      progressPercent:
+                        error
+                          .progressPercent,
+                    };
+                  }
+
+                  request.log.warn(
+                    {
+                      err:
+                        error,
+                    },
+                    "dashboard savings performance unavailable",
+                  );
+
+                  return {
+                    kind:
+                      "error" as const,
+                  };
+                },
               );
 
-          const url =
-            new URL(
-              dependencies.moonPay
-                .baseUrl,
+          const marketStatusPromise =
+            readSavingsMarketStatus()
+              .then(
+                (
+                  marketStatus,
+                ) => ({
+                  kind:
+                    "ready" as const,
+                  data:
+                    marketStatus,
+                }),
+              )
+              .catch(
+                (
+                  error,
+                ) => {
+                  request.log.warn(
+                    {
+                      err:
+                        error,
+                    },
+                    "dashboard savings market status unavailable",
+                  );
+
+                  return {
+                    kind:
+                      "error" as const,
+                  };
+                },
+              );
+
+          const [
+            goals,
+            commitments,
+            savingsPerformance,
+            savingsMarketStatus,
+          ] =
+            await Promise.all([
+              dependencies
+                .persistence
+                .listGoals(
+                  auth.user.id,
+                ),
+
+              listReconciledCommitments(
+                auth.user.id,
+              ),
+
+              performancePromise,
+
+              marketStatusPromise,
+            ]);
+
+          const allocationEntries =
+            await Promise.all(
+              goals.map(
+                async (
+                  goal,
+                ) => {
+                  const allocation =
+                    await dependencies
+                      .persistence
+                      .getGoalAllocation(
+                        auth.user.id,
+                        goal.id,
+                        auth.identity
+                          .wallet!,
+                      );
+
+                  if (
+                    !allocation
+                  ) {
+                    throw new NotFoundError(
+                      "Savings goal",
+                    );
+                  }
+
+                  return [
+                    goal.id,
+                    allocation,
+                  ] as const;
+                },
+              ),
             );
 
-          url.searchParams.set(
-            "apiKey",
-            publishableKey,
-          );
-
-          url.searchParams.set(
-            "baseCurrencyCode",
-            "usdc",
-          );
-
-          url.searchParams.set(
-            "baseCurrencyAmount",
-            amount,
-          );
-
-          url.searchParams.set(
-            "lockAmount",
-            "true",
-          );
-
-          url.searchParams.set(
-            "allowedIpAddress",
-            ipHash,
-          );
-
-          const signature =
-            createHmac(
-              "sha256",
-              secretKey,
-            )
-              .update(
-                url.search,
-              )
-              .digest(
-                "base64",
-              );
-
-          url.searchParams.set(
-            "signature",
-            signature,
-          );
-
           return {
-            url:
-              url.toString(),
+            goals,
+            commitments,
+            allocations:
+              Object.fromEntries(
+                allocationEntries,
+              ),
+            savings: {
+              performance:
+                savingsPerformance,
+              marketStatus:
+                savingsMarketStatus,
+            },
           };
         },
       ),
   );
-
-  app.post(
-    "/v1/moonpay/sign",
-    async (
-      request,
-      reply,
-    ) =>
-      handle(
-        request,
-        reply,
-        async () => {
-          const body =
-            requireObject(
-              request.body,
-            );
-
-          const url =
-            requireString(
-              body,
-              "url",
-            );
-
-          const parsed =
-            new URL(
-              url,
-            );
-
-          const signature =
-            createHmac(
-              "sha256",
-              dependencies.moonPay
-                .secretKey,
-            )
-              .update(
-                parsed.search,
-              )
-              .digest(
-                "base64",
-              );
-
-          return {
-            signature,
-          };
-        },
-      ),
-  );
-
-  app.get("/v1/me", async (request) => asAuthenticatedRequest(request).user);
 
   app.post(
     "/v1/staging/faucet",
@@ -1482,6 +2372,25 @@ export function buildApp(
                   });
                 }
 
+                const snapshotStatus =
+                  dependencies
+                    .savingsActivityIndex!
+                    .status();
+
+                const snapshotBlock =
+                  snapshotStatus.currentBlock;
+
+                if (snapshotBlock === null) {
+                  throw new SavingsHistorySynchronizingError({
+                    progressPercent:
+                      snapshotStatus.progressPercent,
+                    currentBlock:
+                      snapshotStatus.currentBlock,
+                    targetBlock:
+                      snapshotStatus.targetBlock,
+                  });
+                }
+
                 const [
                   activity,
                   currentAssets,
@@ -1490,12 +2399,14 @@ export function buildApp(
                     .savingsActivityIndex!
                     .readAccountActivity(
                       auth.identity.wallet!,
+                      snapshotBlock,
                     ),
 
                   dependencies
                     .savingsCurrentAssets!
                     .read(
                       auth.identity.wallet!,
+                      snapshotBlock,
                     ),
                 ]);
 
@@ -1566,8 +2477,56 @@ export function buildApp(
       ),
   );
 
-  app.get("/v1/savings/market-status", async (request, reply) =>
-    handle(request, reply, () => dependencies.savingsMarketStatus.readStatus()),
+  app.get(
+    "/v1/savings/market-status",
+    async (
+      request,
+      reply,
+    ) =>
+      handle(
+        request,
+        reply,
+        async () => {
+          const now =
+            Date.now();
+
+          if (
+            savingsMarketStatusCache
+            && savingsMarketStatusCache.expiresAt >
+            now
+          ) {
+            return savingsMarketStatusCache.promise;
+          }
+
+          const promise =
+            dependencies
+              .savingsMarketStatus
+              .readStatus();
+
+          savingsMarketStatusCache = {
+            expiresAt:
+              now +
+              SAVINGS_MARKET_STATUS_CACHE_TTL_MS,
+
+            promise,
+          };
+
+          try {
+            return await promise;
+          } catch (error) {
+            if (
+              savingsMarketStatusCache
+                ?.promise ===
+              promise
+            ) {
+              savingsMarketStatusCache =
+                null;
+            }
+
+            throw error;
+          }
+        },
+      ),
   );
 
   app.get(

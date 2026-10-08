@@ -1,6 +1,9 @@
 import type { Address } from "viem";
 
 import type { GoalAllocationDto } from "@/api/kept-api";
+import type {
+  MulticallReader,
+} from "@/wallet/blockchain";
 
 const allocationVaultAbi = [
   {
@@ -22,6 +25,9 @@ const allocationVaultAbi = [
 interface ContractReader {
   readContract(input: unknown): Promise<bigint>;
 }
+
+const MONAD_MULTICALL3_ADDRESS =
+  "0xcA11bde05977b3631167028862bE2a173976CA11" as Address;
 
 export interface GoalFundingEntry {
   readonly allocatedShares: bigint;
@@ -49,8 +55,9 @@ function parseNonnegativeAtomic(value: string, field: string): bigint {
 
 export async function readGoalFunding(input: {
   readonly allocations: readonly GoalAllocationDto[];
-  readonly publicClient: ContractReader;
+  readonly publicClient: ContractReader & MulticallReader;
   readonly vault: Address;
+  readonly chainId: number;
 }): Promise<GoalFundingSnapshot> {
   if (input.allocations.length === 0) {
     return {
@@ -81,34 +88,146 @@ export async function readGoalFunding(input: {
     }
   }
 
-  const sharesByGoal = input.allocations.map((allocation) => ({
-    goalId: allocation.goalId,
-    shares: parseNonnegativeAtomic(allocation.allocatedSharesAtomic, "allocatedSharesAtomic"),
-  }));
-  const conversions = new Map<bigint, Promise<bigint>>();
-  const convert = (shares: bigint): Promise<bigint> => {
-    const existing = conversions.get(shares);
-    if (existing) return existing;
-    const pending = convertToAssets(input.publicClient, input.vault, shares);
-    conversions.set(shares, pending);
-    return pending;
-  };
-  const converted = await Promise.all([
-    ...sharesByGoal.map(({ shares }) => convert(shares)),
-    convert(totalAllocatedShares),
-    convert(unallocatedShares),
-  ]);
-  const byGoal = new Map<string, GoalFundingEntry>();
-  sharesByGoal.forEach(({ goalId, shares }, index) => {
-    byGoal.set(goalId, { allocatedShares: shares, allocatedAssets: converted[index]! });
-  });
+  const sharesByGoal =
+    input.allocations.map(
+      (allocation) => ({
+        goalId:
+          allocation.goalId,
+        shares:
+          parseNonnegativeAtomic(
+            allocation.allocatedSharesAtomic,
+            "allocatedSharesAtomic",
+          ),
+      }),
+    );
+
+  const uniqueShares =
+    [...new Set([
+      ...sharesByGoal.map(
+        ({ shares }) =>
+          shares,
+      ),
+      totalAllocatedShares,
+      unallocatedShares,
+    ])];
+
+  const convertedValues =
+    input.chainId === 31_337
+      ? await Promise.all(
+          uniqueShares.map(
+            (shares) =>
+              convertToAssets(
+                input.publicClient,
+                input.vault,
+                shares,
+              ),
+          ),
+        )
+      : await input.publicClient.multicall({
+          allowFailure: false,
+          multicallAddress:
+            MONAD_MULTICALL3_ADDRESS,
+          contracts:
+            uniqueShares.map(
+              (shares) => ({
+                address:
+                  input.vault,
+                abi:
+                  allocationVaultAbi,
+                functionName:
+                  "convertToAssets",
+                args:
+                  [shares],
+              }),
+            ),
+        });
+
+  const conversions =
+    new Map<bigint, bigint>();
+
+  uniqueShares.forEach(
+    (
+      shares,
+      index,
+    ) => {
+      const assets =
+        convertedValues[
+          index
+        ];
+
+      if (
+        typeof assets
+        !== "bigint"
+      ) {
+        throw new Error(
+          "Goal funding multicall returned an unexpected result.",
+        );
+      }
+
+      conversions.set(
+        shares,
+        assets,
+      );
+    },
+  );
+
+  const converted =
+    (
+      shares: bigint,
+    ): bigint => {
+      const assets =
+        conversions.get(
+          shares,
+        );
+
+      if (
+        assets === undefined
+      ) {
+        throw new Error(
+          "Goal funding conversion is unavailable.",
+        );
+      }
+
+      return assets;
+    };
+
+  const byGoal =
+    new Map<
+      string,
+      GoalFundingEntry
+    >();
+
+  sharesByGoal.forEach(
+    ({
+      goalId,
+      shares,
+    }) => {
+      byGoal.set(
+        goalId,
+        {
+          allocatedShares:
+            shares,
+          allocatedAssets:
+            converted(
+              shares,
+            ),
+        },
+      );
+    },
+  );
 
   return {
     totalVaultShares,
     totalAllocatedShares,
     unallocatedShares,
-    totalAllocatedAssets: converted[sharesByGoal.length]!,
-    unallocatedAssets: converted[sharesByGoal.length + 1]!,
+    totalAllocatedAssets:
+      converted(
+        totalAllocatedShares,
+      ),
+    unallocatedAssets:
+      converted(
+        unallocatedShares,
+      ),
     byGoal,
   };
 }

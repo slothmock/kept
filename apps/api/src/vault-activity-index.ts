@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   and,
   eq,
+  lte,
   sql,
 } from "drizzle-orm";
 
@@ -86,6 +87,7 @@ export interface VaultActivityIndex {
   } | null>;
   readAccountActivity(
     account: string,
+    throughBlock?: bigint,
   ): Promise<IndexedVaultActivity>;
 }
 
@@ -535,6 +537,7 @@ export function createVaultActivityIndex(input: {
 
     async readAccountActivity(
       account: string,
+      throughBlock?: bigint,
     ): Promise<IndexedVaultActivity> {
       if (!ready) {
         throw new Error(
@@ -580,6 +583,14 @@ export function createVaultActivityIndex(input: {
               ),
               sql`lower(${vaultActivityEvents.vaultAddress}) = lower(${input.vault})`,
               sql`lower(${vaultActivityEvents.accountAddress}) = lower(${normalized})`,
+              ...(throughBlock !== undefined
+                ? [
+                  lte(
+                    vaultActivityEvents.blockNumber,
+                    throughBlock,
+                  ),
+                ]
+                : []),
             ),
           );
 

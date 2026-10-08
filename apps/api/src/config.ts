@@ -16,9 +16,14 @@ export interface ApiConfig {
   readonly commitmentWindowOverrideSeconds?: number | undefined;
   readonly auroraIntentsBaseUrl: string;
   readonly auroraIntentsApiKey: string;
-  readonly moonPayPublishableKey: string;
-  readonly moonPaySecretKey: string;
-  readonly moonPayBaseUrl: string;
+  readonly fiatEnabled: boolean;
+  readonly stagingAllowedPrivyUserIds: readonly string[] | null;
+  readonly moonPay?: {
+    readonly publishableKey: string;
+    readonly secretKey: string;
+    readonly webhookKey: string;
+    readonly baseUrl: string;
+  };
 }
 
 function parseCommitmentWindowOverride(
@@ -83,6 +88,38 @@ function requirePrivateKey(
   }
 
   return value as `0x${string}`;
+}
+
+function parseStagingAllowedPrivyUserIds(
+  environment: NodeJS.ProcessEnv,
+): readonly string[] | null {
+  const raw =
+    environment.STAGING_ALLOWED_PRIVY_USER_IDS
+      ?.trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const userIds = [
+    ...new Set(
+      raw
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) =>
+          value.startsWith("did:privy:")
+            ? value
+            : `did:privy:${value}`
+        ),
+    ),
+  ];
+
+  if (userIds.length === 0) {
+    return null;
+  }
+
+  return userIds;
 }
 
 function parsePort(value: string | undefined): number {
@@ -215,23 +252,39 @@ export function loadApiConfig(
       "AURORA_INTENTS_API_KEY",
     );
 
-  const moonPayBaseUrl =
-    requireValue(
+  const fiatEnabled =
+    environment.VITE_FIAT_ENABLED?.trim() === "true";
+
+  const stagingAllowedPrivyUserIds =
+    parseStagingAllowedPrivyUserIds(
       environment,
-      "MOONPAY_WIDGET_BASE_URL",
     );
 
-  const moonPayPublishableKey =
-    requireValue(
-      environment,
-      "MOONPAY_PUBLISHABLE_KEY",
-    );
-
-  const moonPaySecretKey =
-    requireValue(
-      environment,
-      "MOONPAY_SECRET_KEY",
-    );
+  const moonPay =
+    fiatEnabled
+      ? {
+        baseUrl:
+          requireValue(
+            environment,
+            "MOONPAY_WIDGET_BASE_URL",
+          ),
+        publishableKey:
+          requireValue(
+            environment,
+            "MOONPAY_PUBLISHABLE_KEY",
+          ),
+        secretKey:
+          requireValue(
+            environment,
+            "MOONPAY_SECRET_KEY",
+          ),
+        webhookKey:
+          requireValue(
+            environment,
+            "MOONPAY_WEBHOOK_KEY",
+          ),
+      }
+      : undefined;
 
   return {
     databaseUrl,
@@ -249,8 +302,8 @@ export function loadApiConfig(
     commitmentWindowOverrideSeconds,
     auroraIntentsBaseUrl,
     auroraIntentsApiKey,
-    moonPayBaseUrl,
-    moonPayPublishableKey,
-    moonPaySecretKey,
+    fiatEnabled,
+    stagingAllowedPrivyUserIds,
+    ...(moonPay ? { moonPay } : {}),
   };
 }
