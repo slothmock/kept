@@ -364,6 +364,40 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("rejects unauthenticated intents proxy requests", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        webOrigin:
+          "https://staging.keptfinance.app",
+        auroraIntents: {
+          baseUrl:
+            "https://intents.example/",
+          apiKey:
+            "test-key",
+        },
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/intents-connect/quote",
+      headers: {
+        origin:
+          "https://staging.keptfinance.app",
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: "UNAUTHENTICATED",
+      },
+    });
+
+    await app.close();
+  });
+
   it("rejects intents proxy requests from untrusted origins", async () => {
     const app = buildApp(
       buildDependencies(),
@@ -383,6 +417,7 @@ describe("Kept HTTP API", () => {
       method: "GET",
       url: "/api/intents-connect/quote",
       headers: {
+        ...auth,
         origin:
           "https://attacker.example",
       },
@@ -436,6 +471,7 @@ describe("Kept HTTP API", () => {
         method: "GET",
         url: "/api/intents-connect/quote",
         headers: {
+          ...auth,
           origin:
             "https://staging.keptfinance.app",
           "x-forwarded-for":
@@ -449,6 +485,7 @@ describe("Kept HTTP API", () => {
         method: "GET",
         url: "/api/intents-connect/quote",
         headers: {
+          ...auth,
           origin:
             "https://staging.keptfinance.app",
           "x-forwarded-for":
