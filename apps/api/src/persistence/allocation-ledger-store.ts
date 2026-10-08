@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { getAddress } from "viem";
+import { planFreshDepositAttribution } from "../domain/deposit-attribution.js";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { planVaultReconciliation } from "../domain/allocation-reconciliation.js";
 import type { KeptDatabase } from "../db/client.js";
 import {
-  allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, allocationShareLots, allocationTransferLotMovements, users,
+  allocationBuckets, allocationDepositClaims, allocationLedgerEntries, allocationLedgerEvents, allocationShareLots, allocationTransferLotMovements, users, vaultActivityEvents, wallets,
 } from "../db/schema.js";
 import {
   assertLedgerEvent, assertNonnegativeBalances, type AllocationBucketKey,
@@ -156,6 +158,87 @@ export class AllocationLedgerStore {
     });
   }
 
+  /**
+   * Claim an indexed, confirmed ERC-4626 Deposit at most once.
+   * The user row serializes this with transfers and reconciliations.
+   * It never upgrades existing UNKNOWN lots to EXTERNAL_DEPOSIT.
+   */
+  async claimIndexedDeposit(input: {
+    userId: string;
+    chainId: bigint;
+    vaultAddress: string;
+    ownerAddress: string;
+    transactionHash: string;
+    logIndex: number;
+    liveVaultShares: bigint;
+  }): Promise<{status:"CREDITED"|"ALREADY_REFLECTED";eventId:string|null}> {
+    if (input.chainId <= 0n || !Number.isSafeInteger(input.logIndex) || input.logIndex < 0) {
+      throw new Error("Invalid deposit identity");
+    }
+    const vault = getAddress(input.vaultAddress);
+    const ownerAddress = getAddress(input.ownerAddress);
+    if (!/^0x[0-9a-fA-F]{64}$/.test(input.transactionHash)) {
+      throw new Error("Invalid deposit hash");
+    }
+    return this.db.transaction(async tx => {
+      const [owner] = await tx.select({id:users.id}).from(users)
+        .where(eq(users.id,input.userId)).for("update");
+      if (!owner) throw new Error("Unknown ledger owner");
+      const [wallet] = await tx.select({id:wallets.id}).from(wallets).where(and(
+        eq(wallets.userId,input.userId),
+        eq(wallets.chainId,input.chainId),
+        sql`lower(${wallets.address}) = lower(${ownerAddress})`,
+      )).limit(1);
+      if (!wallet) throw new Error("Deposit owner wallet does not belong to user");
+      if (!(await this.hasOpeningInTransaction(tx,input.userId))) {
+        throw new Error("Deposit ledger has not been initialized");
+      }
+      const identity = and(
+        eq(allocationDepositClaims.chainId,input.chainId),
+        sql`lower(${allocationDepositClaims.vaultAddress}) = lower(${vault})`,
+        sql`lower(${allocationDepositClaims.transactionHash}) = lower(${input.transactionHash})`,
+        eq(allocationDepositClaims.logIndex,input.logIndex),
+      );
+      const [existing] = await tx.select().from(allocationDepositClaims).where(identity).limit(1);
+      if (existing) {
+        if (existing.userId !== input.userId) throw new Error("Deposit already claimed by another user");
+        return {status:existing.status as "CREDITED"|"ALREADY_REFLECTED",eventId:existing.ledgerEventId};
+      }
+      const [indexed] = await tx.select().from(vaultActivityEvents).where(and(
+        eq(vaultActivityEvents.chainId,input.chainId),
+        eq(vaultActivityEvents.eventType,"DEPOSIT"),
+        sql`lower(${vaultActivityEvents.vaultAddress}) = lower(${vault})`,
+        sql`lower(${vaultActivityEvents.accountAddress}) = lower(${ownerAddress})`,
+        sql`lower(${vaultActivityEvents.transactionHash}) = lower(${input.transactionHash})`,
+        eq(vaultActivityEvents.logIndex,input.logIndex),
+      )).limit(1);
+      if (!indexed?.sharesAtomic || BigInt(indexed.sharesAtomic) <= 0n) {
+        throw new Error("Verified indexed deposit shares are unavailable");
+      }
+      const minted = BigInt(indexed.sharesAtomic);
+      const balances = await this.getBalancesInTransaction(tx,input.userId);
+      const accounted = Object.values(balances).reduce((sum,value)=>sum+value,0n);
+      const decision = planFreshDepositAttribution({
+        mintedShares:minted,currentVaultShares:input.liveVaultShares,ledgerShares:accounted,
+      });
+      const eventId = decision.kind === "CREDIT"
+        ? await this.writeEventInTransaction(tx,{
+            userId:input.userId,kind:"VAULT_CREDIT",
+            key:`verified-deposit:${input.chainId}:${vault.toLowerCase()}:${input.transactionHash.toLowerCase()}:${input.logIndex}`,
+            legs:[{bucket:"UNASSIGNED",deltaShares:minted}],
+            verifiedDeposit:true,
+          })
+        : null;
+      await tx.insert(allocationDepositClaims).values({
+        id:randomUUID(),userId:input.userId,ledgerEventId:eventId,
+        chainId:input.chainId,vaultAddress:vault,transactionHash:input.transactionHash.toLowerCase(),
+        logIndex:input.logIndex,sharesAtomic:minted.toString(),
+        status:eventId ? "CREDITED" : "ALREADY_REFLECTED",createdAt:new Date(),
+      });
+      return {status:eventId ? "CREDITED" : "ALREADY_REFLECTED",eventId};
+    });
+  }
+
   async recordVaultChange(input: {
     userId: string; kind: CreditDebit; shares: bigint; key: string;
     bucket?: AllocationBucketKey;
@@ -178,9 +261,14 @@ export class AllocationLedgerStore {
 
   private async writeEventInTransaction(tx: LedgerTransaction, input: {
     userId: string; kind: AllocationEventKind; key: string;
+    verifiedDeposit?: boolean;
     legs: readonly {bucket: AllocationBucketKey; deltaShares: bigint}[];
   }): Promise<string> {
     if (!input.key.trim()) throw new Error("Ledger idempotency key required");
+    if (input.verifiedDeposit && (
+      input.kind !== "VAULT_CREDIT" || input.legs.length !== 1 ||
+      input.legs[0]?.bucket !== "UNASSIGNED"
+    )) throw new Error("Verified deposit origin requires an unassigned vault credit");
       // Lock the owner rather than an optionally absent bucket, so concurrent
       // credits, debits and transfers cannot observe the same opening balance.
       const [owner] = await tx.select({id: users.id}).from(users)
@@ -252,7 +340,7 @@ export class AllocationLedgerStore {
         bucketId: bucketRows.get(leg.bucket)!.id,
         shareDeltaAtomic: leg.deltaShares.toString(),
         // UNKNOWN is intentionally non-qualifying until lineage is implemented.
-        originKind: input.kind === "OPENING" ? "OPENING" : "UNKNOWN", originEventId: input.kind === "OPENING" ? id : null, createdAt: now,
+        originKind: input.kind === "OPENING" ? "OPENING" : input.verifiedDeposit ? "EXTERNAL_DEPOSIT" : "UNKNOWN", originEventId: input.kind === "OPENING" || input.verifiedDeposit ? id : null, createdAt: now,
       })));
       // Persist the attribution carried by each share lot in the SAME
       // transaction as the event and its balanced entries.
@@ -311,7 +399,7 @@ export class AllocationLedgerStore {
         } else {
           await tx.insert(allocationShareLots).values({
             id:randomUUID(),userId:input.userId,bucketId:destBucket.id,
-            originEventId:id,originKind:input.kind === "OPENING" ? "OPENING" : "UNKNOWN",
+            originEventId:id,originKind:input.kind === "OPENING" ? "OPENING" : input.verifiedDeposit ? "EXTERNAL_DEPOSIT" : "UNKNOWN",
             sharesAtomic:leg.deltaShares.toString(),
             everGoalAllocated:destBucket.bucketKind === "GOAL",
             firstGoalId:destBucket.bucketKind === "GOAL" ? destBucket.goalId : null,
