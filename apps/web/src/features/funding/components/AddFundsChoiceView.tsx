@@ -5,7 +5,6 @@ import type {
 import {
   ArrowRight,
   Landmark,
-  WalletCards,
 } from "lucide-react";
 
 import {
@@ -29,7 +28,6 @@ const MIN_FIAT_ONRAMP =
 export function AddFundsChoiceView({
   walletAddress,
   fiatEnabled,
-  availableCashReady,
   fiatStatus,
   fiatError,
   executionStatus,
@@ -40,15 +38,11 @@ export function AddFundsChoiceView({
   onFiatConfirmed,
   onFiatError,
   onTransferCrypto,
-  onUseAvailableCash,
 }: {
   readonly walletAddress:
   string | null;
 
   readonly fiatEnabled:
-  boolean;
-
-  readonly availableCashReady:
   boolean;
 
   readonly fiatStatus:
@@ -81,9 +75,6 @@ export function AddFundsChoiceView({
 
   readonly onTransferCrypto:
   () => void;
-
-  readonly onUseAvailableCash:
-  () => void;
 }) {
   return (
     <div className="space-y-6">
@@ -98,24 +89,6 @@ export function AddFundsChoiceView({
       </div>
 
       <div className="space-y-3">
-        <FundingOption
-          icon={<WalletCards className="size-4" />}
-          title="Available cash"
-          description="Move money already in your Kept account into savings."
-          meta="Instant"
-        >
-          <Button
-            type="button"
-            className="w-full"
-            disabled={!availableCashReady || executing}
-            onClick={onUseAvailableCash}
-          >
-            {availableCashReady
-              ? "Use available cash"
-              : "Checking available cash…"}
-          </Button>
-        </FundingOption>
-
         <FundingOption
           icon={<ArrowRight className="size-4" />}
           title="Crypto wallet"

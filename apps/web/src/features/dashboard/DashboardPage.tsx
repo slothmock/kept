@@ -620,10 +620,8 @@ export function DashboardPage(props: DashboardPageProps) {
           walletAddress={walletAddress}
           getAccessToken={getAccessToken}
           fiatEnabled={fiatEnabled}
-          availableCashReady={savingsOverview.positionState.kind === "ready"}
           readSolanaFundingBalances={readSolanaFundingBalances}
           onBack={() => navigate("/dashboard")}
-          onUseAvailableCash={() => setDepositOpen(true)}
         />
       ) : null}
 
@@ -818,6 +816,7 @@ export function DashboardPage(props: DashboardPageProps) {
             transactionPending={savingsTransactions.pendingTransaction !== null}
             onAddMoney={() => navigate("/add-money")}
             onWithdraw={() => navigate("/withdraw")}
+            onAddToSavings={() => setDepositOpen(true)}
             onRefresh={async () => {
               await Promise.all([
                 savingsOverview.onRefreshPosition(),

@@ -21,7 +21,6 @@ interface AddMoneyViewProps {
   readonly walletAddress: string | null;
   readonly getAccessToken: AccessTokenProvider;
   readonly fiatEnabled: boolean;
-  readonly availableCashReady: boolean;
   readonly readSolanaFundingBalances: (
     owner: string,
   ) => Promise<{
@@ -29,17 +28,14 @@ interface AddMoneyViewProps {
     readonly balances: Readonly<Record<string, string>>;
   }>;
   readonly onBack: () => void;
-  readonly onUseAvailableCash: () => void;
 }
 
 export function AddMoneyView({
   walletAddress,
   getAccessToken,
   fiatEnabled,
-  availableCashReady,
   readSolanaFundingBalances,
   onBack,
-  onUseAvailableCash,
 }: AddMoneyViewProps) {
   const [view, setView] =
     useState<FundingView>("choose");
@@ -173,7 +169,6 @@ export function AddMoneyView({
             <AddFundsChoiceView
               walletAddress={walletAddress}
               fiatEnabled={fiatEnabled}
-              availableCashReady={availableCashReady}
               fiatStatus={fiatStatus}
               fiatError={fiatError}
               executionStatus={executionStatus}
@@ -185,7 +180,6 @@ export function AddMoneyView({
                 void handleFiatConfirmed();
               }}
               onFiatError={handleFiatError}
-              onUseAvailableCash={onUseAvailableCash}
               onTransferCrypto={() => {
                 invalidateCryptoPreview();
                 setView("crypto");
