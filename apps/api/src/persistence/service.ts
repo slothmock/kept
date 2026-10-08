@@ -529,6 +529,29 @@ export interface KeptPersistenceOptions {
   readonly commitmentWindowOverrideSeconds?: number;
 }
 
+function normalizeWaitlistEmail(
+  value: string,
+): string {
+  const email =
+    value
+      .trim()
+      .toLowerCase();
+
+  if (
+    email.length < 3
+    || email.length > 254
+    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email,
+    )
+  ) {
+    throw new PersistenceValidationError(
+      "email must be a valid email address",
+    );
+  }
+
+  return email;
+}
+
 export class KeptPersistenceService {
   constructor(
     private readonly db: KeptDatabase,
@@ -538,6 +561,21 @@ export class KeptPersistenceService {
     },
     private readonly commitmentWindowOverrideSeconds?: number,
   ) { }
+
+  async joinWaitlist(input: {
+    readonly email: string;
+  }): Promise<void> {
+    await new KeptRepository(
+      this.db,
+    ).joinWaitlist({
+      id: randomUUID(),
+      email:
+        normalizeWaitlistEmail(
+          input.email,
+        ),
+      now: new Date(),
+    });
+  }
 
   async createUser(input: {
     readonly privyUserId: string;
