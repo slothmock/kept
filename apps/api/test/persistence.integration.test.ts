@@ -103,7 +103,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await connection.pool.query(
-    "TRUNCATE TABLE idempotency_records, user_commitments, savings_goals, wallets, users CASCADE",
+    "TRUNCATE TABLE waitlist_signups, idempotency_records, user_commitments, savings_goals, wallets, users CASCADE",
   );
 });
 
@@ -122,6 +122,7 @@ describe.sequential("PostgreSQL migrations and schema constraints", () => {
 
     expect(tables.rows.map(({ table_name }) => table_name)).toEqual(
       expect.arrayContaining([
+        "waitlist_signups",
         "users",
         "wallets",
         "savings_goals",
@@ -202,6 +203,47 @@ describe.sequential("PostgreSQL migrations and schema constraints", () => {
       await client.query("ROLLBACK");
       client.release();
     }
+  });
+});
+
+describe.sequential("Waitlist signups", () => {
+  it("normalizes emails and keeps repeat signups idempotent", async () => {
+    await service.joinWaitlist({
+      email:
+        "  Person@Example.COM  ",
+    });
+
+    await service.joinWaitlist({
+      email:
+        "person@example.com",
+    });
+
+    const result =
+      await connection.pool.query<{
+        email: string;
+      }>(
+        "SELECT email FROM waitlist_signups ORDER BY created_at",
+      );
+
+    expect(
+      result.rows,
+    ).toEqual([
+      {
+        email:
+          "person@example.com",
+      },
+    ]);
+  });
+
+  it("rejects invalid waitlist emails", async () => {
+    await expect(
+      service.joinWaitlist({
+        email:
+          "not-an-email",
+      }),
+    ).rejects.toBeInstanceOf(
+      PersistenceValidationError,
+    );
   });
 });
 
