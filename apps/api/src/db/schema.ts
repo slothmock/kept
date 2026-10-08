@@ -242,6 +242,33 @@ export const allocationShareLots = pgTable(
   ],
 );
 
+export const allocationTransferLotMovements = pgTable(
+  "allocation_transfer_lot_movements",
+  {
+    id: uuid("id").primaryKey(),
+    eventId: uuid("event_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    sourceBucketId: uuid("source_bucket_id").notNull(),
+    destinationBucketId: uuid("destination_bucket_id").notNull(),
+    originEventId: uuid("origin_event_id").notNull(),
+    originKind: text("origin_kind").notNull(),
+    sharesAtomic: numeric("shares_atomic", {precision: 78, scale: 0}).notNull(),
+    wasEverGoalAllocated: boolean("was_ever_goal_allocated").notNull(),
+    createdAt: timestamp("created_at", {withTimezone: true}).notNull(),
+  },
+  (table) => [
+    foreignKey({columns: [table.eventId, table.userId], foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId], name: "allocation_transfer_lot_movements_event_owner_fk"}),
+    foreignKey({columns: [table.sourceBucketId, table.userId], foreignColumns: [allocationBuckets.id, allocationBuckets.userId], name: "allocation_transfer_lot_movements_source_owner_fk"}),
+    foreignKey({columns: [table.destinationBucketId, table.userId], foreignColumns: [allocationBuckets.id, allocationBuckets.userId], name: "allocation_transfer_lot_movements_dest_owner_fk"}),
+    foreignKey({columns: [table.originEventId, table.userId], foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId], name: "allocation_transfer_lot_movements_origin_owner_fk"}),
+    index("allocation_transfer_lot_movements_owner_time_idx").on(table.userId,table.createdAt,table.eventId),
+    index("allocation_transfer_lot_movements_event_idx").on(table.eventId),
+    check("allocation_transfer_lot_movements_positive", sql`${table.sharesAtomic} > 0`),
+    check("allocation_transfer_lot_movements_origin", sql`${table.originKind} IN ('OPENING','EXTERNAL_DEPOSIT','LEGACY','UNKNOWN')`),
+    check("allocation_transfer_lot_movements_distinct_buckets", sql`${table.sourceBucketId} <> ${table.destinationBucketId}`),
+  ],
+);
+
 export const accountTransactions = pgTable(
   "account_transactions",
   {
@@ -557,6 +584,7 @@ export const schema = {
   allocationLedgerEvents,
   allocationLedgerEntries,
   allocationShareLots,
+  allocationTransferLotMovements,
   accountTransactions,
   moonPayOfframpOrders,
   vaultActivityEvents,
