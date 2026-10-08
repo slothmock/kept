@@ -210,17 +210,17 @@ export function FundingAssetPicker({
                         role="combobox"
                         aria-expanded={open}
                         disabled={disabled}
-                        className="h-15 w-full justify-between px-3 py-2 font-normal"
+                        className="h-12 w-full justify-between px-3 py-2 font-normal"
                     />
                 }
             >
                 {selectedAsset ? (
                     <div className="min-w-0 text-left">
-                        <p className="truncate text-sm font-medium">
+                        <p className="truncate text-label font-medium">
                             {selectedAsset.symbol}
                         </p>
 
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="truncate text-caption text-muted-foreground">
                             {FormatFundingChainName(
                                 selectedAsset.blockchain,
                             )}
@@ -286,13 +286,13 @@ export function FundingAssetPicker({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div className="min-w-0">
-                                                        <p className="truncate text-sm font-medium">
+                                                        <p className="truncate text-label font-medium">
                                                             {
                                                                 asset.symbol
                                                             }
                                                         </p>
 
-                                                        <p className="truncate text-xs text-muted-foreground">
+                                                        <p className="truncate text-caption text-muted-foreground">
                                                             {
                                                                 FormatFundingChainName(
                                                                     asset.blockchain,
@@ -303,7 +303,7 @@ export function FundingAssetPicker({
 
                                                     <div className="shrink-0 text-right">
                                                         {balancesLoading ? (
-                                                            <span className="text-xs text-muted-foreground">
+                                                            <span className="text-caption text-muted-foreground">
                                                                 …
                                                             </span>
                                                         ) : (
@@ -320,7 +320,7 @@ export function FundingAssetPicker({
                                                                     null
                                                                 ) {
                                                                     return (
-                                                                        <span className="text-xs text-muted-foreground">
+                                                                        <span className="text-caption text-muted-foreground">
                                                                             —
                                                                         </span>
                                                                     );
@@ -328,7 +328,7 @@ export function FundingAssetPicker({
 
                                                                 return (
                                                                     <>
-                                                                        <p className="text-sm font-medium tabular-nums">
+                                                                        <p className="text-label font-medium tabular-nums">
                                                                             {
                                                                                 formatFundingAssetBalance(
                                                                                     asset,
@@ -337,7 +337,7 @@ export function FundingAssetPicker({
                                                                             }
                                                                         </p>
 
-                                                                        <p className="text-xs text-muted-foreground">
+                                                                        <p className="text-caption text-muted-foreground">
                                                                             {
                                                                                 asset.symbol
                                                                             }

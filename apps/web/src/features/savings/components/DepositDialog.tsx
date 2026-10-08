@@ -74,20 +74,20 @@ export function DepositDialog({
       >
         <form onSubmit={submit} className="space-y-6">
           <DialogHeader>
-            <DialogTitle>Deposit</DialogTitle>
+            <DialogTitle>Move to savings</DialogTitle>
 
             <DialogDescription>
-              Move money from your available cash into your Kept savings.
+              Choose how much of your available cash to move into savings.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border bg-muted/20 px-4 py-3">
+          <div className="rounded-lg border border-border bg-surface px-4 py-3">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 Available cash
               </span>
 
-              <span className="text-sm font-medium tabular-nums">
+              <span className="text-label font-medium tabular-nums">
                 {availableBalance === null
                   ? "…"
                   : `${formatUsdcPrecise(availableBalance)} USDC`}
@@ -99,7 +99,7 @@ export function DepositDialog({
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="deposit-amount">Amount</Label>
 
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 Minimum 10 USDC
               </span>
             </div>
@@ -111,7 +111,7 @@ export function DepositDialog({
                 onChange={(event) => onAmountChange(event.target.value)}
                 inputMode="decimal"
                 placeholder="0.00"
-                className="h-12 pr-28 text-lg tabular-nums"
+                className="h-12 pr-28 text-body font-medium tabular-nums"
                 disabled={submitting}
                 autoFocus
               />
@@ -138,7 +138,7 @@ export function DepositDialog({
                   Max
                 </Button>
 
-                <span className="pointer-events-none pr-1 text-sm font-medium text-muted-foreground">
+                <span className="pointer-events-none pr-1 text-label font-medium text-muted-foreground">
                   USDC
                 </span>
               </div>
@@ -147,7 +147,7 @@ export function DepositDialog({
 
           {quoteState.kind === "loading" && (
             <div
-              className="space-y-3 rounded-lg border bg-muted/20 p-4 text-sm"
+              className="space-y-3 rounded-lg border border-border bg-surface p-4 text-sm"
               aria-live="polite"
               aria-label="Updating deposit details"
             >
@@ -178,18 +178,18 @@ export function DepositDialog({
           )}
 
           {quoteState.kind === "ready" && (
-            <div className="rounded-lg border bg-muted/20 p-4">
+            <div className="rounded-lg border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-sm text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   Deposit fee
                 </span>
 
                 <div className="text-right">
-                  <p className="text-sm font-medium tabular-nums">
+                  <p className="text-label font-medium tabular-nums">
                     {formatUsdcPrecise(quoteState.quote.depositFeeAssets)} USDC
                   </p>
 
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {formatBasisPoints(
                       quoteState.quote.depositFeeBps,
                       quoteState.quote.bpsDenominator,
@@ -199,11 +199,11 @@ export function DepositDialog({
               </div>
 
               <div className="mt-4 flex items-end justify-between gap-4 border-t pt-4">
-                <span className="text-sm font-medium">You&apos;ll add</span>
+                <span className="text-label font-medium">You&apos;ll add</span>
 
-                <p className="text-xl font-semibold tabular-nums">
+                <p className="text-h3 font-semibold tabular-nums">
                   {formatUsdcPrecise(quoteState.quote.expectedNetAssets)}{" "}
-                  <span className="text-sm font-medium text-muted-foreground">
+                  <span className="text-label font-medium text-muted-foreground">
                     USDC
                   </span>
                 </p>
@@ -212,11 +212,11 @@ export function DepositDialog({
               {quoteState.quote.performanceFeeBps > 0n && (
                 <div className="mt-4 border-t pt-4">
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       Performance fee
                     </span>
 
-                    <span className="text-sm font-medium tabular-nums">
+                    <span className="text-label font-medium tabular-nums">
                       {formatBasisPoints(
                         quoteState.quote.performanceFeeBps,
                         quoteState.quote.bpsDenominator,
@@ -235,7 +235,7 @@ export function DepositDialog({
 
           {status && (
             <div
-              className="rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+              className="rounded-lg bg-muted/40 px-4 py-3 text-caption text-muted-foreground"
               aria-live="polite"
             >
               {status}
@@ -273,7 +273,7 @@ export function DepositDialog({
                   Depositing…
                 </>
               ) : (
-                "Deposit"
+                "Move to savings"
               )}
             </Button>
           </DialogFooter>

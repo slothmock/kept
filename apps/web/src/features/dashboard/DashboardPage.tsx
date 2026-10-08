@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
-import type { CommitmentDto, GoalDto } from "@/api/kept-api";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
+import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +9,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { ProductDataState } from "@/features/dashboard/product-data-state";
+import { HomeActivityPreview } from "@/features/dashboard/HomeActivityPreview";
+
+import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
+
+import { CommitmentsView } from "@/features/commitments/CommitmentsView";
+
+import { CommitmentDetailView } from "@/features/commitments/CommitmentDetailView";
 
 import {
 
@@ -17,11 +25,7 @@ import {
 
 } from "@/features/commitments/components/CreateCommitmentDialog";
 
-import {
-
-  AddFundsDialog,
-
-} from "@/features/funding/components/AddFundsDialog";
+import { AddMoneyView } from "@/features/funding/AddMoneyView";
 
 import { updateDialogOpenState } from "@/features/dashboard/dialog-lifecycle";
 
@@ -31,17 +35,13 @@ import { CreateGoalDialog } from "@/features/goals/components/CreateGoalDialog";
 
 import { GoalCard } from "@/features/goals/components/GoalCard";
 
-import { GoalDetailsDialog } from "@/features/goals/components/GoalDetailsDialog";
+import { GoalDetailView } from "@/features/goals/components/GoalDetailView";
 
 import type { GoalFundingState } from "@/features/goals/funding";
 
 import {
   BalanceCard,
 } from "@/features/savings/components/BalanceCard";
-
-import {
-  SavingsMarketStatus,
-} from "@/features/savings/components/SavingsMarketStatus";
 
 import type {
   PositionState,
@@ -53,7 +53,7 @@ import { DepositDialog } from "@/features/savings/components/DepositDialog";
 
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 
-import { WithdrawFundsDialog } from "@/features/withdrawals/components/WithdrawFundsDialog";
+import { WithdrawView } from "@/features/withdrawals/WithdrawView";
 
 import type { RewardState } from "@/features/commitments/reward-claim";
 
@@ -66,6 +66,9 @@ import type { FundingAsset } from "@/features/funding/intents/supported-tokens";
 interface DashboardPageProps {
 
   readonly walletAddress: string | null;
+
+  readonly loadRecentTransactions:
+    () => Promise<readonly TransactionDto[]>;
 
   readonly readSolanaFundingBalances: (
     owner: string,
@@ -406,6 +409,59 @@ interface DashboardPageProps {
 
 }
 
+function DetailPageSkeleton() {
+  return (
+    <div className="space-y-8" aria-label="Loading details" aria-live="polite">
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-36 rounded-md" />
+        <Skeleton className="h-10 w-64 max-w-full rounded-md" />
+        <Skeleton className="h-5 w-40 rounded-md" />
+      </div>
+
+      <Skeleton className="h-40 w-full rounded-xl" />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]">
+        <div className="space-y-4">
+          <Skeleton className="h-7 w-48 rounded-md" />
+          <Skeleton className="h-72 rounded-lg" />
+        </div>
+
+        <div className="space-y-4">
+          <Skeleton className="h-44 rounded-lg" />
+          <Skeleton className="h-44 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommitmentsPageSkeleton() {
+  return (
+    <div className="space-y-8" aria-label="Loading commitments" aria-live="polite">
+      <div className="flex items-center justify-between gap-4">
+        <Skeleton className="h-10 w-48 rounded-md" />
+        <Skeleton className="h-10 w-36 rounded-md" />
+      </div>
+
+      <Skeleton className="h-11 w-48 rounded-lg" />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Skeleton className="h-32 rounded-lg" />
+        <Skeleton className="h-32 rounded-lg" />
+        <Skeleton className="h-32 rounded-lg" />
+      </div>
+
+      <div className="space-y-4">
+        <Skeleton className="h-7 w-52 rounded-md" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-48 rounded-lg" />
+          <Skeleton className="h-48 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function currentCommitment(
 
   goalId: string,
@@ -430,6 +486,26 @@ function currentCommitment(
 
 export function DashboardPage(props: DashboardPageProps) {
 
+  const location = useLocation();
+
+  const navigate = useNavigate();
+
+  const { goalId, commitmentId } = useParams<{ goalId?: string; commitmentId?: string }>();
+
+  const homeView = location.pathname === "/dashboard";
+
+  const goalDetailView = location.pathname.startsWith("/goals/");
+
+  const goalsView = location.pathname === "/goals";
+
+  const commitmentDetailView = location.pathname.startsWith("/commitments/");
+
+  const commitmentsView = location.pathname === "/commitments";
+
+  const addMoneyView = location.pathname === "/add-money";
+
+  const withdrawView = location.pathname === "/withdraw";
+
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
@@ -438,6 +514,8 @@ export function DashboardPage(props: DashboardPageProps) {
   const {
 
     walletAddress,
+
+    loadRecentTransactions,
 
     readSolanaFundingBalances,
 
@@ -459,14 +537,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
   } = props;
 
-  const [addFundsOpen, setAddFundsOpen] = useState(false);
-
   const [depositOpen, setDepositOpen] = useState(false);
-
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-
-  const [dismissedBankOrderId, setDismissedBankOrderId] =
-    useState<string | null>(null);
 
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
 
@@ -474,15 +545,6 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const [savingsGoal, setSavingsGoal] = useState<GoalDto | null>(null);
 
-  const [detailGoal, setDetailGoal] = useState<GoalDto | null>(null);
-
-  const bankFlowNeedsAttention =
-    bankWithdrawal.phase !== "setup"
-    && bankWithdrawal.orderId !== null
-    && dismissedBankOrderId !== bankWithdrawal.orderId;
-
-  const withdrawDialogOpen =
-    withdrawOpen || bankFlowNeedsAttention;
 
   const goals = productState.goals;
 
@@ -490,17 +552,47 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const activeGoals = goals.filter((goal) => goal.status === "ACTIVE");
 
+  const sortedActiveGoals = [...activeGoals].sort((left, right) => {
+    const leftDate = left.targetDate
+      ? new Date(left.targetDate).getTime()
+      : Number.POSITIVE_INFINITY;
+    const rightDate = right.targetDate
+      ? new Date(right.targetDate).getTime()
+      : Number.POSITIVE_INFINITY;
+
+    return leftDate - rightDate;
+  });
+
+  const selectedGoal =
+    goalDetailView && goalId
+      ? goals.find((goal) => goal.id === goalId) ?? null
+      : null;
+
+  const selectedGoalCommitments =
+    selectedGoal
+      ? commitments.filter(
+        (commitment) => commitment.savingsGoalId === selectedGoal.id,
+      )
+      : [];
+
+  const selectedCommitment =
+    commitmentDetailView && commitmentId
+      ? commitments.find((commitment) => commitment.id === commitmentId) ?? null
+      : null;
+
+  const selectedCommitmentGoal =
+    selectedCommitment
+      ? goals.find((goal) => goal.id === selectedCommitment.savingsGoalId) ?? null
+      : null;
+
   const initialLoading = productState.kind === "loading" && goals.length === 0;
 
-  const detailCommitments = detailGoal
+  const activeCommitments = commitments.filter(
+    (commitment) => commitment.state === "ACTIVE",
+  );
 
-    ? commitments.filter(
+  const featuredCommitment = activeCommitments[0] ?? null;
 
-      (commitment) => commitment.savingsGoalId === detailGoal.id,
-
-    )
-
-    : [];
 
   const commitmentForDialog = commitmentGoal
 
@@ -508,330 +600,587 @@ export function DashboardPage(props: DashboardPageProps) {
 
     : undefined;
 
-  const unassignedSavings =
-
-    goalFundingState.kind === "ready" && savingsOverview.positionState.kind === "ready"
-
-      ? goalFundingState.funding.totalVaultShares === 0n &&
-
-        savingsOverview.positionState.position.shares > 0n
-
-        ? savingsOverview.positionState.position.assets
-
-        : goalFundingState.funding.unallocatedAssets
-
+  const allocatedGoalSavings =
+    goalFundingState.kind === "ready"
+      ? goalFundingState.funding.totalAllocatedAssets
       : null;
 
   return (
 
-    <div className="space-y-10">
-
-      <section className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-
-        <div>
-
-          <p className="text-sm font-medium text-primary">Dashboard</p>
-
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
-
-            Keep moving forward.
-
-          </h1>
-
-          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-
-            Track your savings, goals, commitments, and rewards in one place.
-
-          </p>
-
-        </div>
-
-        <SavingsMarketStatus state={savingsOverview.marketStatusState} />
-
-      </section>
-
-      <BalanceCard
-
-        positionState={savingsOverview.positionState}
-
-        savingsPerformanceState={savingsOverview.performanceState}
-
-        transactionPending={savingsTransactions.pendingTransaction !== null}
-
-        onAddMoney={() => {
-
-          setAddFundsOpen(true);
-
-        }}
-
-        onWithdraw={() => setWithdrawOpen(true)}
-
-        onRefresh={async () => {
-          await Promise.all([
-            savingsOverview.onRefreshPosition(),
-            savingsOverview.onRefreshDashboardData(),
-          ]);
-        }}
-
-        stagingFaucetAvailable={savingsOverview.stagingFaucet.available}
-
-        stagingFaucetClaiming={savingsOverview.stagingFaucet.claiming}
-
-        stagingFaucetStatus={savingsOverview.stagingFaucet.status}
-
-        stagingFaucetError={savingsOverview.stagingFaucet.error}
-
-        onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
-
-      />
-
-      <section className="space-y-5" aria-labelledby="goals-heading">
-
-        <div className="flex items-end justify-between gap-4">
-
-          <div>
-
-            <h2
-
-              id="goals-heading"
-
-              className="text-xl font-semibold tracking-tight"
-
-            >
-
-              Your savings goals
-
-            </h2>
-
-          </div>
-
-          {productState.kind === "error" && (
-
-            <Button variant="ghost" size="sm" onClick={onRefreshProductData}>
-
-              <RefreshCw className="size-4" />
-
-              Retry
-
-            </Button>
-
-          )}
-
-        </div>
-
-        {productState.kind === "error" && (
-
-          <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-
-            {productState.message}
-
-          </p>
-
-        )}
-
-        {unassignedSavings !== null && (
-
-          <div className="flex flex-col gap-3 rounded-lg border bg-muted/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-            <div>
-
-              <p className="font-medium">Unassigned savings</p>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-
-                Savings you haven&apos;t assigned to a goal yet.
-
-              </p>
-
-            </div>
-
-            <p className="text-lg font-semibold tabular-nums">
-
-              {formatUsdc(unassignedSavings)} USDC
-
-            </p>
-
-          </div>
-
-        )}
-
-        {initialLoading ? (
-
-          <div className="grid gap-4 md:grid-cols-2">
-
-            <Skeleton className="h-80 rounded-xl" />
-
-            <Skeleton className="h-80 rounded-xl" />
-
-          </div>
-
-        ) : activeGoals.length === 0 ? (
-
+    <div className="space-y-8">
+
+      {addMoneyView ? (
+        <AddMoneyView
+          walletAddress={walletAddress}
+          fiatEnabled={fiatEnabled}
+          availableCashReady={savingsOverview.positionState.kind === "ready"}
+          readSolanaFundingBalances={readSolanaFundingBalances}
+          onBack={() => navigate("/dashboard")}
+          onUseAvailableCash={() => setDepositOpen(true)}
+        />
+      ) : null}
+
+      {withdrawView ? (
+        <WithdrawView
+          position={
+            savingsOverview.positionState.kind === "ready"
+              ? savingsOverview.positionState.position
+              : null
+          }
+          positionLoading={savingsOverview.positionState.kind === "loading"}
+          amount={savingsTransactions.withdrawal.amount}
+          status={savingsTransactions.withdrawal.status}
+          error={savingsTransactions.withdrawal.error}
+          submitting={savingsTransactions.pendingTransaction === "withdraw"}
+          cryptoAvailable={cryptoWithdrawal.destinationAssets.length > 0}
+          cryptoAmount={cryptoWithdrawal.amount}
+          cryptoRecipient={cryptoWithdrawal.recipient}
+          cryptoDestinationAssets={cryptoWithdrawal.destinationAssets}
+          cryptoDestinationAssetId={cryptoWithdrawal.destinationAssetId}
+          cryptoPreviewing={cryptoWithdrawal.previewing}
+          cryptoPreviewReady={cryptoWithdrawal.previewReady}
+          cryptoPreviewStatus={cryptoWithdrawal.previewStatus}
+          cryptoPreviewError={cryptoWithdrawal.previewError}
+          cryptoExecuting={cryptoWithdrawal.executing}
+          cryptoExecutionStatus={cryptoWithdrawal.executionStatus}
+          cryptoExecutionError={cryptoWithdrawal.executionError}
+          cryptoEstimatedReceive={cryptoWithdrawal.estimatedReceive}
+          onBack={() => navigate("/dashboard")}
+          onAmountChange={savingsTransactions.withdrawal.onAmountChange}
+          onSubmitAvailableCash={() => {
+            void savingsTransactions.withdrawal.onSubmit();
+          }}
+          onCryptoAmountChange={cryptoWithdrawal.onAmountChange}
+          onCryptoRecipientChange={cryptoWithdrawal.onRecipientChange}
+          onCryptoDestinationAssetChange={cryptoWithdrawal.onDestinationAssetChange}
+          onPreviewCryptoWithdrawal={cryptoWithdrawal.onPreview}
+          onExecuteCryptoWithdrawal={cryptoWithdrawal.onExecute}
+          bankAvailable={true}
+          bankEnabled={fiatEnabled}
+          bankAmount={bankWithdrawal.amount}
+          bankSubmitting={bankWithdrawal.submitting}
+          bankStatus={bankWithdrawal.status}
+          bankError={bankWithdrawal.error}
+          bankPhase={bankWithdrawal.phase}
+          bankReviewAmount={bankWithdrawal.reviewAmount}
+          bankMinimumReceive={bankWithdrawal.minimumReceive}
+          onBankAmountChange={bankWithdrawal.onAmountChange}
+          onStartBankWithdrawal={bankWithdrawal.onStart}
+          onRefreshBankWithdrawal={bankWithdrawal.onRefresh}
+          onConfirmBankWithdrawal={bankWithdrawal.onConfirm}
+        />
+      ) : null}
+
+      {commitmentDetailView ? (
+        selectedCommitment ? (
+          <CommitmentDetailView
+            commitment={selectedCommitment}
+            goal={selectedCommitmentGoal}
+            rewardState={goalManagement.rewards.states[selectedCommitment.id]}
+            claiming={goalManagement.rewards.claimingId === selectedCommitment.id}
+            claimError={
+              goalManagement.rewards.claimError?.commitmentId === selectedCommitment.id
+                ? goalManagement.rewards.claimError.message
+                : null
+            }
+            onBack={() => navigate("/commitments")}
+            onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
+            onClaimReward={goalManagement.rewards.onClaim}
+            onAddToSavings={() => setDepositOpen(true)}
+          />
+        ) : productState.kind === "loading" ? (
+          <DetailPageSkeleton />
+        ) : (
           <Card className="border-dashed shadow-none">
+            <CardContent className="p-6">
+              <p className="text-label font-medium">Commitment not found</p>
+              <p className="mt-2 text-caption text-muted-foreground">
+                This commitment may no longer be available.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate("/commitments")}
+              >
+                Back to commitments
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
-            <CardContent className="flex flex-col items-start gap-4 p-8 sm:flex-row sm:items-center sm:justify-between">
+      {commitmentsView ? (
+        initialLoading ? (
+          <CommitmentsPageSkeleton />
+        ) : (
+          <CommitmentsView
+            commitments={commitments}
+            goals={goals}
+            onAddCommitment={(goal) => setCommitmentGoal(goal)}
+            onOpenGoal={(goal) => navigate(`/goals/${goal.id}`)}
+            onOpenCommitment={(commitment) =>
+              navigate(`/commitments/${commitment.id}`)
+            }
+          />
+        )
+      ) : null}
 
-              <div>
 
-                <h3 className="font-semibold">Create your first goal</h3>
+      {goalDetailView ? (
+        selectedGoal ? (
+          <GoalDetailView
+            goal={selectedGoal}
+            funding={
+              goalFundingState.kind !== "loading"
+                ? (goalFundingState.funding?.byGoal.get(selectedGoal.id) ?? null)
+                : null
+            }
+            commitments={selectedGoalCommitments}
+            currentApyBps={
+              savingsOverview.marketStatusState.kind === "ready"
+                ? savingsOverview.marketStatusState.netApyBps
+                : null
+            }
+            loadRecentTransactions={loadRecentTransactions}
+            deleting={goalManagement.deletion.deleting}
+            deleteStatus={goalManagement.deletion.status}
+            deleteError={goalManagement.deletion.error}
+            onDelete={goalManagement.deletion.onDelete}
+            onBack={() => {
+              goalManagement.deletion.onDismiss();
+              navigate("/goals");
+            }}
+            onManageSavings={(goal) => setSavingsGoal(goal)}
+            onAddCommitment={(goal) => setCommitmentGoal(goal)}
+            rewardStates={goalManagement.rewards.states}
+            claimingRewardId={goalManagement.rewards.claimingId}
+            rewardClaimError={goalManagement.rewards.claimError}
+            onClaimReward={goalManagement.rewards.onClaim}
+            onAddToSavings={() => setDepositOpen(true)}
+          />
+        ) : initialLoading ? (
+          <DetailPageSkeleton />
+        ) : (
+          <Card className="border-dashed shadow-none">
+            <CardContent className="p-6">
+              <p className="text-label font-medium">Goal not found</p>
+              <p className="mt-2 text-caption text-muted-foreground">
+                This goal may have been deleted or is no longer available.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate("/goals")}
+              >
+                Back to goals
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
-                <p className="mt-1 max-w-lg text-sm text-muted-foreground">
 
-                  Give your savings a destination, then choose a weekly savings
+      {homeView ? (
+        <>
+          <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-h1 font-semibold tracking-tight">
+              Home
+            </h1>
 
-                  commitment.
-
-                </p>
-
-              </div>
-
-              <Button onClick={() => setCreateGoalOpen(true)}>
-
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => navigate("/add-money")}>
                 <Plus className="size-4" />
-
-                Create goal
-
+                Add money
               </Button>
 
-            </CardContent>
-
-          </Card>
-
-        ) : (
-
-          <div className="grid gap-4 md:grid-cols-2">
-
-            {activeGoals.map((goal) => (
-
-              <GoalCard
-
-                key={goal.id}
-
-                goal={goal}
-
-                funding={
-
-                  goalFundingState.kind === "loading"
-
-                    ? null
-
-                    : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
-
-                }
-
-                commitment={currentCommitment(goal.id, commitments)}
-
-                onManageSavings={(selected) => setSavingsGoal(selected)}
-
-                onAddCommitment={(selected) => setCommitmentGoal(selected)}
-
-                onOpen={(selected) => setDetailGoal(selected)}
-
-              />
-
-            ))}
-
-            <button
-
-              type="button"
-
-              onClick={() => setCreateGoalOpen(true)}
-
-              className="
-
-      group flex min-h-80 flex-col items-center
-
-      justify-center gap-4 rounded-xl border
-
-      border-dashed bg-muted/10 p-8 text-center
-
-      transition
-
-      hover:border-primary/40
-
-      hover:bg-accent/30
-
-      focus-visible:outline-none
-
-      focus-visible:ring-2
-
-      focus-visible:ring-ring
-
-      focus-visible:ring-offset-2
-
-    "
-
-            >
-
-              <div
-
-                className="
-
-        grid size-12 place-items-center rounded-full
-
-        border bg-background text-muted-foreground
-
-        transition
-
-        group-hover:border-primary/30
-
-        group-hover:text-primary
-
-      "
-
+              <Button
+                variant="outline"
+                onClick={() => navigate("/withdraw")}
               >
+                Withdraw
+              </Button>
+            </div>
+          </section>
 
-                <Plus className="size-5" />
+          <BalanceCard
+            positionState={savingsOverview.positionState}
+            savingsPerformanceState={savingsOverview.performanceState}
+            marketStatusState={savingsOverview.marketStatusState}
+            allocatedGoalSavings={allocatedGoalSavings}
+            showActions={false}
+            transactionPending={savingsTransactions.pendingTransaction !== null}
+            onAddMoney={() => navigate("/add-money")}
+            onWithdraw={() => navigate("/withdraw")}
+            onRefresh={async () => {
+              await Promise.all([
+                savingsOverview.onRefreshPosition(),
+                savingsOverview.onRefreshDashboardData(),
+              ]);
+            }}
+            stagingFaucetAvailable={savingsOverview.stagingFaucet.available}
+            stagingFaucetClaiming={savingsOverview.stagingFaucet.claiming}
+            stagingFaucetStatus={savingsOverview.stagingFaucet.status}
+            stagingFaucetError={savingsOverview.stagingFaucet.error}
+            onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
+          />
 
+          <section className="space-y-4" aria-labelledby="home-goals-heading">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <h2
+                  id="home-goals-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Your goals
+                </h2>
+
+                <p className="mt-1 text-caption text-muted-foreground">
+                  {initialLoading
+                    ? "Loading goals…"
+                    : allocatedGoalSavings === null
+                      ? `${activeGoals.length} active ${activeGoals.length === 1 ? "goal" : "goals"}`
+                      : `${formatUsdc(allocatedGoalSavings)} USDC saved across ${activeGoals.length} ${activeGoals.length === 1 ? "goal" : "goals"}`}
+                </p>
               </div>
 
-              <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/goals")}
+              >
+                View all goals
+              </Button>
+            </div>
 
-                <h3 className="font-semibold">Create another goal</h3>
-
-                <p className="mt-1 max-w-xs text-sm leading-6 text-muted-foreground">
-
-                  Give more of your savings a purpose.
-
+            {productState.kind === "error" ? (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-danger-surface px-4 py-3">
+                <p className="text-caption text-destructive">
+                  {productState.message}
                 </p>
 
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefreshProductData}
+                >
+                  <RefreshCw className="size-4" />
+                  Retry
+                </Button>
+              </div>
+            ) : initialLoading ? (
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+              </div>
+            ) : activeGoals.length === 0 ? (
+              <Card className="border-dashed shadow-none">
+                <CardContent className="flex min-h-36 items-center justify-between gap-4 p-6">
+                  <div>
+                    <p className="text-label font-medium">
+                      Create your first goal
+                    </p>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Give your savings a destination and track your progress.
+                    </p>
+                  </div>
+
+                  <Button onClick={() => setCreateGoalOpen(true)}>
+                    <Plus className="size-4" />
+                    Create goal
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {activeGoals.slice(0, 3).map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    compact
+                    funding={
+                      goalFundingState.kind === "loading"
+                        ? null
+                        : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
+                    }
+                    onOpen={(selected) =>
+                      navigate(`/goals/${selected.id}`)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
+            <section className="space-y-4" aria-labelledby="home-commitment-heading">
+              <div className="flex items-end justify-between gap-4">
+                <h2
+                  id="home-commitment-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Active commitment
+                </h2>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/commitments")}
+                >
+                  View commitments
+                </Button>
               </div>
 
-            </button>
+              {initialLoading ? (
+                <Skeleton className="h-32 rounded-lg" />
+              ) : featuredCommitment ? (
+                <Card className="shadow-none">
+                  <CardContent className="p-5">
+                    <CommitmentCard
+                      commitment={featuredCommitment}
+                      compact
+                    />
 
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                      <p className="text-caption text-muted-foreground">
+                        Due {new Date(featuredCommitment.epochEnd).toLocaleDateString()}
+                      </p>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          navigate(`/commitments/${featuredCommitment.id}`)
+                        }
+                      >
+                        View commitment
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="flex min-h-32 flex-col justify-center p-5">
+                    <p className="text-label font-medium">
+                      No active commitment
+                    </p>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Add a commitment to a goal when you are ready to build a regular saving habit.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </section>
+
+            <section className="space-y-4" aria-labelledby="home-activity-heading">
+              <div className="flex items-end justify-between gap-4">
+                <h2
+                  id="home-activity-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Recent activity
+                </h2>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/activity")}
+                >
+                  See all
+                </Button>
+              </div>
+
+              <HomeActivityPreview
+                loadTransactions={loadRecentTransactions}
+              />
+            </section>
           </div>
+        </>
+      ) : null}
 
-        )}
+      {goalsView ? (
+        <>
+          <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-h1 font-semibold tracking-tight">
+              Goals
+            </h1>
 
-      </section>
+            <Button onClick={() => setCreateGoalOpen(true)}>
+              <Plus className="size-4" />
+              Create a goal
+            </Button>
+          </section>
 
-      <AddFundsDialog
+          <section
+            className="grid gap-4 sm:grid-cols-3"
+            aria-label="Goals summary"
+          >
+            <Card className="shadow-none">
+              <CardContent className="p-6">
+                <p className="text-caption font-medium text-muted-foreground">
+                  Saved toward goals
+                </p>
 
-        open={addFundsOpen}
+                <p className="mt-2 text-h2 font-semibold tabular-nums">
+                  {allocatedGoalSavings === null
+                    ? "—"
+                    : `${formatUsdc(allocatedGoalSavings)} USDC`}
+                </p>
 
-        walletAddress={walletAddress}
+                <p className="mt-1 text-caption text-muted-foreground">
+                  {initialLoading
+                    ? "Loading goals…"
+                    : `Across ${activeGoals.length} active ${activeGoals.length === 1 ? "goal" : "goals"}`}
+                </p>
+              </CardContent>
+            </Card>
 
-        fiatEnabled={fiatEnabled}
+            <Card className="shadow-none">
+              <CardContent className="p-6">
+                <p className="text-caption font-medium text-muted-foreground">
+                  Active goals
+                </p>
 
-        readSolanaFundingBalances={
-          readSolanaFundingBalances
-        }
+                <p className="mt-2 text-h2 font-semibold tabular-nums">
+                  {initialLoading ? "—" : activeGoals.length}
+                </p>
 
-        onOpenChange={
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Currently in progress
+                </p>
+              </CardContent>
+            </Card>
 
-          setAddFundsOpen
+            <Card className="shadow-none">
+              <CardContent className="p-6">
+                <p className="text-caption font-medium text-muted-foreground">
+                  Current APY
+                </p>
 
-        }
+                <p className="mt-2 text-h2 font-semibold tabular-nums">
+                  {savingsOverview.marketStatusState.kind === "ready"
+                    ? `${(savingsOverview.marketStatusState.netApyBps / 100).toFixed(2)}%`
+                    : "—"}
+                </p>
 
-        onUseAvailableCash={() => {
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Variable, after Kept&apos;s fee
+                </p>
+              </CardContent>
+            </Card>
+          </section>
 
-          setAddFundsOpen(false);
+          <section className="space-y-4" aria-labelledby="goals-heading">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2
+                  id="goals-heading"
+                  className="text-h3 font-semibold tracking-tight"
+                >
+                  Active goals
+                </h2>
 
-          setDepositOpen(true);
+                <p className="mt-1 text-caption text-muted-foreground">
+                  {initialLoading
+                    ? "Loading goals…"
+                    : `${activeGoals.length} ${activeGoals.length === 1 ? "goal" : "goals"} currently growing`}
+                </p>
+              </div>
 
-        }}
+              <div
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-label text-foreground"
+                aria-label="Goals sorted by soonest target date"
+              >
+                <SlidersHorizontal className="size-4 text-muted-foreground" />
+                Sort: Soonest
+              </div>
+            </div>
 
-      />
+            {productState.kind === "error" ? (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-danger-surface px-4 py-3">
+                <p className="text-caption text-destructive">
+                  {productState.message}
+                </p>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefreshProductData}
+                >
+                  <RefreshCw className="size-4" />
+                  Retry
+                </Button>
+              </div>
+            ) : initialLoading ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+                <Skeleton className="h-36 rounded-lg" />
+              </div>
+            ) : activeGoals.length === 0 ? (
+              <Card className="border-dashed shadow-none">
+                <CardContent className="flex min-h-40 items-center justify-between gap-4 p-6">
+                  <div>
+                    <h3 className="text-label font-semibold">
+                      Create your first goal
+                    </h3>
+
+                    <p className="mt-1 max-w-lg text-caption text-muted-foreground">
+                      Give your savings a destination and track your progress.
+                    </p>
+                  </div>
+
+                  <Button onClick={() => setCreateGoalOpen(true)}>
+                    <Plus className="size-4" />
+                    Create goal
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {sortedActiveGoals.map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    compact
+                    funding={
+                      goalFundingState.kind === "loading"
+                        ? null
+                        : (goalFundingState.funding?.byGoal.get(goal.id) ?? null)
+                    }
+                    onOpen={(selected) =>
+                      navigate(`/goals/${selected.id}`)
+                    }
+                  />
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setCreateGoalOpen(true)}
+                  className="group flex min-h-36 flex-col items-start justify-center rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:border-primary/50 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <div className="grid size-10 place-items-center rounded-full bg-accent text-accent-foreground">
+                    <Plus className="size-4" />
+                  </div>
+
+                  <h3 className="mt-4 text-label font-medium">
+                    Start another goal
+                  </h3>
+
+                  <p className="mt-4 max-w-md text-caption text-muted-foreground">
+                    Name what you are saving for, choose a target, and keep charting your progress.
+                  </p>
+
+                  <span className="mt-4 rounded-md border border-border px-3 py-2 text-label font-medium">
+                    Create goal
+                  </span>
+                </button>
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
 
       <DepositDialog
 
@@ -879,238 +1228,6 @@ export function DashboardPage(props: DashboardPageProps) {
             }
           )();
         }}
-
-      />
-
-      <WithdrawFundsDialog
-
-        open={withdrawDialogOpen}
-
-        position={
-
-          savingsOverview.positionState.kind === "ready"
-
-            ? savingsOverview.positionState.position
-
-            : null
-
-        }
-
-        amount={savingsTransactions.withdrawal.amount}
-
-        status={savingsTransactions.withdrawal.status}
-
-        error={savingsTransactions.withdrawal.error}
-
-        submitting={
-
-          savingsTransactions.pendingTransaction ===
-
-          "withdraw"
-
-        }
-
-        cryptoAvailable={
-
-          cryptoWithdrawal.destinationAssets.length >
-
-          0
-
-        }
-
-        cryptoAmount={
-
-          cryptoWithdrawal.amount
-
-        }
-
-        cryptoRecipient={
-
-          cryptoWithdrawal.recipient
-
-        }
-
-        cryptoDestinationAssets={
-
-          cryptoWithdrawal.destinationAssets
-
-        }
-
-        cryptoDestinationAssetId={
-
-          cryptoWithdrawal.destinationAssetId
-
-        }
-
-        cryptoPreviewing={
-
-          cryptoWithdrawal.previewing
-
-        }
-
-        cryptoPreviewReady={
-
-          cryptoWithdrawal.previewReady
-
-        }
-
-        cryptoPreviewStatus={
-
-          cryptoWithdrawal.previewStatus
-
-        }
-
-        cryptoPreviewError={
-
-          cryptoWithdrawal.previewError
-
-        }
-
-        cryptoExecuting={
-
-          cryptoWithdrawal.executing
-
-        }
-
-        cryptoExecutionStatus={
-
-          cryptoWithdrawal.executionStatus
-
-        }
-
-        cryptoExecutionError={
-
-          cryptoWithdrawal.executionError
-
-        }
-
-        cryptoEstimatedReceive={
-
-          cryptoWithdrawal.estimatedReceive
-
-        }
-
-        onOpenChange={(open) => {
-          if (!open && bankFlowNeedsAttention) {
-            setDismissedBankOrderId(bankWithdrawal.orderId);
-          }
-
-          updateDialogOpenState(
-            open,
-            setWithdrawOpen,
-            savingsTransactions.withdrawal.onDismiss,
-          );
-        }}
-
-        onAmountChange={
-
-          savingsTransactions.withdrawal.onAmountChange
-
-        }
-
-        onSubmitAvailableCash={() => {
-          void (
-            async () => {
-              const succeeded =
-                await savingsTransactions.withdrawal.onSubmit();
-
-              if (succeeded) {
-                setWithdrawOpen(false);
-              }
-            }
-          )();
-        }}
-        
-
-        onCryptoAmountChange={
-
-          cryptoWithdrawal.onAmountChange
-
-        }
-
-        onCryptoRecipientChange={
-
-          cryptoWithdrawal.onRecipientChange
-
-        }
-
-        onCryptoDestinationAssetChange={
-
-          cryptoWithdrawal.onDestinationAssetChange
-
-        }
-
-        onPreviewCryptoWithdrawal={
-
-          cryptoWithdrawal.onPreview
-
-        }
-
-        onExecuteCryptoWithdrawal={
-
-          cryptoWithdrawal.onExecute
-
-        }
-
-        bankAvailable={true}
-
-        bankEnabled={fiatEnabled}
-
-        bankAmount={
-
-          bankWithdrawal.amount
-
-        }
-
-        bankSubmitting={
-
-          bankWithdrawal.submitting
-
-        }
-
-        bankStatus={
-
-          bankWithdrawal.status
-
-        }
-
-        bankError={
-
-          bankWithdrawal.error
-
-        }
-
-        bankPhase={
-          bankWithdrawal.phase
-        }
-
-        bankReviewAmount={
-          bankWithdrawal.reviewAmount
-        }
-
-        bankMinimumReceive={
-          bankWithdrawal.minimumReceive
-        }
-
-        onBankAmountChange={
-
-          bankWithdrawal.onAmountChange
-
-        }
-
-        onStartBankWithdrawal={
-
-          bankWithdrawal.onStart
-
-        }
-
-        onRefreshBankWithdrawal={
-          bankWithdrawal.onRefresh
-        }
-
-        onConfirmBankWithdrawal={
-          bankWithdrawal.onConfirm
-        }
 
       />
 
@@ -1177,42 +1294,6 @@ export function DashboardPage(props: DashboardPageProps) {
           }
         }}
         onSubmit={goalManagement.commitment.onCreate}
-      />
-      <GoalDetailsDialog
-        open={detailGoal !== null}
-        goal={detailGoal}
-        funding={
-          detailGoal && goalFundingState.kind !== "loading"
-            ? (goalFundingState.funding?.byGoal.get(detailGoal.id) ?? null)
-            : null
-        }
-        commitments={detailCommitments}
-        rewardStates={goalManagement.rewards.states}
-        claimingRewardId={goalManagement.rewards.claimingId}
-        rewardClaimError={goalManagement.rewards.claimError}
-        onClaimReward={goalManagement.rewards.onClaim}
-        deleting={goalManagement.deletion.deleting}
-        deleteStatus={goalManagement.deletion.status}
-        deleteError={goalManagement.deletion.error}
-        onDelete={goalManagement.deletion.onDelete}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDetailGoal(null);
-            goalManagement.deletion.onDismiss();
-          }
-        }}
-        onAddToSavings={() => {
-          setDetailGoal(null);
-          setDepositOpen(true);
-        }}
-        onManageSavings={(goal) => {
-          setDetailGoal(null);
-          setSavingsGoal(goal);
-        }}
-        onAddCommitment={(goal) => {
-          setDetailGoal(null);
-          setCommitmentGoal(goal);
-        }}
       />
     </div>
   );

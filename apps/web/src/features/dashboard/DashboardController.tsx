@@ -5,7 +5,6 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   createPublicClient,
   getAddress,
@@ -21,9 +20,10 @@ import { type Session } from "@/app/providers/session";
 import { useKeptEvmWallet } from "@/wallet/evm-wallet";
 import { checkNetworkReadiness } from "@/wallet/network-readiness";
 import { useKeptTransactionSender } from "@/wallet/transaction-sender";
-import { AccountMenu } from "@/features/account/components/AccountMenu";
+import { SignOutAction } from "@/features/account/components/SignOutAction";
 
 import { AppShell } from "@/app/layout/AppShell";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
   useDashboardDataController,
@@ -87,8 +87,6 @@ import {
 } from "@/features/withdrawals/use-bank-withdrawal-controller";
 
 export function DashboardController({ session }: { readonly session: Session }) {
-  const navigate = useNavigate();
-
   const fiatEnabled =
     readFiatEnabled(
       import.meta.env,
@@ -162,6 +160,18 @@ export function DashboardController({ session }: { readonly session: Session }) 
 
     [config],
   );
+
+  const loadRecentTransactions =
+    useCallback(
+      async () => {
+        if (!api) {
+          return [];
+        }
+
+        return api.listTransactions();
+      },
+      [api],
+    );
 
   const readSolanaFundingBalances =
     useCallback(
@@ -777,12 +787,35 @@ export function DashboardController({ session }: { readonly session: Session }) 
 
   if (!session.isReady) {
     return (
-      <main
-        className="grid min-h-screen place-items-center text-sm text-muted-foreground"
-        aria-live="polite"
-      >
-        Preparing your account…
-      </main>
+      <AppShell>
+        <div
+          className="space-y-8"
+          aria-live="polite"
+          aria-label="Preparing your Kept account"
+        >
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-40 rounded-md" />
+            <Skeleton className="h-5 w-72 max-w-full rounded-md" />
+          </div>
+
+          <Skeleton className="h-56 w-full rounded-xl" />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Skeleton className="h-36 rounded-lg" />
+            <Skeleton className="h-36 rounded-lg" />
+            <Skeleton className="h-36 rounded-lg" />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
+            <Skeleton className="h-64 rounded-lg" />
+            <Skeleton className="h-64 rounded-lg" />
+          </div>
+
+          <span className="sr-only">
+            Preparing your account…
+          </span>
+        </div>
+      </AppShell>
     );
   }
 
@@ -790,11 +823,8 @@ export function DashboardController({ session }: { readonly session: Session }) 
     <AppShell
       headerAction={
         wallet.address ? (
-          <AccountMenu
-            onOpenAccount={() => {
-              navigate("/account");
-            }}
-            onSignOut={async () => {
+          <SignOutAction
+onSignOut={async () => {
               session.logout();
             }}
           />
@@ -803,6 +833,10 @@ export function DashboardController({ session }: { readonly session: Session }) 
     >
       <DashboardPage
         walletAddress={wallet.address}
+
+        loadRecentTransactions={
+          loadRecentTransactions
+        }
 
         readSolanaFundingBalances={
           readSolanaFundingBalances

@@ -576,7 +576,7 @@ describe(
 
                 expect(
                     screen.getByText(
-                        "You're adding",
+                        "You're sending",
                     ),
                 ).toBeTruthy();
 
@@ -677,7 +677,7 @@ describe(
 
                 expect(
                     screen.getByText(
-                        "You're adding",
+                        "You're sending",
                     ),
                 ).toBeTruthy();
 
@@ -992,7 +992,7 @@ describe(
                         "button",
                         {
                             name:
-                                "Deposit available cash",
+                                "Use available cash",
                         },
                     ),
                 );

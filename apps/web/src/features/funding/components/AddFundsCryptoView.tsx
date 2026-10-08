@@ -16,12 +16,6 @@ import {
 } from "@/components/ui/button";
 
 import {
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-
-import {
     Input,
 } from "@/components/ui/input";
 
@@ -257,12 +251,12 @@ export function AddFundsCryptoView({
         sourceAsset
     ) {
         return (
-            <div className="space-y-5">
+            <div className="space-y-6">
                 <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="-ml-2"
+                    className="-ml-3 text-muted-foreground"
                     disabled={
                         executing
                     }
@@ -278,17 +272,17 @@ export function AddFundsCryptoView({
                     Back
                 </Button>
 
-                <DialogHeader>
-                    <DialogTitle>
+                <div>
+                    <h2 className="text-h2 font-semibold tracking-tight">
                         Review transfer
-                    </DialogTitle>
+                    </h2>
 
-                    <DialogDescription>
-                        Check the details before adding money to Kept.
-                    </DialogDescription>
-                </DialogHeader>
+                    <p className="mt-2 text-caption text-muted-foreground">
+                        Confirm the route and minimum amount before the transfer begins.
+                    </p>
+                </div>
 
-                <div className="overflow-hidden rounded-lg border bg-muted/20">
+                <div className="overflow-hidden rounded-lg border border-border bg-surface">
                     <div
                         className="grid grid-cols-2 border-b p-1"
                         role="tablist"
@@ -304,8 +298,8 @@ export function AddFundsCryptoView({
                             className={
                                 previewTab ===
                                 "transfer"
-                                    ? "rounded-md bg-background px-3 py-2 text-sm font-medium shadow-sm"
-                                    : "rounded-md px-3 py-2 text-sm text-muted-foreground"
+                                    ? "rounded-md bg-accent px-3 py-2 text-label font-medium text-accent-foreground"
+                                    : "rounded-md px-3 py-2 text-label text-muted-foreground"
                             }
                             onClick={() => {
                                 setPreviewTab(
@@ -326,8 +320,8 @@ export function AddFundsCryptoView({
                             className={
                                 previewTab ===
                                 "more-info"
-                                    ? "rounded-md bg-background px-3 py-2 text-sm font-medium shadow-sm"
-                                    : "rounded-md px-3 py-2 text-sm text-muted-foreground"
+                                    ? "rounded-md bg-accent px-3 py-2 text-label font-medium text-accent-foreground"
+                                    : "rounded-md px-3 py-2 text-label text-muted-foreground"
                             }
                             onClick={() => {
                                 setPreviewTab(
@@ -345,28 +339,23 @@ export function AddFundsCryptoView({
                             className="space-y-4 p-4"
                             role="tabpanel"
                         >
-                            <div>
-                                <p className="text-xs text-muted-foreground">
-                                    You're adding
+                            <div className="rounded-md bg-accent/50 p-4">
+                                <p className="text-caption text-muted-foreground">
+                                    You&apos;re sending
                                 </p>
 
-                                <p className="mt-1 text-lg font-semibold">
-                                    {
-                                        amount
-                                    }{" "}
-                                    {
-                                        sourceAsset.symbol
-                                    }
+                                <p className="mt-1 text-h3 font-semibold tabular-nums">
+                                    {amount} {sourceAsset.symbol}
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-caption text-muted-foreground">
                                         From
                                     </p>
 
-                                    <p className="mt-1 text-sm font-medium">
+                                    <p className="mt-1 text-label font-medium">
                                         {
                                             FormatFundingChainName(
                                                 sourceAsset.blockchain,
@@ -376,28 +365,21 @@ export function AddFundsCryptoView({
                                 </div>
 
                                 <div className="text-right">
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-caption text-muted-foreground">
                                         You'll receive at least
                                     </p>
 
-                                    <p className="mt-1 text-sm font-medium">
-                                        {
-                                            formatUnits(
-                                                BigInt(
-                                                    previewDetails.minimumAmountOut,
-                                                ),
-                                                destinationAsset.decimals,
-                                            )
-                                        }{" "}
-                                        {
-                                            destinationAsset.symbol
-                                        }
+                                    <p className="mt-1 text-label font-semibold tabular-nums text-success">
+                                        {formatUnits(
+                                            BigInt(previewDetails.minimumAmountOut),
+                                            destinationAsset.decimals,
+                                        )} {destinationAsset.symbol}
                                     </p>
                                 </div>
                             </div>
 
                             {previewDetails.estimatedTime ? (
-                                <div className="flex items-center justify-between gap-4 border-t pt-3 text-sm">
+                                <div className="flex items-center justify-between gap-4 border-t pt-3 text-label">
                                     <span className="text-muted-foreground">
                                         Estimated time
                                     </span>
@@ -412,7 +394,7 @@ export function AddFundsCryptoView({
                         </div>
                     ) : (
                         <div
-                            className="space-y-3 p-4 text-sm"
+                            className="space-y-3 p-4 text-label"
                             role="tabpanel"
                         >
                             <PreviewDetailRow
@@ -503,8 +485,8 @@ export function AddFundsCryptoView({
                 ) : null}
 
                 {executionStatus ? (
-                    <div className="rounded-lg border bg-muted/20 p-3">
-                        <p className="text-sm">
+                    <div className="rounded-lg border border-border bg-surface p-3">
+                        <p className="text-label">
                             {
                                 executionStatus
                             }
@@ -523,22 +505,20 @@ export function AddFundsCryptoView({
                     </p>
                 ) : null}
 
-                <p className="text-xs leading-5 text-muted-foreground">
-                    Kept converts the selected asset to USDC during
-                    the transfer.<br />
-                    Network and provider fees may apply.
+                <p className="text-caption text-muted-foreground">
+                    Kept converts the selected asset to USDC during the transfer. Network and provider fees may apply.
                 </p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-6">
             <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="-ml-2"
+                className="-ml-3 text-muted-foreground"
 
                 disabled={
                     executing
@@ -553,27 +533,25 @@ export function AddFundsCryptoView({
                 Back
             </Button>
 
-            <DialogHeader>
-                <DialogTitle>
+            <div>
+                <h2 className="text-h2 font-semibold tracking-tight">
                     Transfer crypto
-                </DialogTitle>
+                </h2>
 
-                <DialogDescription>
-                    Move crypto you
-                    already own into
-                    your Kept account.
-                </DialogDescription>
-            </DialogHeader>
+                <p className="mt-2 text-caption text-muted-foreground">
+                    Choose a wallet, network, asset, and amount. Kept will show the route before anything moves.
+                </p>
+            </div>
 
-            <div className="rounded-lg border p-4">
-                <p className="text-sm font-medium">
+            <div className="rounded-lg border border-border bg-surface p-4">
+                <p className="text-label font-medium">
                     Source wallet
                 </p>
 
                 {externalWalletConnected ? (
                     <div className="mt-2 flex items-center justify-between gap-4">
                         <div className="min-w-0">
-                            <p className="text-sm font-medium capitalize">
+                            <p className="text-label font-medium capitalize">
                                 {externalWalletClientType ??
                                     "External wallet"}
                                 {externalWalletFamily === "sol"
@@ -583,7 +561,7 @@ export function AddFundsCryptoView({
                                       : ""}
                             </p>
 
-                            <p className="truncate text-sm text-muted-foreground">
+                            <p className="truncate text-caption text-muted-foreground">
                                 {shortAddress}
                             </p>
                         </div>
@@ -609,7 +587,7 @@ export function AddFundsCryptoView({
                         {availableExternalWallets.length >
                             0 ? (
                             <>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-caption text-muted-foreground">
                                     Choose which wallet
                                     you'd like to fund
                                     Kept from.
@@ -677,8 +655,8 @@ export function AddFundsCryptoView({
                         )}
 
                         {walletFamilyChooserOpen ? (
-                            <div className="rounded-lg border bg-muted/20 p-3">
-                                <p className="mb-2 text-sm font-medium">
+                            <div className="rounded-lg border border-border bg-surface p-3">
+                                <p className="mb-2 text-label font-medium">
                                     Which network does your wallet use?
                                 </p>
 
@@ -768,11 +746,11 @@ export function AddFundsCryptoView({
 
             {externalWalletConnected ? (
                 <>
-                    <div className="grid gap-4 sm:grid-cols-[0.85fr_1.15fr]">
+                    <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                             <label
                                 htmlFor="crypto-funding-network"
-                                className="text-sm font-medium"
+                                className="text-label font-medium"
                             >
                                 Network
                             </label>
@@ -795,7 +773,7 @@ export function AddFundsCryptoView({
                                         event.target.value,
                                     );
                                 }}
-                                className="flex h-15 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-12 w-full rounded-md border border-input bg-surface px-3 py-2 text-label outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {sourceBlockchains.map(
                                     (
@@ -821,16 +799,16 @@ export function AddFundsCryptoView({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">
+                            <label className="text-label font-medium">
                                 Asset
                             </label>
 
                             {sourceAssetsLoading ? (
-                                <div className="flex h-10 items-center rounded-md border px-3 text-sm text-muted-foreground">
+                                <div className="flex h-10 items-center rounded-md border px-3 text-caption text-muted-foreground">
                                     Loading assets…
                                 </div>
                             ) : sourceAssetsError ? (
-                                <div className="flex h-10 items-center rounded-md border border-destructive px-3 text-sm text-destructive">
+                                <div className="flex h-12 items-center rounded-md border border-destructive/25 bg-danger-surface px-3 text-caption text-destructive">
                                     Couldn't load assets
                                 </div>
                             ) : sourceAssets.length > 0 ? (
@@ -857,7 +835,7 @@ export function AddFundsCryptoView({
                                     }
                                 />
                             ) : (
-                                <div className="flex h-10 items-center rounded-md border px-3 text-sm text-muted-foreground">
+                                <div className="flex h-10 items-center rounded-md border px-3 text-caption text-muted-foreground">
                                     No supported assets
                                 </div>
                             )}
@@ -865,7 +843,7 @@ export function AddFundsCryptoView({
                     </div>
 
                     {switchingSourceNetwork ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-caption text-muted-foreground">
                             Confirm the network change in your wallet…
                         </p>
                     ) : null}
@@ -883,7 +861,10 @@ export function AddFundsCryptoView({
 
                     {sourceAsset ? (
                         <>
-                            <div className="rounded-lg border bg-muted/20 p-4">
+                            <div className="rounded-lg border border-border bg-surface p-4">
+                                <p className="mb-3 text-caption font-medium text-muted-foreground">
+                                    Transfer route
+                                </p>
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="min-w-0">
                                         <p className="font-medium">
@@ -892,7 +873,7 @@ export function AddFundsCryptoView({
                                             }
                                         </p>
 
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-caption text-muted-foreground">
                                             {
                                                 FormatFundingChainName(
                                                     sourceAsset.blockchain,
@@ -908,7 +889,7 @@ export function AddFundsCryptoView({
                                             USDC
                                         </p>
 
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-caption text-muted-foreground">
                                             Kept (Monad)
                                         </p>
                                     </div>
@@ -918,7 +899,7 @@ export function AddFundsCryptoView({
                             <div className="space-y-2">
                                 <label
                                     htmlFor="crypto-funding-amount"
-                                    className="text-sm font-medium"
+                                    className="text-label font-medium"
                                 >
                                     Amount
                                 </label>
@@ -940,6 +921,8 @@ export function AddFundsCryptoView({
                                             executing
                                         }
 
+                                        className="h-12 pr-20 text-body font-medium tabular-nums"
+
                                         onChange={(
                                             event,
                                         ) => {
@@ -951,7 +934,7 @@ export function AddFundsCryptoView({
                                         }}
                                     />
 
-                                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-caption text-muted-foreground">
                                         {
                                             sourceAsset.symbol
                                         }
@@ -1000,10 +983,8 @@ export function AddFundsCryptoView({
                                 </p>
                             ) : null}
 
-                            <p className="text-xs leading-5 text-muted-foreground">
-                                Kept converts the selected asset to USDC during
-                                the transfer.<br />
-                                Network and provider fees may apply.
+                            <p className="text-caption text-muted-foreground">
+                                Kept converts the selected asset to USDC during the transfer. Network and provider fees may apply.
                             </p>
                         </>
                     ) : null}
@@ -1031,7 +1012,7 @@ function PreviewDetailRow({
                 }
             </span>
 
-            <span className="max-w-[60%] break-all text-right font-medium">
+            <span className="max-w-xs break-all text-right font-medium text-foreground">
                 {
                     value
                 }

@@ -203,7 +203,7 @@ export function CryptoWithdrawalStep({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="-ml-2"
+                    className="-ml-3 text-muted-foreground"
                     disabled={busy}
                     onClick={
                         onBack
@@ -216,11 +216,11 @@ export function CryptoWithdrawalStep({
             </div>
 
             <div>
-                <h2 className="text-lg font-semibold">
+                <h2 className="text-h3 font-semibold">
                     Send to a crypto wallet
                 </h2>
 
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                <p className="mt-1 text-caption text-muted-foreground">
                     Send money from Kept to another wallet.
                     Kept will handle any network transfer
                     needed.
@@ -229,12 +229,18 @@ export function CryptoWithdrawalStep({
 
             <div className="mt-6 space-y-6">
                 <div className="space-y-2">
-                    <label
-                        htmlFor="crypto-withdrawal-amount"
-                        className="text-sm font-medium"
-                    >
-                        Amount
-                    </label>
+                    <div className="flex items-center justify-between gap-4">
+                        <label
+                            htmlFor="crypto-withdrawal-amount"
+                            className="text-label font-medium"
+                        >
+                            Amount
+                        </label>
+
+                        <span className="text-caption text-muted-foreground">
+                            Available {formatUsdc(availableAssets)} USDC
+                        </span>
+                    </div>
 
                     <div className="relative">
                         <Input
@@ -248,7 +254,7 @@ export function CryptoWithdrawalStep({
                             disabled={
                                 busy
                             }
-                            className="pr-16"
+                            className="h-12 pr-16 text-body font-medium tabular-nums"
                             onChange={(
                                 event,
                             ) =>
@@ -263,7 +269,7 @@ export function CryptoWithdrawalStep({
                                 pointer-events-none
                                 absolute right-3 top-1/2
                                 -translate-y-1/2
-                                text-sm
+                                text-caption
                                 text-muted-foreground
                             "
                         >
@@ -313,11 +319,11 @@ export function CryptoWithdrawalStep({
                     </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-[0.85fr_1.15fr]">
+                <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <label
                             htmlFor="crypto-withdrawal-network"
-                            className="text-sm font-medium"
+                            className="text-label font-medium"
                         >
                             Network
                         </label>
@@ -352,7 +358,7 @@ export function CryptoWithdrawalStep({
                                     );
                                 }
                             }}
-                            className="flex h-15 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex h-12 w-full rounded-md border border-input bg-surface px-3 py-2 text-label outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {destinationBlockchains.map(
                                 (
@@ -374,7 +380,7 @@ export function CryptoWithdrawalStep({
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">
+                        <label className="text-label font-medium">
                             Asset
                         </label>
 
@@ -403,7 +409,7 @@ export function CryptoWithdrawalStep({
                 <div className="space-y-2">
                     <label
                         htmlFor="crypto-withdrawal-recipient"
-                        className="text-sm font-medium"
+                        className="text-label font-medium"
                     >
                         Wallet address
                     </label>
@@ -437,7 +443,7 @@ export function CryptoWithdrawalStep({
                     {recipient.length >
                         0 &&
                         !recipientValid && (
-                            <p className="text-sm text-destructive">
+                            <p className="text-caption text-destructive">
                                 Enter a valid wallet address.
                             </p>
                         )}
@@ -447,26 +453,29 @@ export function CryptoWithdrawalStep({
                     destinationAsset && (
                         <div
                             className="
-                                space-y-3 rounded-xl
-                                border bg-muted/20 p-4
+                                space-y-3 rounded-lg
+                                border border-border bg-surface p-4
                             "
                         >
+                            <p className="text-caption font-medium text-muted-foreground">
+                                Review withdrawal
+                            </p>
                             <div className="flex items-center justify-between gap-4">
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-caption text-muted-foreground">
                                     You send
                                 </span>
 
-                                <span className="text-sm font-medium tabular-nums">
+                                <span className="text-label font-medium tabular-nums">
                                     {amount} USDC
                                 </span>
                             </div>
 
                             <div className="flex items-center justify-between gap-4">
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-caption text-muted-foreground">
                                     Network
                                 </span>
 
-                                <span className="text-sm font-medium">
+                                <span className="text-label font-medium">
                                     {FormatFundingChainName(
                                         destinationAsset.blockchain,
                                     )}
@@ -474,11 +483,11 @@ export function CryptoWithdrawalStep({
                             </div>
 
                             <div className="flex items-center justify-between gap-4">
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-caption text-muted-foreground">
                                     Asset
                                 </span>
 
-                                <span className="text-sm font-medium">
+                                <span className="text-label font-medium">
                                     {
                                         destinationAsset.symbol
                                     }
@@ -486,11 +495,11 @@ export function CryptoWithdrawalStep({
                             </div>
 
                             <div className="flex items-center justify-between gap-4">
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-caption text-muted-foreground">
                                     Receive
                                 </span>
 
-                                <span className="text-sm font-medium tabular-nums">
+                                <span className="text-label font-medium tabular-nums">
                                     {estimatedReceive ??
                                         "Calculated at transfer"}{" "}
                                     {estimatedReceive
@@ -500,11 +509,11 @@ export function CryptoWithdrawalStep({
                             </div>
 
                             <div className="flex items-start justify-between gap-4">
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-caption text-muted-foreground">
                                     To
                                 </span>
 
-                                <span className="max-w-[65%] break-all text-right text-sm font-medium">
+                                <span className="max-w-[65%] break-all text-right text-label font-medium">
                                     {
                                         recipient
                                     }
@@ -518,8 +527,8 @@ export function CryptoWithdrawalStep({
                         role="alert"
                         className="
                             rounded-lg border
-                            border-destructive/20
-                            bg-destructive/5
+                            border-destructive/25
+                            bg-danger-surface
                             px-4 py-3 text-sm
                             text-destructive
                         "
@@ -533,8 +542,8 @@ export function CryptoWithdrawalStep({
                         role="status"
                         className="
                             rounded-lg border
-                            bg-muted/20
-                            px-4 py-3 text-sm
+                            bg-surface
+                            px-4 py-3 text-caption
                         "
                     >
                         {previewStatus}
@@ -546,8 +555,8 @@ export function CryptoWithdrawalStep({
                         role="alert"
                         className="
                             rounded-lg border
-                            border-destructive/20
-                            bg-destructive/5
+                            border-destructive/25
+                            bg-danger-surface
                             px-4 py-3 text-sm
                             text-destructive
                         "
@@ -561,8 +570,8 @@ export function CryptoWithdrawalStep({
                         role="status"
                         className="
                             rounded-lg border
-                            bg-muted/20
-                            px-4 py-3 text-sm
+                            bg-surface
+                            px-4 py-3 text-caption
                         "
                     >
                         {executionStatus}
