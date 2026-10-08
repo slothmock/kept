@@ -40,6 +40,7 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     let reads=0;
     const service=new KeptPersistenceService(connection.db,{
       chainId:143n,
+      vaultAddress:vault,
       reader:{
         readShares:async()=>{reads++;return 20n;},
         convertToAssets:async(shares:bigint)=>shares,
@@ -48,7 +49,6 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     const input={
       userId,
       walletAddress:address,
-      vaultAddress:vault,
       transactionHash:claim.transactionHash,
       logIndex:claim.logIndex,
     };
