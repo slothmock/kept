@@ -91,6 +91,25 @@ describe.sequential("allocation ledger persistence", () => {
     expect(await store.getBalances(userId)).toEqual({UNASSIGNED: 3n});
   });
 
+  it("rolls back a ledger transfer when the outer API transaction fails", async () => {
+    const userId = await user();
+    const goalId = await goal(userId);
+    await store.recordVaultChange({userId, shares: 50n, kind: "VAULT_CREDIT", key: "initial"});
+    await expect(connection.db.transaction(async tx => {
+      await store.transferInTransaction(tx, {
+        userId, from: "UNASSIGNED", to: `GOAL:${goalId}`,
+        shares: 30n, key: "rolled-back",
+      });
+      throw new Error("simulate idempotency completion failure");
+    })).rejects.toThrow("simulate idempotency completion failure");
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED: 50n});
+    const events = await connection.pool.query(
+      "SELECT id FROM allocation_ledger_events WHERE user_id=$1 AND idempotency_key='rolled-back'",
+      [userId],
+    );
+    expect(events.rows).toHaveLength(0);
+  });
+
   it("rejects ownership violations", async () => {
     const owner = await user();
     const other = await user();
