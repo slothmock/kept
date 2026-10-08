@@ -141,6 +141,84 @@ export const goalShareAllocations = pgTable(
   ],
 );
 
+export const allocationBuckets = pgTable(
+  "allocation_buckets",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    bucketKind: text("bucket_kind").notNull(),
+    goalId: uuid("goal_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("allocation_buckets_id_user_unique").on(table.id, table.userId),
+    foreignKey({
+      columns: [table.goalId, table.userId],
+      foreignColumns: [savingsGoals.id, savingsGoals.userId],
+      name: "allocation_buckets_goal_owner_fk",
+    }),
+    uniqueIndex("allocation_unassigned_unique").on(table.userId)
+      .where(sql`${table.bucketKind} = 'UNASSIGNED'`),
+    uniqueIndex("allocation_goal_unique").on(table.userId, table.goalId)
+      .where(sql`${table.bucketKind} = 'GOAL'`),
+    check("allocation_buckets_kind_check", sql`(${table.bucketKind} = 'UNASSIGNED' AND ${table.goalId} IS NULL) OR (${table.bucketKind} = 'GOAL' AND ${table.goalId} IS NOT NULL)`),
+  ],
+);
+
+export const allocationLedgerEvents = pgTable(
+  "allocation_ledger_events",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    eventKind: text("event_kind").notNull(),
+    idempotencyKey: text("idempotency_key"),
+    transactionHash: text("transaction_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("allocation_ledger_events_id_user_unique").on(table.id, table.userId),
+    uniqueIndex("allocation_ledger_event_idempotency_unique").on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    index("allocation_ledger_events_user_created_idx").on(table.userId, table.createdAt),
+    check("allocation_ledger_events_kind_check", sql`${table.eventKind} IN ('OPENING','TRANSFER','VAULT_CREDIT','VAULT_DEBIT','RECONCILIATION_CREDIT','RECONCILIATION_DEBIT')`),
+  ],
+);
+
+export const allocationLedgerEntries = pgTable(
+  "allocation_ledger_entries",
+  {
+    id: uuid("id").primaryKey(),
+    eventId: uuid("event_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    bucketId: uuid("bucket_id").notNull(),
+    shareDeltaAtomic: numeric("share_delta_atomic", { precision: 78, scale: 0 }).notNull(),
+    originEventId: uuid("origin_event_id"),
+    originKind: text("origin_kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.eventId, table.userId],
+      foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId],
+      name: "allocation_ledger_entries_event_owner_fk",
+    }),
+    foreignKey({
+      columns: [table.bucketId, table.userId],
+      foreignColumns: [allocationBuckets.id, allocationBuckets.userId],
+      name: "allocation_ledger_entries_bucket_owner_fk",
+    }),
+    foreignKey({
+      columns: [table.originEventId, table.userId],
+      foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId],
+      name: "allocation_ledger_entries_origin_fk",
+    }),
+    index("allocation_ledger_entries_user_bucket_idx").on(table.userId, table.bucketId),
+    index("allocation_ledger_entries_event_idx").on(table.eventId),
+    check("allocation_ledger_entries_delta_check", sql`${table.shareDeltaAtomic} <> 0`),
+    check("allocation_ledger_entries_origin_check", sql`${table.originKind} IN ('OPENING','EXTERNAL_DEPOSIT','LEGACY','UNKNOWN')`),
+  ],
+);
+
 export const accountTransactions = pgTable(
   "account_transactions",
   {
@@ -452,6 +530,9 @@ export const schema = {
   wallets,
   savingsGoals,
   goalShareAllocations,
+  allocationBuckets,
+  allocationLedgerEvents,
+  allocationLedgerEntries,
   accountTransactions,
   moonPayOfframpOrders,
   vaultActivityEvents,
