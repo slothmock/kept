@@ -171,8 +171,7 @@ export function createKeptIntentsRunner(
         });
 
     return createExecutionRunner({
-        api:
-            intentsConnectApi,
+        api,
 
         wallet:
             intentsWallet,
