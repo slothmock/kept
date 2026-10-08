@@ -57,6 +57,13 @@
       "when": 1791483000000,
       "tag": "0007_waitlist_signups",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791490000000,
+      "tag": "0008_allocation_ledger_foundation",
+      "breakpoints": true
     }
   ]
 }
