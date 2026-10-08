@@ -28,6 +28,11 @@ describe("qualified allocation provenance", () => {
   it("clamps negative retained progress to zero", () => {
     expect(score([movement('e1',A,B,100n)])).toBe(0n);
   });
+  it("counts each source lot separately when one transfer consumes mixed origins", () => {
+    const fresh = movement("e1","UNASSIGNED",A,8n,true);
+    const old = {...fresh,movementId:"lot-two",shares:4n,verifiedFreshUnassigned:false};
+    expect(score([fresh,old])).toBe(8n);
+  });
   it("rejects duplicate and incomplete histories", () => {
     const x=movement('e1','UNASSIGNED',A,20n,true);
     expect(() => score([x,x])).toThrow(/Duplicate/);
