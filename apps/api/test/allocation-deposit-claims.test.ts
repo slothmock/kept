@@ -71,6 +71,48 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     })).rejects.toThrow(/Trusted vault address/);
     expect(await ledger.getBalances(userId)).toEqual({});
   });
+  it("credits two confirmed deposits atomically and never credits them twice",async()=>{
+    const {userId,claim}=await fixture();
+    const secondHash="0x"+randomUUID().replaceAll("-","").padEnd(64,"0");
+    await connection.pool.query(
+      `INSERT INTO vault_activity_events
+        (id,chain_id,vault_address,account_address,event_type,assets_atomic,
+         shares_atomic,block_number,transaction_hash,log_index,created_at)
+       VALUES ($1,143,$2,$3,'DEPOSIT',29,30,101,$4,0,now())`,
+      [randomUUID(),vault,address,secondHash],
+    );
+    const input={userId,chainId,vaultAddress:vault,ownerAddress:address,liveVaultShares:50n};
+    await expect(ledger.claimIndexedDeposit({...claim,liveVaultShares:50n}))
+      .rejects.toThrow(/uniquely attributed/);
+    expect(await ledger.claimIndexedDepositBatch(input)).toEqual({credited:2,shares:50n});
+    expect(await ledger.claimIndexedDepositBatch(input)).toEqual({credited:0,shares:0n});
+    expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:50n});
+    const origins=await connection.pool.query<{origin_kind:string;total:string}>(
+      `SELECT origin_kind,sum(shares_atomic)::text AS total
+       FROM allocation_share_lots WHERE user_id=$1 GROUP BY origin_kind`,[userId],
+    );
+    expect(origins.rows).toEqual([{origin_kind:"EXTERNAL_DEPOSIT",total:"50"}]);
+    const claims=await connection.pool.query(
+      "SELECT id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
+    );
+    expect(claims.rows).toHaveLength(2);
+  });
+
+  it("rejects a partially reconciled deposit batch without writing claims",async()=>{
+    const {userId}=await fixture();
+    await ledger.recordVaultChange({
+      userId,kind:"RECONCILIATION_CREDIT",shares:10n,key:"prior-reconciliation",
+    });
+    await expect(ledger.claimIndexedDepositBatch({
+      userId,chainId,vaultAddress:vault,ownerAddress:address,liveVaultShares:20n,
+    })).rejects.toThrow(/uniquely attributed/);
+    const claims=await connection.pool.query(
+      "SELECT id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
+    );
+    expect(claims.rows).toHaveLength(0);
+    expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:10n});
+  });
+
   it("credits verified shares and lineage once across idempotent replay",async()=>{
     const {userId,claim}=await fixture();
     const first=await ledger.claimIndexedDeposit(claim);
