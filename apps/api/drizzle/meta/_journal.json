@@ -78,6 +78,13 @@
       "when": 1791492000000,
       "tag": "0010_allocation_transfer_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791493000000,
+      "tag": "0011_vault_activity_shares",
+      "breakpoints": true
     }
   ]
 }
