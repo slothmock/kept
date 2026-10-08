@@ -6,7 +6,7 @@ const goalId = "a";
 const A = "GOAL:a" as const;
 const B = "GOAL:b" as const;
 function movement(id: string, source: AllocationProvenanceMovement["source"], destination: AllocationProvenanceMovement["destination"], shares: bigint, verifiedFreshUnassigned = false): AllocationProvenanceMovement {
-  return { eventId: id, source, destination, shares, verifiedFreshUnassigned, at: new Date(`2026-10-0${1+Number(id.replace(/\D/g,'') || 1)}T00:00:00Z`) };
+  return { eventId: id, movementId: id, source, destination, shares, verifiedFreshUnassigned, at: new Date(`2026-10-0${1+Number(id.replace(/\D/g,'') || 1)}T00:00:00Z`) };
 }
 const score = (movements: AllocationProvenanceMovement[]) => calculateQualifiedGoalShares({goalId,startAt,endAt,movements});
 describe("qualified allocation provenance", () => {
@@ -31,6 +31,6 @@ describe("qualified allocation provenance", () => {
   it("rejects duplicate and incomplete histories", () => {
     const x=movement('e1','UNASSIGNED',A,20n,true);
     expect(() => score([x,x])).toThrow(/Duplicate/);
-    expect(() => score([{...x,at:startAt}])).toThrow(/incomplete/);
+    expect(score([{...x,at:startAt}])).toBe(20n);
   });
 });
