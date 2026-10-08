@@ -262,18 +262,23 @@ describe.sequential("allocation ledger persistence", () => {
       userId, key: "opening",
       positions: {UNASSIGNED: 2n, [`GOAL:${goalA}`]: 5n, [`GOAL:${goalB}`]: 3n},
     });
+    // The legacy algorithm distributes the single survivor-share remainder
+    // in ascending goal UUID order. UUIDs are generated randomly in this test.
+    const aWinsRemainder = goalA < goalB;
+    const expectedA = aWinsRemainder ? 4n : 3n;
+    const expectedB = aWinsRemainder ? 2n : 3n;
     live = 6n;
     expect(await service.reconcileInitializedGoalLedger({userId, walletAddress})).toBe(true);
     expect(await store.getBalances(userId)).toEqual({
-      UNASSIGNED: 0n, [`GOAL:${goalA}`]: 4n, [`GOAL:${goalB}`]: 2n,
+      UNASSIGNED: 0n, [`GOAL:${goalA}`]: expectedA, [`GOAL:${goalB}`]: expectedB,
     });
     await service.assertGoalAllocationCutoverReady({userId, walletAddress});
     const legacyA = await service.getGoalAllocation(userId, goalA, walletAddress);
-    expect(legacyA?.allocatedSharesAtomic).toBe("4");
+    expect(legacyA?.allocatedSharesAtomic).toBe(expectedA.toString());
     live = 12n;
     expect(await service.reconcileInitializedGoalLedger({userId, walletAddress})).toBe(true);
     expect(await store.getBalances(userId)).toEqual({
-      UNASSIGNED: 6n, [`GOAL:${goalA}`]: 4n, [`GOAL:${goalB}`]: 2n,
+      UNASSIGNED: 6n, [`GOAL:${goalA}`]: expectedA, [`GOAL:${goalB}`]: expectedB,
     });
   });
 
