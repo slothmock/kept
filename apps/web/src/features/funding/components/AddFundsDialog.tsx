@@ -1,3 +1,7 @@
+import type {
+    AccessTokenProvider,
+} from "@/api/http-client";
+
 import {
     useCallback,
     useState,
@@ -44,12 +48,19 @@ type FundingView =
     | "choose"
     | "crypto";
 
+const noAccessToken:
+    AccessTokenProvider =
+    async () => null;
+
 interface AddFundsDialogProps {
     readonly open:
     boolean;
 
     readonly walletAddress:
     string | null;
+
+    readonly getAccessToken?:
+    AccessTokenProvider;
 
     readonly fiatEnabled:
     boolean;
@@ -73,6 +84,8 @@ interface AddFundsDialogProps {
 export function AddFundsDialog({
     open,
     walletAddress,
+    getAccessToken =
+        noAccessToken,
     fiatEnabled,
     readSolanaFundingBalances,
     onOpenChange,
@@ -101,7 +114,9 @@ export function AddFundsDialog({
         executeExternalFunding,
         clearExecutionFeedback,
         resetExecution,
-    } = useFundingExecutionController();
+    } = useFundingExecutionController({
+        getAccessToken,
+    });
 
     const {
         fiatStatus,
@@ -134,6 +149,7 @@ export function AddFundsDialog({
         resetPreview,
     } = useFundingPreviewController({
         clearExecutionFeedback,
+        getAccessToken,
     });
 
     const {
