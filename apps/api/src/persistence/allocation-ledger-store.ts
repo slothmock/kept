@@ -33,6 +33,24 @@ export class AllocationLedgerStore {
     ]));
   }
 
+  /**
+   * Records cutover positions supplied by a separate, verified live-vault
+   * snapshot. This never reads or guesses the live balance itself.
+   */
+  async openPositions(input: {
+    userId: string; positions: Readonly<Record<string, bigint>>; key: string;
+  }): Promise<string> {
+    const legs = Object.entries(input.positions).map(([bucket, deltaShares]) => ({
+      bucket: bucket as AllocationBucketKey,
+      deltaShares,
+    })).filter(leg => leg.deltaShares !== 0n);
+    if (legs.length === 0) throw new Error("Opening positions must be nonempty");
+    assertLedgerEvent("OPENING", legs);
+    return this.writeEvent({
+      userId: input.userId, kind: "OPENING", key: input.key, legs,
+    });
+  }
+
   async transfer(input: {
     userId: string; from: AllocationBucketKey; to: AllocationBucketKey;
     shares: bigint; key: string;
@@ -88,6 +106,20 @@ export class AllocationLedgerStore {
         }
         return existing.id;
       }
+      if (input.kind === "OPENING") {
+        const [prior] = await tx.select({id: allocationLedgerEvents.id})
+          .from(allocationLedgerEvents)
+          .where(eq(allocationLedgerEvents.userId, input.userId)).limit(1);
+        if (prior) throw new Error("Ledger has already been initialized");
+      } else {
+        const [opening] = await tx.select({id: allocationLedgerEvents.id})
+          .from(allocationLedgerEvents)
+          .where(and(eq(allocationLedgerEvents.userId, input.userId),
+            eq(allocationLedgerEvents.eventKind, "OPENING"))).limit(1);
+        // Explicit opening is required only at cutover. New zero-balance
+        // accounts can start with a vault credit instead.
+        void opening;
+      }
       const bucketRows = new Map<AllocationBucketKey, typeof allocationBuckets.$inferSelect>();
       for (const leg of input.legs) {
         if (bucketRows.has(leg.bucket)) continue;
@@ -129,7 +161,7 @@ export class AllocationLedgerStore {
         bucketId: bucketRows.get(leg.bucket)!.id,
         shareDeltaAtomic: leg.deltaShares.toString(),
         // UNKNOWN is intentionally non-qualifying until lineage is implemented.
-        originKind: "UNKNOWN", originEventId: null, createdAt: now,
+        originKind: input.kind === "OPENING" ? "OPENING" : "UNKNOWN", originEventId: input.kind === "OPENING" ? id : null, createdAt: now,
       })));
       return id;
     });
