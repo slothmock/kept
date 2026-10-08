@@ -679,6 +679,8 @@ export function DashboardController({ session }: { readonly session: Session }) 
     confirm: confirmBankWithdrawal,
   } = useBankWithdrawalController({
     api,
+    getAccessToken:
+      session.getAccessToken,
     fiatEnabled,
     account,
     config,
