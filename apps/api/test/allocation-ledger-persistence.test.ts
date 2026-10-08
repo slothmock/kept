@@ -96,6 +96,14 @@ describe.sequential("allocation ledger persistence", () => {
     });
     await service.initializeFreshAllocationLedger({userId,walletAddress});
     liveShares = 100n;
+    await expect(service.getGoalAllocation(userId,goalA,walletAddress))
+      .rejects.toThrow(/deposit attribution pending/);
+    expect(await store.getBalances(userId)).toEqual({});
+    // Simulate a separately validated and attributed vault credit; goal
+    // operations must never manufacture that credit from a balance read.
+    await store.recordVaultChange({
+      userId,shares:100n,kind:"VAULT_CREDIT",key:"verified-deposit-test-fixture",
+    });
     const empty = await service.getGoalAllocation(userId,goalA,walletAddress);
     expect(empty?.allocatedSharesAtomic).toBe("0");
     expect(await store.getBalances(userId)).toEqual({UNASSIGNED:100n});
@@ -118,6 +126,33 @@ describe.sequential("allocation ledger persistence", () => {
       "SELECT count(*)::int AS count FROM goal_share_allocations WHERE user_id=$1",[userId],
     );
     expect(legacy.rows[0]?.count).toBe(0);
+  });
+
+  it("reconciles clean-start withdrawals without manufacturing deposit credits",async()=>{
+    const userId=await user();
+    const goalId=await goal(userId);
+    let liveShares=0n;
+    const walletAddress="0x0000000000000000000000000000000000000001";
+    const service=new KeptPersistenceService(connection.db,{
+      chainId:143n,reader:{
+        readShares:async()=>liveShares,
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    });
+    await service.initializeFreshAllocationLedger({userId,walletAddress});
+    liveShares=50n;
+    await expect(service.getGoalAllocation(userId,goalId,walletAddress))
+      .rejects.toThrow(/deposit attribution pending/);
+    await store.recordVaultChange({userId,shares:50n,kind:"VAULT_CREDIT",key:"verified-in-test"});
+    await store.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:20n,key:"goal-assign",
+    });
+    liveShares=40n;
+    const allocation=await service.getGoalAllocation(userId,goalId,walletAddress);
+    expect(allocation?.allocatedSharesAtomic).toBe("20");
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED:20n,[`GOAL:${goalId}`]:20n,
+    });
   });
 
   it("credits unassigned shares and atomically moves shares into a goal", async () => {
