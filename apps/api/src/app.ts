@@ -137,6 +137,11 @@ export interface ApiDependencies {
 export interface BuildAppOptions {
   readonly enableLogging?: boolean;
   readonly webOrigin?: string;
+  readonly stagingAllowedPrivyUserIds?: readonly string[] | null;
+  readonly intentsProxyRateLimit?: {
+    readonly maxRequests: number;
+    readonly windowMs: number;
+  };
 
   readonly auroraIntents?: {
     readonly baseUrl: string;
@@ -995,8 +1000,27 @@ export function buildApp(
 
   const webOrigin = options.webOrigin ?? "http://localhost:5173";
 
+  const allowedOrigins =
+    allowedWebOrigins(webOrigin);
+
+  const intentsProxyRateLimit =
+    options.intentsProxyRateLimit
+    ?? {
+      maxRequests: 120,
+      windowMs: 60_000,
+    };
+
+  const intentsProxyRequests =
+    new Map<
+      string,
+      {
+        count: number;
+        resetAt: number;
+      }
+    >();
+
   app.register(cors, {
-    origin: allowedWebOrigins(webOrigin),
+    origin: allowedOrigins,
 
     methods: ["GET", "POST"],
 
@@ -1123,6 +1147,33 @@ export function buildApp(
       return reply;
     }
 
+    if (
+      options.stagingAllowedPrivyUserIds
+      && !options.stagingAllowedPrivyUserIds
+        .includes(identity.privyUserId)
+    ) {
+      request.log.warn(
+        {
+          errorCode:
+            "STAGING_ACCESS_DENIED",
+          privyUserId:
+            identity.privyUserId,
+        },
+        "Staging API access denied",
+      );
+
+      await reply
+        .code(403)
+        .send({
+          error: {
+            code:
+              "STAGING_ACCESS_DENIED",
+          },
+        });
+
+      return reply;
+    }
+
     try {
       const authenticatedRequest = asAuthenticatedRequest(request);
 
@@ -1169,6 +1220,93 @@ export function buildApp(
                 "SERVICE_UNAVAILABLE",
             },
           });
+      }
+
+      const origin =
+        request.headers.origin;
+
+      if (
+        typeof origin !== "string"
+        || !allowedOrigins.includes(origin)
+      ) {
+        request.log.warn(
+          {
+            errorCode:
+              "INTENTS_PROXY_ORIGIN_DENIED",
+          },
+          "Aurora Intents proxy origin denied",
+        );
+
+        return reply
+          .code(403)
+          .send({
+            error: {
+              code:
+                "FORBIDDEN",
+            },
+          });
+      }
+
+      let clientIp: string;
+
+      try {
+        clientIp =
+          getCustomerIp(request);
+      } catch {
+        return reply
+          .code(400)
+          .send({
+            error: {
+              code:
+                "VALIDATION_ERROR",
+            },
+          });
+      }
+
+      const now = Date.now();
+      const existing =
+        intentsProxyRequests.get(clientIp);
+
+      if (
+        !existing
+        || existing.resetAt <= now
+      ) {
+        intentsProxyRequests.set(
+          clientIp,
+          {
+            count: 1,
+            resetAt:
+              now
+              + intentsProxyRateLimit.windowMs,
+          },
+        );
+      } else if (
+        existing.count
+        >= intentsProxyRateLimit.maxRequests
+      ) {
+        reply.header(
+          "retry-after",
+          Math.max(
+            1,
+            Math.ceil(
+              (
+                existing.resetAt
+                - now
+              ) / 1_000,
+            ),
+          ).toString(),
+        );
+
+        return reply
+          .code(429)
+          .send({
+            error: {
+              code:
+                "RATE_LIMITED",
+            },
+          });
+      } else {
+        existing.count += 1;
       }
 
       const suffix =
