@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { planVaultReconciliation } from "../domain/allocation-reconciliation.js";
 import type { KeptDatabase } from "../db/client.js";
 import {
-  allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, allocationShareLots, users,
+  allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, allocationShareLots, allocationTransferLotMovements, users,
 } from "../db/schema.js";
 import {
   assertLedgerEvent, assertNonnegativeBalances, type AllocationBucketKey,
@@ -268,6 +268,20 @@ export class AllocationLedgerStore {
             ...lot,id:randomUUID(),bucketId:destBucket.id,
             everGoalAllocated:lot.everGoalAllocated || destBucket.bucketKind === "GOAL",
             firstGoalId:lot.firstGoalId ?? (destBucket.bucketKind === "GOAL" ? destBucket.goalId : null),
+          })));
+          // Preserve each consumed source lot as immutable transfer-time evidence.
+          // In particular, never infer historical first allocation from today's lots.
+          await tx.insert(allocationTransferLotMovements).values(consumed.map(lot => ({
+            id: randomUUID(),
+            eventId: id,
+            userId: input.userId,
+            sourceBucketId: lot.bucketId,
+            destinationBucketId: destBucket.id,
+            originEventId: lot.originEventId,
+            originKind: lot.originKind,
+            sharesAtomic: lot.sharesAtomic,
+            wasEverGoalAllocated: lot.everGoalAllocated,
+            createdAt: now,
           })));
         } else {
           await tx.insert(allocationShareLots).values({
