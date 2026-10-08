@@ -1449,15 +1449,15 @@ export class KeptPersistenceService {
         }
 
         const existingCommitments =
-          await repository.listCommitmentsForGoal(
+          await repository.listCommitmentsForOwner(
             input.userId,
-            input.goalId,
           );
 
         const duplicateCurrentCommitment =
           existingCommitments.some(
             (existing) =>
-              existing.definitionId === persistedDefinition.id
+              existing.savingsGoalId === input.goalId
+              && existing.definitionCode === input.definition.code
               && (
                 existing.state === "DRAFT"
                 || existing.state === "ACTIVE"
