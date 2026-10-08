@@ -1069,6 +1069,45 @@ export class KeptPersistenceService {
   }
 
   /**
+   * Reconcile an explicitly initialized account against the live vault in
+   * one transaction, alongside legacy goal reductions. Uninitialized accounts
+   * remain exclusively on the legacy path.
+   */
+  async reconcileInitializedGoalLedger(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<boolean> {
+    const { shares } = await this.readVaultShares(input.walletAddress);
+    return this.db.transaction(async transaction => {
+      const repository = new KeptRepository(transaction);
+      await repository.lockGoalsForOwner(input.userId);
+      const ledger = new AllocationLedgerStore(this.db);
+      if (!(await ledger.hasOpeningInTransaction(transaction, input.userId))) return false;
+      const oldRows = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+      const oldBalances = await ledger.getBalancesInTransaction(transaction, input.userId);
+      const beforeTotal = Object.values(oldBalances).reduce((sum, n) => sum + n, 0n);
+      assertAllocationCutoverParity({
+        hasOpening: true,
+        liveVaultShares: beforeTotal,
+        legacyGoalShares: Object.fromEntries(oldRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
+        ledgerBalances: oldBalances,
+      });
+      await this.reconcileGoalAllocationsToVaultBalance(repository, input.userId, shares);
+      await ledger.reconcileToVaultSharesInTransaction(transaction, {
+        userId: input.userId, liveShares: shares, key: `vault-reconciliation:${randomUUID()}`,
+      });
+      const newRows = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+      const newBalances = await ledger.getBalancesInTransaction(transaction, input.userId);
+      assertAllocationCutoverParity({
+        hasOpening: true, liveVaultShares: shares,
+        legacyGoalShares: Object.fromEntries(newRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
+        ledgerBalances: newBalances,
+      });
+      return true;
+    });
+  }
+
+  /**
    * Read-only ledger cutover preflight. Does not activate the ledger,
    * mutate legacy allocations, or infer historical provenance.
    */
