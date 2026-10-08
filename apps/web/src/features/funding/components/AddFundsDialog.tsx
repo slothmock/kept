@@ -76,9 +76,6 @@ interface AddFundsDialogProps {
     readonly onOpenChange: (
         open: boolean,
     ) => void;
-
-    readonly onUseAvailableCash:
-    () => void;
 }
 
 export function AddFundsDialog({
