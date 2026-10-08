@@ -1114,9 +1114,6 @@ export function buildApp(
   app.addHook("onRequest", async (request, reply) => {
     if (
       request.url === "/health" ||
-      request.url.startsWith(
-        "/api/intents-connect",
-      ) ||
       (
         dependencies.moonPay
         && request.url.startsWith(
