@@ -317,6 +317,53 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("rejects authenticated users outside the staging allowlist", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        stagingAllowedPrivyUserIds: [
+          "did:privy:allowed-user",
+        ],
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/goals",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: {
+        code: "STAGING_ACCESS_DENIED",
+      },
+    });
+
+    await app.close();
+  });
+
+  it("allows authenticated users on the staging allowlist", async () => {
+    const app = buildApp(
+      buildDependencies(),
+      {
+        stagingAllowedPrivyUserIds: [
+          user.privyUserId,
+        ],
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/goals",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+
   it("returns the aggregated dashboard read model in one authenticated request", async () => {
     const dependencies = buildDependencies();
 
