@@ -166,9 +166,9 @@ export function BalanceCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {netApy ? (
+            {netApy && ready ? (
               <span className="rounded-full bg-success-surface px-3 py-1.5 text-caption font-medium text-success">
-                Earning {netApy}% APY
+                {formatUsdc(positionState.position.assets)} USDC earning {netApy}% APY
               </span>
             ) : null}
 
