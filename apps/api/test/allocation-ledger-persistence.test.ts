@@ -82,6 +82,44 @@ describe.sequential("allocation ledger persistence", () => {
       .rejects.toThrow(/legacy goal allocations/);
   });
 
+  it("uses the ledger alone for goal allocations on a clean-start account", async () => {
+    const userId = await user();
+    const goalA = await goal(userId);
+    const goalB = await goal(userId);
+    let liveShares = 0n;
+    const walletAddress = "0x0000000000000000000000000000000000000001";
+    const service = new KeptPersistenceService(connection.db,{
+      chainId:143n,reader:{
+        readShares:async()=>liveShares,
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    });
+    await service.initializeFreshAllocationLedger({userId,walletAddress});
+    liveShares = 100n;
+    const empty = await service.getGoalAllocation(userId,goalA,walletAddress);
+    expect(empty?.allocatedSharesAtomic).toBe("0");
+    expect(await store.getBalances(userId)).toEqual({UNASSIGNED:100n});
+    const allocated = await service.allocateGoalShares({
+      userId,goalId:goalA,walletAddress,shareDeltaAtomic:"40",reason:"manual",
+      idempotencyKey:"clean-allocation-1",
+    });
+    expect(allocated.allocatedSharesAtomic).toBe("40");
+    expect((await service.getGoalAllocation(userId,goalA,walletAddress))?.allocatedSharesAtomic).toBe("40");
+    const moved = await service.reallocateGoalShares({
+      userId,walletAddress,fromGoalId:goalA,toGoalId:goalB,
+      shareAmountAtomic:"15",idempotencyKey:"clean-reallocation-1",
+    });
+    expect(moved.from.allocatedSharesAtomic).toBe("25");
+    expect(moved.to.allocatedSharesAtomic).toBe("15");
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED:60n,[`GOAL:${goalA}`]:25n,[`GOAL:${goalB}`]:15n,
+    });
+    const legacy = await connection.pool.query(
+      "SELECT count(*)::int AS count FROM goal_share_allocations WHERE user_id=$1",[userId],
+    );
+    expect(legacy.rows[0]?.count).toBe(0);
+  });
+
   it("credits unassigned shares and atomically moves shares into a goal", async () => {
     const userId = await user();
     const goalId = await goal(userId);
