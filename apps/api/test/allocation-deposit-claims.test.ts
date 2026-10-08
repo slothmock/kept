@@ -57,6 +57,20 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     expect(reads).toBe(1);
     expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:20n});
   });
+  it("refuses to claim deposits when no trusted vault is configured",async()=>{
+    const {userId,claim}=await fixture();
+    const service=new KeptPersistenceService(connection.db,{
+      chainId:143n,
+      reader:{
+        readShares:async()=>20n,
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    });
+    await expect(service.claimVerifiedVaultDeposit({
+      userId,walletAddress:address,transactionHash:claim.transactionHash,logIndex:claim.logIndex,
+    })).rejects.toThrow(/Trusted vault address/);
+    expect(await ledger.getBalances(userId)).toEqual({});
+  });
   it("credits verified shares and lineage once across idempotent replay",async()=>{
     const {userId,claim}=await fixture();
     const first=await ledger.claimIndexedDeposit(claim);
