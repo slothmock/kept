@@ -83,6 +83,10 @@ import {
 } from "@/features/commitments/use-commitment-creation-controller";
 
 import {
+  useCommitmentCancellationController,
+} from "@/features/commitments/use-commitment-cancellation-controller";
+
+import {
   useBankWithdrawalController,
 } from "@/features/withdrawals/use-bank-withdrawal-controller";
 
@@ -548,6 +552,31 @@ export function DashboardController({ session }: { readonly session: Session }) 
     refreshProductData: refreshDashboardData,
   });
 
+  const {
+    cancellingId: cancellingCommitmentId,
+    status: cancelCommitmentStatus,
+    error: cancelCommitmentError,
+    cancelCommitment,
+    dismiss: dismissCommitmentCancellation,
+  } = useCommitmentCancellationController({
+    api,
+    account,
+    manager:
+      commitmentManagerConfig?.address
+      ?? null,
+    chainId:
+      config?.chainId
+      ?? null,
+    sender,
+    transactionCoordinator,
+    ensureTransactionNetwork,
+    waitForReceipt:
+      publicClient
+        ? waitForRewardClaimReceipt
+        : null,
+    refreshProductData: refreshDashboardData,
+  });
+
   const depositQuoteReader =
     useMemo(
       () =>
@@ -1004,6 +1033,23 @@ onSignOut={async () => {
 
             onDismiss:
               dismissCommitment,
+          },
+
+          cancellation: {
+            cancellingId:
+              cancellingCommitmentId,
+
+            status:
+              cancelCommitmentStatus,
+
+            error:
+              cancelCommitmentError,
+
+            onCancel:
+              cancelCommitment,
+
+            onDismiss:
+              dismissCommitmentCancellation,
           },
 
           rewards: {
