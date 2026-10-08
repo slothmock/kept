@@ -1,6 +1,8 @@
 /** Immutable evidence captured at the time of a ledger transfer. */
 export interface AllocationProvenanceMovement {
   readonly eventId: string;
+  /** Unique consumed-lot movement row, distinct from its parent event. */
+  readonly movementId: string;
   readonly at: Date;
   readonly source: "UNASSIGNED" | `GOAL:${string}`;
   readonly destination: "UNASSIGNED" | `GOAL:${string}`;
@@ -29,17 +31,17 @@ export function calculateQualifiedGoalShares(input: {
   let previous = start;
   for (const movement of input.movements) {
     const time = movement.at.getTime();
-    if (!Number.isFinite(time) || time <= start || time > end || time < previous) {
+    if (!Number.isFinite(time) || time < start || time > end || time < previous) {
       throw new Error("Provenance history is incomplete or unordered");
     }
-    if (ids.has(movement.eventId)) throw new Error("Duplicate provenance event");
+    if (ids.has(movement.movementId)) throw new Error("Duplicate provenance movement");
     if (movement.shares <= 0n || movement.source === movement.destination) {
       throw new Error("Invalid provenance movement");
     }
     if (movement.verifiedFreshUnassigned && movement.source !== "UNASSIGNED") {
       throw new Error("Fresh provenance is only valid for unassigned source");
     }
-    ids.add(movement.eventId);
+    ids.add(movement.movementId);
     previous = time;
     if (movement.destination === goal && movement.source === "UNASSIGNED" && movement.verifiedFreshUnassigned) {
       eligible += movement.shares;
