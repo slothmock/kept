@@ -30,13 +30,25 @@ Kept is being prepared for the **Monad Metropolis** hackathon, in the **Consumer
 
 ## Installable web app (PWA)
 
-Install support is being developed in [PR #52](https://github.com/slothmock/kept/pull/52) and is **not part of `staging` until that PR merges**. Once deployed, users can add Kept to an Android home screen through Chrome, or to an iPhone home screen through Safari's **Share → Add to Home Screen** flow. Supported browsers may offer an **Install app** action.
+Kept is available as a Progressive Web App (PWA), allowing users to install it directly onto their device's home screen without downloading it from an app store.
 
-Installing Kept does **not** enable offline financial operations. Balances, authentication, quotes, deposits and withdrawals require a network connection. See [web app documentation](apps/web/README.md) for implementation and verification details.
+On Android, users can install Kept through Chrome using the **Install app** or **Add to Home screen** option. On iOS, users can open Kept in Safari and select **Share → Add to Home Screen**.
+
+Once installed, Kept launches in a standalone window, providing an app-like experience without the standard browser interface.
+
+The PWA includes dedicated application icons, a web app manifest, and a service worker that caches static assets while ensuring sensitive account data and financial information remain network-only.
+
+An internet connection is required for authentication, live balances, transaction quotes, deposits, withdrawals, and other financial operations. Offline financial transactions are not supported.
+
+For implementation details, configuration, and testing instructions, see the [web app documentation](https://github.com/slothmock/kept/blob/staging/apps/web/README.md).
 
 ## Development
 
-This is an npm-workspaces monorepo. Use a compatible Node.js version (see the `engines` field in [package.json](package.json)), then:
+Kept uses an npm-workspaces monorepo containing the frontend, backend API, smart contracts, and shared packages.
+
+Use a compatible Node.js version as specified in the `engines` field of [package.json](https://github.com/slothmock/kept/blob/staging/package.json).
+
+Install dependencies and run the development checks from the repository root:
 
 ```bash
 npm ci
@@ -47,7 +59,11 @@ npm --workspace @kept/web run build
 forge test --root packages/contracts
 ```
 
-For local API/web environment settings, start from [`.env.example`](.env.example). **Never commit private keys, API secrets or real credentials.** The Monad mainnet fork test is a separate opt-in check and requires a compatible Monad execution environment and mainnet RPC.
+Local development requires the appropriate API, database, blockchain, and frontend configuration. Refer to [`.env.example`](https://github.com/slothmock/kept/blob/staging/.env.example) for the supported environment variables.
+
+**Security:** Never commit private keys, API secrets, credentials, or other sensitive configuration values to the repository.
+
+The Monad Mainnet Aave fork test is maintained separately from standard contract tests. Running it requires a compatible Monad execution environment and access to a Monad Mainnet RPC endpoint.  
 
 ## License
 
