@@ -35,6 +35,57 @@ async function fixture() {
 }
 
 describe.sequential("atomic verified vault deposit claim",()=>{
+  it("claims indexed deposits before a clean-start goal balance read",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    const service=new KeptPersistenceService(connection.db,{
+      chainId:143n,vaultAddress:vault,
+      reader:{
+        readShares:async()=>20n,
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    },undefined,()=>({ready:true,currentBlock:101n,targetBlock:101n}));
+    const result=await service.getGoalAllocation(userId,goalId,claim.ownerAddress);
+    expect(result?.allocatedSharesAtomic).toBe("0");
+    expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:20n});
+    const lots=await connection.pool.query<{origin_kind:string}>(
+      "SELECT origin_kind FROM allocation_share_lots WHERE user_id=$1",[userId],
+    );
+    expect(lots.rows).toEqual([{origin_kind:"EXTERNAL_DEPOSIT"}]);
+    await service.getGoalAllocation(userId,goalId,claim.ownerAddress);
+    const claims=await connection.pool.query(
+      "SELECT id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
+    );
+    expect(claims.rows).toHaveLength(1);
+  });
+
+  it("does not reconcile a new deposit while the index is behind",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    const service=new KeptPersistenceService(connection.db,{
+      chainId:143n,vaultAddress:vault,
+      reader:{
+        readShares:async()=>20n,
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    },undefined,()=>({ready:true,currentBlock:100n,targetBlock:101n}));
+    await expect(service.getGoalAllocation(userId,goalId,claim.ownerAddress))
+      .rejects.toThrow(/index is synchronizing/);
+    expect(await ledger.getBalances(userId)).toEqual({});
+    const claims=await connection.pool.query(
+      "SELECT id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
+    );
+    expect(claims.rows).toHaveLength(0);
+  });
+
   it("reads live vault shares internally rather than accepting a supplied balance",async()=>{
     const {userId,claim}=await fixture();
     let reads=0;
