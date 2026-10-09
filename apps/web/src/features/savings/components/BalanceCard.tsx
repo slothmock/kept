@@ -113,8 +113,8 @@ export function BalanceCard({
       className="overflow-hidden rounded-2xl bg-balance-surface text-balance-foreground shadow-sm"
       aria-labelledby="balance-heading"
     >
-      <div className="space-y-7 p-6 sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-5">
+      <div className="space-y-5 p-4 sm:space-y-7 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-5">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <h2
@@ -224,11 +224,11 @@ export function BalanceCard({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           <Button
             disabled={!ready || transactionPending}
             onClick={onAddToSavings}
-            className="bg-surface text-foreground hover:bg-accent disabled:bg-white/10 disabled:text-white/45"
+            className="min-h-11 w-full bg-surface text-foreground hover:bg-accent disabled:bg-white/10 disabled:text-white/45 sm:min-h-0 sm:w-auto"
           >
             <ArrowDownToLine className="size-4" />
             Add to savings
@@ -237,7 +237,7 @@ export function BalanceCard({
             variant="outline"
             disabled={!canWithdraw || transactionPending}
             onClick={onWithdraw}
-            className="border-white/30 bg-transparent text-balance-foreground hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-white/35"
+            className="min-h-11 w-full border-white/30 bg-transparent text-balance-foreground hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-white/35 sm:min-h-0 sm:w-auto"
           >
             <ArrowUpFromLine className="size-4" />
             Withdraw
@@ -247,7 +247,7 @@ export function BalanceCard({
               variant="ghost"
               disabled={!ready || transactionPending}
               onClick={onAddMoney}
-              className="text-balance-foreground/80 hover:bg-white/10 hover:text-balance-foreground"
+              className="col-span-2 text-balance-foreground/80 hover:bg-white/10 hover:text-balance-foreground sm:col-span-1"
             >
               Add money
             </Button>
@@ -258,7 +258,7 @@ export function BalanceCard({
               size="sm"
               disabled={stagingFaucetClaiming || transactionPending}
               onClick={onClaimStagingFaucet}
-              className="text-balance-foreground/70 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-white/35"
+              className="col-span-2 text-balance-foreground/70 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-white/35 sm:col-span-1"
             >
               {stagingFaucetClaiming ? "Getting test funds…" : "Get test funds"}
             </Button>
