@@ -3,6 +3,7 @@ import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {connectDatabase,type DatabaseConnection} from "../src/db/client.js";
 import {AllocationLedgerStore} from "../src/persistence/allocation-ledger-store.js";
 import {KeptPersistenceService} from "../src/persistence/service.js";
+import {AllocationWeeklySavingsEvidenceSource} from "../src/verifier/allocation-weekly-savings-evidence.js";
 import {readAllocationGoalWithdrawals,readQualifiedGoalShares} from "../src/persistence/allocation-provenance-reader.js";
 
 const url = process.env.TEST_DATABASE_URL ??
@@ -218,6 +219,51 @@ describe.sequential("atomic verified vault deposit claim",()=>{
       "SELECT ledger_event_id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
     );
     expect(lots.rows[0]?.origin_event_id).toBe(claimRow.rows[0]?.ledger_event_id);
+  });
+
+  it("produces read-only weekly verifier evidence from verified allocations",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    const startAt=new Date(Date.now()-60_000);
+    expect((await ledger.claimIndexedDeposit(claim)).status).toBe("CREDITED");
+    await ledger.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:15n,key:"initial-eligible-allocation",
+    });
+    const source=new AllocationWeeklySavingsEvidenceSource({
+      db:connection.db,chainId,
+      repository:{findPrimaryWalletForOwnerOnChain:async()=>({address:claim.ownerAddress})},
+      vaultShares:{
+        readShares:async()=>20n,
+        convertToAssets:async(shares:bigint)=>shares*2n,
+      },
+      vaultActivity:{readActivity:async()=>({
+        depositedAssets:40n,withdrawnAssets:0n,netAssets:40n,
+      })},
+    });
+    const result=await source.evaluatePeriod({
+      userId,goalId,startAt,endAt:new Date(Date.now()+60_000),
+    });
+    expect(result.netSavedAtomic).toBe(30n);
+    expect(result.averageEligibleBalanceAtomic>=0n).toBe(true);
+    expect(result.averageEligibleBalanceAtomic<=30n).toBe(true);
+    const capSource=new AllocationWeeklySavingsEvidenceSource({
+      db:connection.db,chainId,
+      repository:{findPrimaryWalletForOwnerOnChain:async()=>({address:claim.ownerAddress})},
+      vaultShares:{
+        readShares:async()=>20n,
+        convertToAssets:async(shares:bigint)=>shares*2n,
+      },
+      vaultActivity:{readActivity:async()=>({
+        depositedAssets:40n,withdrawnAssets:35n,netAssets:5n,
+      })},
+    });
+    expect((await capSource.evaluatePeriod({
+      userId,goalId,startAt,endAt:new Date(Date.now()+60_000),
+    })).netSavedAtomic).toBe(5n);
   });
 
   it("credits verified shares and lineage once across idempotent replay",async()=>{
