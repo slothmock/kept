@@ -11,6 +11,7 @@ import { allocationBuckets, allocationLedgerEntries, allocationLedgerEvents } fr
 import { assertAllocationCutoverParity } from "../domain/allocation-cutover.js";
 import { hasOverlappingRewardEpoch } from "../domain/commitment-overlap.js";
 import { AllocationLedgerStore } from "./allocation-ledger-store.js";
+import { toGoalActivity } from "./goal-activity.js";
 import {
   decodeOnchainCommitmentId,
   encodeOnchainCommitmentId,
@@ -1003,13 +1004,7 @@ export class KeptPersistenceService {
       ))
       .orderBy(desc(allocationLedgerEvents.createdAt), desc(allocationLedgerEntries.id))
       .limit(50);
-    return rows.map((row) => ({
-      id: row.id,
-      eventId: row.eventId,
-      kind: BigInt(row.shareDeltaAtomic) > 0n ? "ADDED" as const : "REMOVED" as const,
-      shareDeltaAtomic: row.shareDeltaAtomic,
-      createdAt: row.createdAt.toISOString(),
-    }));
+    return toGoalActivity(rows);
   }
 
   async listTransactions(userId: string):
