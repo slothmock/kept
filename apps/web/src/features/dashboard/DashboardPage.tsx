@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, RefreshCw } from "lucide-react";
-import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
+import type { CommitmentDto, GoalDto, GoalActivityDto, TransactionDto } from "@/api/kept-api";
 import type { AccessTokenProvider } from "@/api/http-client";
 import { Button } from "@/components/ui/button";
 
@@ -75,6 +75,7 @@ interface DashboardPageProps {
 
   readonly loadRecentTransactions:
     () => Promise<readonly TransactionDto[]>;
+  readonly loadGoalActivity: (goalId: string) => Promise<readonly GoalActivityDto[]>;
 
   readonly readSolanaFundingBalances: (
     owner: string,
@@ -543,6 +544,7 @@ export function DashboardPage(props: DashboardPageProps) {
     getAccessToken,
 
     loadRecentTransactions,
+    loadGoalActivity,
 
     readSolanaFundingBalances,
 
@@ -772,7 +774,7 @@ export function DashboardPage(props: DashboardPageProps) {
                 ? savingsOverview.marketStatusState.netApyBps
                 : null
             }
-            loadRecentTransactions={loadRecentTransactions}
+            loadGoalActivity={loadGoalActivity}
             deleting={goalManagement.deletion.deleting}
             deleteStatus={goalManagement.deletion.status}
             deleteError={goalManagement.deletion.error}

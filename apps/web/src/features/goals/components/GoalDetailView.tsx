@@ -1,23 +1,23 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
-import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
+import type { CommitmentDto, GoalDto, GoalActivityDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { HomeActivityPreview } from "@/features/dashboard/HomeActivityPreview";
+import { GoalActivityPreview } from "@/features/goals/components/GoalActivityPreview";
 import { GoalDetailSummary } from "@/features/goals/components/GoalDetailSummary";
 import { CommitmentCard } from "@/features/commitments/components/CommitmentCard";
 import type { RewardState } from "@/features/commitments/reward-claim";
 import type { GoalFundingEntry } from "@/features/goals/funding";
 import { formatUsdc } from "@/features/savings/format";
-import { transactionsForGoal } from "@/features/goals/recent-activity";
+
 
 interface GoalDetailViewProps {
   readonly goal: GoalDto;
   readonly funding: GoalFundingEntry | null;
   readonly commitments: readonly CommitmentDto[];
   readonly currentApyBps: number | null;
-  readonly loadRecentTransactions: () => Promise<readonly TransactionDto[]>;
+  readonly loadGoalActivity: (goalId: string) => Promise<readonly GoalActivityDto[]>;
   readonly deleting: boolean;
   readonly deleteStatus: string | null;
   readonly deleteError: string | null;
@@ -40,7 +40,7 @@ export function GoalDetailView({
   funding,
   commitments,
   currentApyBps,
-  loadRecentTransactions,
+  loadGoalActivity,
   deleting,
   deleteStatus,
   deleteError,
@@ -55,11 +55,6 @@ export function GoalDetailView({
   onAddToSavings,
 }: GoalDetailViewProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const loadGoalTransactions = useCallback(
-    async () => transactionsForGoal(await loadRecentTransactions(), goal.id),
-    [loadRecentTransactions, goal.id],
-  );
 
   const activeCommitments = commitments.filter(
     (commitment) => commitment.state === "ACTIVE",
@@ -221,13 +216,11 @@ export function GoalDetailView({
               Recent activity
             </h2>
             <p className="mt-1 text-caption text-muted-foreground">
-              Recent transactions linked to this goal.
+              Savings movements recorded for this goal. Amounts are shown in vault shares.
             </p>
           </div>
 
-          <HomeActivityPreview
-            loadTransactions={loadGoalTransactions}
-          />
+          <GoalActivityPreview goalId={goal.id} loadActivity={loadGoalActivity} />
 
           <Card className="border-destructive/25 shadow-none">
             <CardHeader>

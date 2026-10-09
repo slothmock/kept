@@ -7,6 +7,7 @@ import {
 import type {
   CommitmentDto,
   DashboardDto,
+  GoalActivityDto,
   GoalAllocationDto,
   GoalDto,
   KeptApi,
@@ -112,6 +113,7 @@ export function createKeptApi(input: {
         { owner },
       ),
     listTransactions: () => request<readonly TransactionDto[]>("/v1/account/transactions"),
+    listGoalActivity: (goalId) => request<readonly GoalActivityDto[]>(`/v1/goals/${encodeURIComponent(goalId)}/activity`),
     recordTransaction: (
       transaction,
       requestIdempotencyKey,

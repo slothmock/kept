@@ -123,6 +123,14 @@ export type TransactionStatus =
   | "completed"
   | "failed";
 
+export interface GoalActivityDto {
+  readonly id: string;
+  readonly eventId: string;
+  readonly kind: "ADDED" | "REMOVED";
+  readonly shareDeltaAtomic: string;
+  readonly createdAt: string;
+}
+
 export interface TransactionDto {
   readonly id: string;
   readonly type: TransactionType;
@@ -200,6 +208,7 @@ export interface KeptApi {
     owner: string,
   ): Promise<SolanaFundingBalancesDto>;
   listTransactions(): Promise<readonly TransactionDto[]>;
+  listGoalActivity(goalId: string): Promise<readonly GoalActivityDto[]>;
   recordTransaction(
     input: RecordTransactionInput,
     idempotencyKey?: string,
