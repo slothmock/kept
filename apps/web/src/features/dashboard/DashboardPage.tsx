@@ -849,6 +849,7 @@ export function DashboardPage(props: DashboardPageProps) {
             positionState={savingsOverview.positionState}
             savingsPerformanceState={savingsOverview.performanceState}
             marketStatusState={savingsOverview.marketStatusState}
+            demoYield={import.meta.env.VITE_MONAD_CHAIN_ID === "10143"}
             allocatedGoalSavings={allocatedGoalSavings}
             showActions={false}
             transactionPending={savingsTransactions.pendingTransaction !== null}
@@ -1109,7 +1110,7 @@ export function DashboardPage(props: DashboardPageProps) {
             <Card className="shadow-none">
               <CardContent className="p-6">
                 <p className="text-caption font-medium text-muted-foreground">
-                  Current APY
+                  {import.meta.env.VITE_MONAD_CHAIN_ID === "10143" ? "Demo APY" : "Current APY"}
                 </p>
 
                 <p className="mt-2 text-h2 font-semibold tabular-nums">
@@ -1119,7 +1120,9 @@ export function DashboardPage(props: DashboardPageProps) {
                 </p>
 
                 <p className="mt-1 text-caption text-muted-foreground">
-                  Variable, after Kept&apos;s fee
+                  {import.meta.env.VITE_MONAD_CHAIN_ID === "10143"
+                    ? "Simulated testnet yield, after Kept's fee"
+                    : "Variable, after Kept's fee"}
                 </p>
               </CardContent>
             </Card>

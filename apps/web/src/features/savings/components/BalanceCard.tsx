@@ -31,6 +31,7 @@ interface BalanceCardProps {
   readonly marketStatusState?: SavingsMarketStatusState;
   readonly allocatedGoalSavings?: bigint | null;
   readonly showActions?: boolean;
+  readonly demoYield?: boolean;
   readonly onAddMoney: () => void;
   readonly onWithdraw: () => void;
   readonly onAddToSavings: () => void;
@@ -49,6 +50,7 @@ export function BalanceCard({
   marketStatusState,
   allocatedGoalSavings = null,
   showActions = true,
+  demoYield = false,
   onAddMoney,
   onWithdraw,
   onAddToSavings,
@@ -150,7 +152,7 @@ export function BalanceCard({
 
             {ready ? (
               <p className="mt-3 text-sm text-balance-foreground/70">
-                {formatUsdc(positionState.position.assets)} USDC currently earning yield
+                {formatUsdc(positionState.position.assets)} USDC currently earning {demoYield ? "simulated testnet yield" : "yield"}
               </p>
             ) : null}
           </div>
@@ -158,10 +160,17 @@ export function BalanceCard({
           {netApy && ready ? (
             <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200/25 bg-white/10 px-4 py-2 text-sm font-semibold text-balance-foreground">
               <Leaf aria-hidden="true" className="size-4 text-emerald-200" />
-              {netApy}% APY
+              {netApy}% {demoYield ? "Demo APY" : "APY"}
             </span>
           ) : null}
         </div>
+
+        {demoYield ? (
+          <p className="text-xs text-balance-foreground/75">
+            Testnet demonstration: yield is simulated, not supplied through Aave.
+            Deposits, withdrawals and commitment rewards still execute on-chain.
+          </p>
+        ) : null}
 
         <div className="grid gap-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 sm:grid-cols-3">
           <div className="flex min-w-0 items-center gap-3 p-4 sm:p-5">
