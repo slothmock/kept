@@ -4,7 +4,7 @@ import type { KeptDatabase } from "../db/client.js";
 import {
   allocationBuckets, allocationLedgerEntries, allocationLedgerEvents, allocationTransferLotMovements,
 } from "../db/schema.js";
-import type { AllocationGoalWithdrawal, AllocationProvenanceMovement } from "../verifier/allocation-provenance-evidence.js";
+import { calculateQualifiedGoalShares, type AllocationGoalWithdrawal, type AllocationProvenanceMovement } from "../verifier/allocation-provenance-evidence.js";
 
 /** Historical evidence only; never infer past transfers from current share lots. */
 export async function readAllocationProvenanceMovements(
@@ -84,5 +84,20 @@ export async function readAllocationGoalWithdrawals(
   return rows.map(row=>{
     if (!row.goalId || BigInt(row.shares) >= 0n) throw new Error("Invalid goal withdrawal evidence");
     return {entryId:row.entryId,at:row.at,goalId:row.goalId,shares:-BigInt(row.shares)};
+  });
+}
+
+/** Read-only qualification for a single goal/epoch. Does not award rewards. */
+export async function readQualifiedGoalShares(
+  db: KeptDatabase,
+  input: {userId:string;goalId:string;startAt:Date;endAt:Date},
+): Promise<bigint> {
+  const [movements,withdrawals] = await Promise.all([
+    readAllocationProvenanceMovements(db,input),
+    readAllocationGoalWithdrawals(db,input),
+  ]);
+  return calculateQualifiedGoalShares({
+    goalId:input.goalId,startAt:input.startAt,endAt:input.endAt,
+    movements,withdrawals,
   });
 }
