@@ -317,7 +317,7 @@ interface DashboardPageProps {
       string | null;
 
       readonly onClaim:
-      () => void;
+      () => Promise<void>;
 
     };
 
