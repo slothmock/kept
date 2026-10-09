@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.github
+.env
+.env.*
+!.env.example
+dist
+**/dist
+coverage
+**/coverage
+packages/contracts/lib
+packages/contracts/out
+packages/contracts/cache
