@@ -57,6 +57,8 @@ export interface AuthenticatedIdentity {
 export interface ApiDependencies {
   readonly chainId: number;
 
+  readonly resendWaitlist?: (email: string) => Promise<void>;
+
   readonly authenticate: (
     authorization: string | undefined,
   ) => Promise<AuthenticatedIdentity | null>;
@@ -1334,15 +1336,12 @@ export function buildApp(
               request.body,
             );
 
-          await dependencies
-            .persistence
-            .joinWaitlist({
-              email:
-                requireString(
-                  body,
-                  "email",
-                ),
-            });
+          const email = requireString(body, "email");
+          if (dependencies.resendWaitlist) {
+            await dependencies.resendWaitlist(email);
+          } else {
+            await dependencies.persistence.joinWaitlist({ email });
+          }
 
           return reply
             .code(204)
