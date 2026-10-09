@@ -87,6 +87,30 @@ jobs:
       - run: npm --workspace @kept/web run lint
       - run: npm --workspace @kept/web run build
 
+  app:
+    name: App checks
+    runs-on: ubuntu-latest
+    needs:
+      - typecheck
+      - unit
+      - integration
+      - web
+    if: ${{ always() }}
+    steps:
+      - name: Verify parallel app checks
+        env:
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          UNIT_RESULT: ${{ needs.unit.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          WEB_RESULT: ${{ needs.web.result }}
+        run: |
+          for result in "$TYPECHECK_RESULT" "$UNIT_RESULT" "$INTEGRATION_RESULT" "$WEB_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "App checks failed or did not complete: $result"
+              exit 1
+            fi
+          done
+
   contracts:
     name: Contract tests
     runs-on: ubuntu-latest
