@@ -23,7 +23,8 @@ contract MonadAaveForkTest is Test {
     function testFork_MonadUSDCVaultAaveSupplyAndWithdrawal() public {
         string memory rpc = vm.envOr("MONAD_RPC_URL", string(""));
         vm.skip(bytes(rpc).length == 0, "MONAD_RPC_URL is required for the Monad Aave fork profile");
-        vm.createSelectFork(rpc);
+        uint256 forkId = vm.createSelectFork(rpc);
+        assertEq(vm.activeFork(), forkId);
 
         _assertProtocolConfiguration();
 
@@ -55,7 +56,7 @@ contract MonadAaveForkTest is Test {
     function _deposit(KeptSavingsVault vault, AaveUSDCStrategy strategy) internal returns (uint256 amount) {
         amount = 10e6;
         deal(USDC, address(this), amount, true);
-        IERC20(USDC).approve(address(vault), amount);
+        assertTrue(IERC20(USDC).approve(address(vault), amount));
         uint256 reserveCashBefore = IERC20(USDC).balanceOf(A_USDC);
         uint256 shares = vault.deposit(amount, address(this));
         assertGt(shares, 0);
@@ -85,12 +86,15 @@ contract MonadAaveForkTest is Test {
     function _redeemAll(KeptSavingsVault vault, AaveUSDCStrategy strategy, address feeRecipient, uint256 grossAssets)
         internal
     {
-        vault.withdraw(4e6, address(this), address(this));
+        uint256 burnedShares = vault.withdraw(4e6, address(this), address(this));
+        assertGt(burnedShares, 0);
         assertEq(IERC20(USDC).balanceOf(address(this)), 4e6);
-        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+        uint256 userRedeemedAssets = vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+        assertGt(userRedeemedAssets, 0);
         uint256 feeRecipientShares = vault.balanceOf(feeRecipient);
         vm.prank(feeRecipient);
-        vault.redeem(feeRecipientShares, feeRecipient, feeRecipient);
+        uint256 feeRedeemedAssets = vault.redeem(feeRecipientShares, feeRecipient, feeRecipient);
+        assertGt(feeRedeemedAssets, 0);
         assertApproxEqAbs(IERC20(USDC).balanceOf(address(this)) + IERC20(USDC).balanceOf(feeRecipient), grossAssets, 10);
 
         assertEq(vault.balanceOf(address(this)), 0);
