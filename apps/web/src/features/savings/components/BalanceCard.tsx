@@ -1,12 +1,12 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  BarChart3,
+  Leaf,
   RefreshCw,
+  Target,
+  Wallet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -61,57 +61,46 @@ export function BalanceCard({
 }: BalanceCardProps) {
   const ready = positionState.kind === "ready";
 
-  const [refreshCooldownSeconds, setRefreshCooldownSeconds] =
-    useState(0);
+  const [refreshCooldownSeconds, setRefreshCooldownSeconds] = useState(0);
 
   useEffect(() => {
-    if (refreshCooldownSeconds <= 0) {
-      return;
-    }
+    if (refreshCooldownSeconds <= 0) return;
 
     const timeout = globalThis.setTimeout(() => {
-      setRefreshCooldownSeconds(
-        (current) => Math.max(0, current - 1),
-      );
+      setRefreshCooldownSeconds((current) => Math.max(0, current - 1));
     }, 1_000);
 
-    return () => {
-      globalThis.clearTimeout(timeout);
-    };
+    return () => globalThis.clearTimeout(timeout);
   }, [refreshCooldownSeconds]);
 
   const refreshDisabled =
-    transactionPending
-    || refreshCooldownSeconds > 0
-    || positionState.kind === "loading"
-    || savingsPerformanceState.kind === "loading"
-    || savingsPerformanceState.kind === "synchronizing";
+    transactionPending ||
+    refreshCooldownSeconds > 0 ||
+    positionState.kind === "loading" ||
+    savingsPerformanceState.kind === "loading" ||
+    savingsPerformanceState.kind === "synchronizing";
 
   const handleRefresh = () => {
-    if (refreshDisabled) {
-      return;
-    }
-
+    if (refreshDisabled) return;
     setRefreshCooldownSeconds(10);
     void onRefresh();
   };
 
   const canWithdraw =
-    ready
-    && (
-      positionState.position.withdrawableAssets > 0n
-      || positionState.position.usdcBalance > 0n
-    );
+    ready &&
+    (positionState.position.withdrawableAssets > 0n ||
+      positionState.position.usdcBalance > 0n);
 
   const earnings =
     savingsPerformanceState.kind === "ready"
       ? savingsPerformanceState.earningsAssets
       : null;
 
-  const totalBalance =
-    ready
-      ? positionState.position.assets + positionState.position.usdcBalance
-      : null;
+  // Total balance includes external wallet cash as well as vault assets.
+  // Don't mislabel the combined amount as an entirely yield-bearing balance.
+  const totalBalance = ready
+    ? positionState.position.assets + positionState.position.usdcBalance
+    : null;
 
   const netApy =
     marketStatusState?.kind === "ready"
@@ -120,151 +109,114 @@ export function BalanceCard({
 
   return (
     <section
-      className="overflow-hidden rounded-xl bg-balance-surface text-balance-foreground"
+      className="overflow-hidden rounded-2xl bg-balance-surface text-balance-foreground shadow-sm"
       aria-labelledby="balance-heading"
     >
-      <div className="p-6 sm:p-8">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+      <div className="space-y-7 p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <p
+              <h2
                 id="balance-heading"
-                className="text-caption font-medium text-balance-foreground/75"
+                className="text-sm font-medium text-balance-foreground/75"
               >
                 Total balance
-              </p>
-
+              </h2>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 disabled={refreshDisabled}
                 onClick={handleRefresh}
-                className="text-balance-foreground/70 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-balance-foreground/40"
+                className="border border-white/20 text-balance-foreground/75 hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-balance-foreground/40"
                 aria-label={
                   refreshCooldownSeconds > 0
                     ? `Refresh available in ${refreshCooldownSeconds} seconds`
                     : "Refresh balance"
                 }
               >
-                <RefreshCw
-                  className={
-                    refreshCooldownSeconds > 0
-                      ? "size-3.5 animate-spin"
-                      : "size-3.5"
-                  }
-                />
+                <RefreshCw className={`size-3.5 ${refreshCooldownSeconds > 0 ? "animate-spin" : ""}`} />
               </Button>
             </div>
 
             {positionState.kind === "loading" ? (
-              <Skeleton className="mt-3 h-12 w-52 bg-white/15" />
+              <Skeleton className="mt-4 h-12 w-56 bg-white/15" />
             ) : (
-              <p className="mt-2 text-balance font-semibold tracking-tight tabular-nums">
+              <p className="mt-3 break-words text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
                 {totalBalance !== null
                   ? `${formatUsdc(totalBalance)} USDC`
                   : "—"}
               </p>
             )}
+
+            {ready ? (
+              <p className="mt-3 text-sm text-balance-foreground/70">
+                {formatUsdc(positionState.position.assets)} USDC currently earning yield
+              </p>
+            ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {netApy && ready ? (
-              <span className="rounded-full bg-success-surface px-3 py-1.5 text-caption font-medium text-success">
-                {formatUsdc(positionState.position.assets)} USDC earning {netApy}% APY
-              </span>
-            ) : null}
+          {netApy && ready ? (
+            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200/25 bg-white/10 px-4 py-2 text-sm font-semibold text-balance-foreground">
+              <Leaf aria-hidden="true" className="size-4 text-emerald-200" />
+              {netApy}% APY
+            </span>
+          ) : null}
+        </div>
 
-            {showActions ? (
-              <>
-                <Button
-                  disabled={!ready || transactionPending}
-                  onClick={onAddMoney}
-                  className="bg-surface text-foreground hover:bg-accent disabled:bg-white/10 disabled:text-white/45"
-                >
-                  <ArrowDownToLine className="size-4" />
-                  Add money
-                </Button>
-
-                <Button
-                  variant="outline"
-                  disabled={!canWithdraw || transactionPending}
-                  onClick={onWithdraw}
-                  className="border-white/25 bg-transparent text-balance-foreground hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-white/35"
-                >
-                  <ArrowUpFromLine className="size-4" />
-                  Withdraw
-                </Button>
-              </>
-            ) : null}
+        <div className="grid gap-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 sm:grid-cols-3">
+          <div className="flex min-w-0 items-center gap-3 p-4 sm:p-5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+              <Wallet aria-hidden="true" className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-balance-foreground/70">Available cash</p>
+              <p className="mt-1 break-words text-base font-semibold tabular-nums">
+                {ready
+                  ? `${formatUsdc(positionState.position.usdcBalance)} USDC`
+                  : "—"}
+              </p>
+            </div>
+          </div>
+          <div className="flex min-w-0 items-center gap-3 border-t border-white/10 p-4 sm:border-l sm:border-t-0 sm:p-5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+              <Target aria-hidden="true" className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-balance-foreground/70">Assigned to goals</p>
+              <p className="mt-1 break-words text-base font-semibold tabular-nums">
+                {allocatedGoalSavings === null
+                  ? "—"
+                  : `${formatUsdc(allocatedGoalSavings)} USDC`}
+              </p>
+            </div>
+          </div>
+          <div className="flex min-w-0 items-center gap-3 border-t border-white/10 p-4 sm:border-l sm:border-t-0 sm:p-5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+              <BarChart3 aria-hidden="true" className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-balance-foreground/70">Net earnings</p>
+              {savingsPerformanceState.kind === "loading" ? (
+                <Skeleton className="mt-2 h-6 w-24 bg-white/15" />
+              ) : savingsPerformanceState.kind === "synchronizing" ? (
+                <p className="mt-1 text-sm font-medium text-balance-foreground/75">
+                  {savingsPerformanceState.progressPercent === null
+                    ? "Synchronising…"
+                    : `Synchronising… ${Math.floor(savingsPerformanceState.progressPercent)}%`}
+                </p>
+              ) : savingsPerformanceState.kind === "ready" ? (
+                <p className="mt-1 break-words text-base font-semibold tabular-nums">
+                  {earnings !== null && earnings > 0n ? "+" : ""}
+                  {formatUsdc(earnings ?? 0n)} USDC
+                </p>
+              ) : (
+                <p className="mt-1 text-base font-semibold">—</p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 border-t border-white/15 pt-5 sm:grid-cols-3">
-          <div>
-            <p className="text-caption text-balance-foreground/65">
-              Available cash
-            </p>
-            <p className="mt-1 text-body font-semibold tabular-nums">
-              {ready
-                ? `${formatUsdc(positionState.position.usdcBalance)} USDC`
-                : "—"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-caption text-balance-foreground/65">
-              Saving toward goals
-            </p>
-            <p className="mt-1 text-body font-semibold tabular-nums">
-              {allocatedGoalSavings === null
-                ? "—"
-                : `${formatUsdc(allocatedGoalSavings)} USDC`}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-caption text-balance-foreground/65">
-              Earned so far
-            </p>
-
-            {savingsPerformanceState.kind === "loading" ? (
-              <Skeleton className="mt-2 h-6 w-24 bg-white/15" />
-            ) : savingsPerformanceState.kind === "synchronizing" ? (
-              <p className="mt-1 text-caption font-medium text-balance-foreground/75">
-                {savingsPerformanceState.progressPercent === null
-                  ? "Synchronising…"
-                  : `Synchronising… ${Math.floor(
-                    savingsPerformanceState.progressPercent,
-                  )}%`}
-              </p>
-            ) : savingsPerformanceState.kind === "ready" ? (
-              <p className="mt-1 text-body font-semibold tabular-nums">
-                {earnings !== null && earnings > 0n ? "+" : ""}
-                {formatUsdc(earnings ?? 0n)} USDC
-              </p>
-            ) : (
-              <p className="mt-1 text-body font-semibold">—</p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-3 border-t border-white/15 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            {stagingFaucetAvailable ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={stagingFaucetClaiming || transactionPending}
-                onClick={onClaimStagingFaucet}
-                className="text-balance-foreground/75 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-white/35"
-              >
-                {stagingFaucetClaiming
-                  ? "Getting test funds…"
-                  : "Get test funds"}
-              </Button>
-            ) : null}
-          </div>
-
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             disabled={!ready || transactionPending}
             onClick={onAddToSavings}
@@ -273,25 +225,50 @@ export function BalanceCard({
             <ArrowDownToLine className="size-4" />
             Add to savings
           </Button>
+          <Button
+            variant="outline"
+            disabled={!canWithdraw || transactionPending}
+            onClick={onWithdraw}
+            className="border-white/30 bg-transparent text-balance-foreground hover:bg-white/10 hover:text-balance-foreground disabled:border-white/10 disabled:bg-transparent disabled:text-white/35"
+          >
+            <ArrowUpFromLine className="size-4" />
+            Withdraw
+          </Button>
+          {showActions ? (
+            <Button
+              variant="ghost"
+              disabled={!ready || transactionPending}
+              onClick={onAddMoney}
+              className="text-balance-foreground/80 hover:bg-white/10 hover:text-balance-foreground"
+            >
+              Add money
+            </Button>
+          ) : null}
+          {stagingFaucetAvailable ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={stagingFaucetClaiming || transactionPending}
+              onClick={onClaimStagingFaucet}
+              className="text-balance-foreground/70 hover:bg-white/10 hover:text-balance-foreground disabled:bg-transparent disabled:text-white/35"
+            >
+              {stagingFaucetClaiming ? "Getting test funds…" : "Get test funds"}
+            </Button>
+          ) : null}
         </div>
 
         {stagingFaucetStatus ? (
-          <p
-            className="mt-4 text-caption text-balance-foreground/75"
-            aria-live="polite"
-          >
+          <p className="text-sm text-balance-foreground/75" aria-live="polite">
             {stagingFaucetStatus}
           </p>
         ) : null}
-
         {stagingFaucetError ? (
-          <p className="mt-4 text-caption text-red-100" role="alert">
+          <p className="text-sm text-red-100" role="alert">
             {stagingFaucetError}
           </p>
         ) : null}
-
         {positionState.kind === "error" ? (
-          <p className="mt-4 text-caption text-red-100">
+          <p className="text-sm text-red-100" role="alert">
             {positionState.message}
           </p>
         ) : null}
