@@ -198,8 +198,8 @@ export function CommitmentsView({
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
-          <CardContent className="p-6">
+        <Card className="col-span-2 shadow-none sm:col-span-1">
+          <CardContent className="p-4 sm:p-6">
             <p className="text-caption font-medium text-muted-foreground">
               Completion rate
             </p>
