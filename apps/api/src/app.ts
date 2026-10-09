@@ -2284,9 +2284,32 @@ export function buildApp(
             throw new NotFoundError("Privy embedded wallet");
           }
 
-          return dependencies.stagingFaucet.claim(
+          const claim = await dependencies.stagingFaucet.claim(
             auth.identity.wallet,
           );
+
+          // Only a confirmed server-signed faucet mint can create this entry.
+          // Never trust a browser-supplied funding transaction as evidence.
+          try {
+            await dependencies.persistence.recordTransaction({
+              userId: auth.user.id,
+              idempotencyKey: `staging-faucet:${claim.transactionHash.toLowerCase()}`,
+              type: "CRYPTO_FUNDING",
+              amountAtomic: claim.amountAtomic,
+              asset: "USDC",
+              description: "Test funds added (faucet)",
+              chainId: BigInt(dependencies.chainId),
+              transactionHash: claim.transactionHash,
+              externalReference: claim.transactionHash,
+            });
+          } catch (error) {
+            // Minting is irreversible. A history write failure must not make
+            // the caller retry a successful faucet mint as though it failed.
+            request.log.error({ error, transactionHash: claim.transactionHash },
+              "Confirmed staging faucet mint could not be recorded in activity");
+          }
+
+          return claim;
         },
       ),
   );
