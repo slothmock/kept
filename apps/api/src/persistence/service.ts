@@ -990,6 +990,7 @@ export class KeptPersistenceService {
         eventId: allocationLedgerEvents.id,
         eventKind: allocationLedgerEvents.eventKind,
         shareDeltaAtomic: allocationLedgerEntries.shareDeltaAtomic,
+        transferAssetsAtomic: allocationLedgerEvents.transferAssetsAtomic,
         createdAt: allocationLedgerEvents.createdAt,
       })
       .from(allocationLedgerEntries)
@@ -1283,6 +1284,7 @@ export class KeptPersistenceService {
       readonly to: `GOAL:${string}` | "UNASSIGNED";
       readonly shares: bigint;
       readonly idempotencyKey: string;
+      readonly transferAssetsAtomic?: bigint;
     },
   ): Promise<void> {
     const ledger = new AllocationLedgerStore(this.db);
@@ -1291,6 +1293,7 @@ export class KeptPersistenceService {
     await ledger.transferInTransaction(transaction, {
       userId: input.userId, from: input.from, to: input.to,
       shares: input.shares, key: input.idempotencyKey,
+      transferAssetsAtomic: input.transferAssetsAtomic,
     });
     const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
     const balances = await ledger.getBalancesInTransaction(transaction, input.userId);
@@ -1464,6 +1467,8 @@ export class KeptPersistenceService {
     const reason = requireNonBlank(input.reason, "reason");
     const { idempotencyKey, ...request } = input;
     await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
+    const transferAssetsAtomic = delta === 0n ? 0n :
+      await this.vaultShares!.reader.convertToAssets(delta > 0n ? delta : -delta);
     return this.executeIdempotent(
       input.userId,
       "goal:share-allocation:append",
@@ -1487,6 +1492,7 @@ export class KeptPersistenceService {
             from:delta>0n?"UNASSIGNED":`GOAL:${input.goalId}`,
             to:delta>0n?`GOAL:${input.goalId}`:"UNASSIGNED",
             shares:delta>0n?delta:-delta,key:`goal-allocation:${idempotencyKey}`,
+            transferAssetsAtomic,
           });
           return this.toGoalAllocationDto(input.goalId,totals.goal+delta,totals.allocated+delta,shares);
         }
@@ -1523,6 +1529,7 @@ export class KeptPersistenceService {
             to: delta > 0n ? `GOAL:${input.goalId}` : "UNASSIGNED",
             shares: delta > 0n ? delta : -delta,
             idempotencyKey: `goal-allocation:${idempotencyKey}`,
+            transferAssetsAtomic,
           });
         }
         return this.toGoalAllocationDto(input.goalId, nextGoalAllocation, nextTotalAllocation, shares);
@@ -1560,6 +1567,8 @@ export class KeptPersistenceService {
     const { idempotencyKey, ...request } = input;
 
     await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
+    const transferAssetsAtomic =
+      await this.vaultShares!.reader.convertToAssets(amount);
     return this.executeIdempotent(
       input.userId,
       "goal:share-reallocation",
@@ -1607,6 +1616,7 @@ export class KeptPersistenceService {
           await ledger.transferInTransaction(transaction,{
             userId:input.userId,from:`GOAL:${input.fromGoalId}`,to:`GOAL:${input.toGoalId}`,
             shares:amount,key:`goal-reallocation:${idempotencyKey}`,
+            transferAssetsAtomic,
           });
           return {
             from:this.toGoalAllocationDto(input.fromGoalId,from.goal-amount,from.allocated,shares),
@@ -1702,6 +1712,7 @@ export class KeptPersistenceService {
           to: `GOAL:${input.toGoalId}`,
           shares: amount,
           idempotencyKey: `goal-reallocation:${idempotencyKey}`,
+          transferAssetsAtomic,
         });
 
         return {
