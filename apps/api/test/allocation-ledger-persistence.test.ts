@@ -155,6 +155,66 @@ describe.sequential("allocation ledger persistence", () => {
     });
   });
 
+  it("reconciles withdrawals across unassigned and goals without leaving phantom provenance lots",async()=>{
+    const userId=await user();
+    const firstGoal=await goal(userId);
+    const secondGoal=await goal(userId);
+    await connection.db.transaction(tx=>store.initializeEmptyAccountInTransaction(tx,{
+      userId,key:"clean-start:empty-account",
+    }));
+    await store.recordVaultChange({userId,shares:100n,kind:"VAULT_CREDIT",key:"starting-credit"});
+    await store.transfer({userId,from:"UNASSIGNED",to:`GOAL:${firstGoal}`,shares:30n,key:"first"});
+    await store.transfer({userId,from:"UNASSIGNED",to:`GOAL:${secondGoal}`,shares:50n,key:"second"});
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED:20n,[`GOAL:${firstGoal}`]:30n,[`GOAL:${secondGoal}`]:50n,
+    });
+    // Remove 45: 20 from unassigned, then 25 proportionally from goals.
+    await store.reconcileToVaultShares({userId,liveShares:55n,key:"withdraw-45"});
+    const result=await store.getBalances(userId);
+    expect(result.UNASSIGNED).toBe(0n);
+    expect((result[`GOAL:${firstGoal}`]??0n)+(result[`GOAL:${secondGoal}`]??0n)).toBe(55n);
+    expect(Object.values(result).reduce((n,value)=>n+value,0n)).toBe(55n);
+    const lotTotals=await connection.pool.query<{bucket_kind:string;goal_id:string|null;total:string}>(
+      `SELECT b.bucket_kind,b.goal_id,coalesce(sum(l.shares_atomic),0)::text AS total
+       FROM allocation_buckets b LEFT JOIN allocation_share_lots l ON l.bucket_id=b.id
+       WHERE b.user_id=$1 GROUP BY b.id,b.bucket_kind,b.goal_id`,[userId],
+    );
+    for (const row of lotTotals.rows) {
+      const key=row.bucket_kind==="UNASSIGNED"?"UNASSIGNED":`GOAL:${row.goal_id}`;
+      expect(BigInt(row.total)).toBe(result[key]??0n);
+    }
+    const before=await connection.pool.query<{count:string}>(
+      "SELECT count(*)::text AS count FROM allocation_ledger_events WHERE user_id=$1",[userId],
+    );
+    await store.reconcileToVaultShares({userId,liveShares:55n,key:"withdraw-45-replay"});
+    const after=await connection.pool.query<{count:string}>(
+      "SELECT count(*)::text AS count FROM allocation_ledger_events WHERE user_id=$1",[userId],
+    );
+    expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
+  });
+
+  it("rolls back impossible withdrawal reconciliation, including share lots",async()=>{
+    const userId=await user();
+    const goalId=await goal(userId);
+    await connection.db.transaction(tx=>store.initializeEmptyAccountInTransaction(tx,{
+      userId,key:"clean-start:empty-account",
+    }));
+    await store.recordVaultChange({userId,shares:25n,kind:"VAULT_CREDIT",key:"initial"});
+    await store.transfer({userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:20n,key:"assign"});
+    const before=await store.getBalances(userId);
+    const lotsBefore=await connection.pool.query<{id:string;shares_atomic:string}>(
+      "SELECT id,shares_atomic::text FROM allocation_share_lots WHERE user_id=$1 ORDER BY id",[userId],
+    );
+    await expect(store.reconcileToVaultShares({
+      userId,liveShares:-1n,key:"invalid-withdrawal",
+    })).rejects.toThrow();
+    expect(await store.getBalances(userId)).toEqual(before);
+    const lotsAfter=await connection.pool.query<{id:string;shares_atomic:string}>(
+      "SELECT id,shares_atomic::text FROM allocation_share_lots WHERE user_id=$1 ORDER BY id",[userId],
+    );
+    expect(lotsAfter.rows).toEqual(lotsBefore.rows);
+  });
+
   it("credits unassigned shares and atomically moves shares into a goal", async () => {
     const userId = await user();
     const goalId = await goal(userId);
