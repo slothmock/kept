@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { KeptDatabase } from "../db/client.js";
 import {
@@ -78,7 +78,7 @@ export async function readAllocationGoalWithdrawals(
       sql`${allocationLedgerEvents.eventKind} IN ('VAULT_DEBIT','RECONCILIATION_DEBIT')`,
       sql`${allocationLedgerEntries.shareDeltaAtomic} < 0`,
       gte(allocationLedgerEvents.createdAt,input.startAt),
-      lte(allocationLedgerEvents.createdAt,input.endAt),
+      lt(allocationLedgerEvents.createdAt,input.endAt),
     ))
     .orderBy(asc(allocationLedgerEvents.createdAt),asc(allocationLedgerEntries.id));
   return rows.map(row=>{
