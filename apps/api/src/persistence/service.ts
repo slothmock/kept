@@ -742,6 +742,22 @@ export class KeptPersistenceService {
       );
     }
 
+    // A newly registered wallet can enter the clean-start ledger only when
+    // its vault position is independently verified as empty. Never infer an
+    // opening position or import historical goal allocations.
+    if (this.vaultShares && this.vaultShares.chainId === chainId) {
+      const { shares } = await this.readVaultShares(address);
+      if (shares === 0n) {
+        const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+        if (legacy.length === 0) {
+          await this.initializeFreshAllocationLedger({
+            userId: input.userId,
+            walletAddress: address,
+          });
+        }
+      }
+    }
+
     return mapWallet(created);
   }
 
