@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useState,
 } from "react";
 import type {
@@ -15,6 +16,8 @@ import {
 import {
   diagnostics,
 } from "@/lib/diagnostics";
+
+export const FAUCET_NOTICE_DURATION_MS = 8_000;
 
 interface UseStagingFaucetControllerInput {
   readonly api:
@@ -75,6 +78,18 @@ export function useStagingFaucetController({
 
   const available =
     chainId === 10_143;
+
+  const clearNotice = useCallback(() => {
+    setStatus(null);
+    setError(null);
+  }, []);
+
+  // Only completed notices expire: progress stays until a claim settles.
+  useEffect(() => {
+    if (claiming || (!error && (!status || status.startsWith("Adding test funds")))) return;
+    const timeout = setTimeout(clearNotice, FAUCET_NOTICE_DURATION_MS);
+    return () => clearTimeout(timeout);
+  }, [status, error, claiming, clearNotice]);
 
   const claim =
     useCallback(
