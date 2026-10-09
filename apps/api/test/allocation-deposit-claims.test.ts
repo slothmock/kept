@@ -266,6 +266,39 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     })).netSavedAtomic).toBe(5n);
   });
 
+  it("evaluates ledger history after a withdrawal without mutating provenance",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    const startAt=new Date(Date.now()-60_000);
+    await ledger.claimIndexedDeposit(claim);
+    await ledger.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:15n,key:"e2e-allocate",
+    });
+    await ledger.reconcileToVaultShares({userId,liveShares:7n,key:"e2e-withdraw"});
+    const before=await ledger.getBalances(userId);
+    const source=new AllocationWeeklySavingsEvidenceSource({
+      db:connection.db,chainId,
+      repository:{findPrimaryWalletForOwnerOnChain:async()=>({address:claim.ownerAddress})},
+      vaultShares:{readShares:async()=>7n,convertToAssets:async(shares:bigint)=>shares},
+      vaultActivity:{readActivity:async()=>({
+        depositedAssets:20n,withdrawnAssets:13n,netAssets:7n,
+      })},
+    });
+    const result=await source.evaluatePeriod({
+      userId,goalId,startAt,endAt:new Date(Date.now()+60_000),
+    });
+    expect(result.netSavedAtomic).toBe(7n);
+    expect(result.averageEligibleBalanceAtomic).toBeGreaterThanOrEqual(0n);
+    expect(await ledger.getBalances(userId)).toEqual(before);
+    expect(await readQualifiedGoalShares(connection.db,{
+      userId,goalId,startAt,endAt:new Date(Date.now()+60_000),
+    })).toBe(7n);
+  });
+
   it("does not requalify the same deposit in a later commitment after goal recycling",async()=>{
     const {userId,claim}=await fixture();
     const goalId=randomUUID();

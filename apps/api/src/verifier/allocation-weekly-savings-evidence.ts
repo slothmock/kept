@@ -33,13 +33,21 @@ export class AllocationWeeklySavingsEvidenceSource implements WeeklySavingsEvide
       input.userId,this.dependencies.chainId,
     );
     if(!wallet)throw new Error("User has no primary wallet for the configured chain");
-    const [history,qualifiedShares,activity]=await Promise.all([
-      readGoalLedgerBalanceHistory(this.dependencies.db,input),
-      readQualifiedGoalShares(this.dependencies.db,input),
+    // Historical ledger balances, provenance movements and goal withdrawals
+    // must observe the same committed snapshot. READ COMMITTED (the default)
+    // permits a concurrent transfer between these queries, producing evidence
+    // that never existed at one point in time.
+    const [ledgerEvidence,activity]=await Promise.all([
+      this.dependencies.db.transaction(async tx => {
+        const history=await readGoalLedgerBalanceHistory(tx,input);
+        const qualifiedShares=await readQualifiedGoalShares(tx,input);
+        return {history,qualifiedShares};
+      },{isolationLevel:"repeatable read",readOnly:true}),
       this.dependencies.vaultActivity.readActivity({
         account:wallet.address,startAt:input.startAt,endAt:input.endAt,
       }),
     ]);
+    const {history,qualifiedShares}=ledgerEvidence;
     const averageShares=calculateAverageGoalShares({
       startAt:input.startAt,endAt:input.endAt,
       openingShares:history.openingShares,deltas:history.deltas,
