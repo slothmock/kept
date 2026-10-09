@@ -266,6 +266,40 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     })).netSavedAtomic).toBe(5n);
   });
 
+  it("does not requalify the same deposit in a later commitment after goal recycling",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    const epochStart=new Date(Date.now()-60_000);
+    await ledger.claimIndexedDeposit(claim);
+    await ledger.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:20n,key:"first-week-allocation",
+    });
+    const epochBoundary=new Date(Date.now()+1_000);
+    expect(await readQualifiedGoalShares(connection.db,{
+      userId,goalId,startAt:epochStart,endAt:epochBoundary,
+    })).toBe(20n);
+    await ledger.transfer({
+      userId,from:`GOAL:${goalId}`,to:"UNASSIGNED",shares:20n,key:"recycle-out",
+    });
+    await ledger.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:20n,key:"recycle-back",
+    });
+    expect(await readQualifiedGoalShares(connection.db,{
+      userId,goalId,startAt:epochBoundary,endAt:new Date(Date.now()+60_000),
+    })).toBe(0n);
+    const lots=await connection.pool.query<{was_ever_goal_allocated:boolean;origin_kind:string}>(
+      "SELECT ever_goal_allocated AS was_ever_goal_allocated,origin_kind FROM allocation_share_lots WHERE user_id=$1",
+      [userId],
+    );
+    expect(lots.rows).toHaveLength(1);
+    expect(lots.rows[0]?.was_ever_goal_allocated).toBe(true);
+    expect(lots.rows[0]?.origin_kind).toBe("EXTERNAL_DEPOSIT");
+  });
+
   it("credits verified shares and lineage once across idempotent replay",async()=>{
     const {userId,claim}=await fixture();
     const first=await ledger.claimIndexedDeposit(claim);
