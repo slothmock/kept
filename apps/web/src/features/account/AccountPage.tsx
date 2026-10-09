@@ -305,6 +305,50 @@ export function AccountPage({
 
             <section className="space-y-3">
               <h2 className="text-h3 font-semibold tracking-tight">
+                Security & account
+              </h2>
+
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-5">
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <div>
+                      <p className="text-label font-medium">
+                        Sign out
+                      </p>
+
+                      <p className="mt-1 text-caption text-muted-foreground">
+                        End your current Kept session.
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={signOutPending}
+                      onClick={() => {
+                        void signOut();
+                      }}
+                    >
+                      <LogOut className="size-4" />
+                      {signOutPending
+                        ? "Signing out…"
+                        : "Sign out"}
+                    </Button>
+                  </div>
+
+                  {signOutError ? (
+                    <p
+                      className="py-3 text-caption text-destructive"
+                      role="alert"
+                    >
+                      {signOutError}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </section>
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
                 Wallet
               </h2>
 
@@ -349,50 +393,6 @@ export function AccountPage({
               </Card>
             </section>
 
-            <section className="space-y-3">
-              <h2 className="text-h3 font-semibold tracking-tight">
-                Security & account
-              </h2>
-
-              <Card className="shadow-none">
-                <CardContent className="divide-y divide-border p-5">
-                  <div className="flex items-center justify-between gap-4 py-3">
-                    <div>
-                      <p className="text-label font-medium">
-                        Sign out
-                      </p>
-
-                      <p className="mt-1 text-caption text-muted-foreground">
-                        End your current Kept session.
-                      </p>
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={signOutPending}
-                      onClick={() => {
-                        void signOut();
-                      }}
-                    >
-                      <LogOut className="size-4" />
-                      {signOutPending
-                        ? "Signing out…"
-                        : "Sign out"}
-                    </Button>
-                  </div>
-
-                  {signOutError ? (
-                    <p
-                      className="py-3 text-caption text-destructive"
-                      role="alert"
-                    >
-                      {signOutError}
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </section>
           </div>
 
           <div className="space-y-6">
