@@ -18,11 +18,36 @@ permissions:
   contents: read
 
 jobs:
-  app:
-    name: App checks
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  unit:
+    name: Parallel unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
 
+  integration:
+    name: Serial infrastructure tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: ghcr.io/knex/postgres:17-alpine
@@ -37,48 +62,38 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 15
-
     env:
       TEST_DATABASE_URL: postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22.22.2
           cache: npm
+      - run: npm ci
+      - run: npm run test:infrastructure
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Lint web app
-        run: npm --workspace @kept/web run lint
-
-      - name: Build web app
-        run: npm --workspace @kept/web run build
+  web:
+    name: Web lint and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace @kept/web run lint
+      - run: npm --workspace @kept/web run build
 
   contracts:
     name: Contract tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Test contracts
-        run: forge test --root packages/contracts
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge test --root packages/contracts
