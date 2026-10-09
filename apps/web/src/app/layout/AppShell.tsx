@@ -115,7 +115,7 @@ function PrimaryNavigation({
           >
             <Icon aria-hidden="true" className={desktop ? "size-4" : "size-5"} />
 
-            <span className={desktop ? undefined : "w-full truncate text-center text-[10px] leading-3 font-medium"}>
+            <span className={desktop ? undefined : "w-full truncate text-center text-[11px] leading-4 font-medium"}>
               {desktop ? item.label : (item.mobileLabel ?? item.label)}
             </span>
           </NavLink>
