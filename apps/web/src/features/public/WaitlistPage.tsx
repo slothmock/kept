@@ -65,6 +65,15 @@ export function WaitlistPage({
       string | null
     >(null);
 
+  const unsubscribeHref =
+    `mailto:support@keptfinance.app?subject=${encodeURIComponent(
+      "Kept waitlist unsubscribe request",
+    )}&body=${encodeURIComponent(
+      email.trim()
+        ? `Please remove ${email.trim()} from the Kept waitlist.`
+        : "Please remove my email address from the Kept waitlist.",
+    )}`;
+
   async function submit(
     event:
       FormEvent<HTMLFormElement>,
@@ -263,7 +272,14 @@ export function WaitlistPage({
               ) : null}
 
               <p className="mt-4 text-xs leading-5 text-muted-foreground">
-                We’ll use your email to send Kept launch and product availability updates. You can ask us to remove it at any time.
+                We’ll use your email to send Kept launch and product availability updates. You can{" "}
+                <a
+                  href={unsubscribeHref}
+                  className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+                >
+                  ask us
+                </a>{" "}
+                to remove it at any time.
               </p>
             </form>
           )}
