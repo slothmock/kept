@@ -164,6 +164,36 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:10n});
   });
 
+  it("preserves genuine deposit provenance on surviving lots after a withdrawal",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    expect((await ledger.claimIndexedDeposit(claim)).status).toBe("CREDITED");
+    await ledger.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:15n,key:"allocate",
+    });
+    await ledger.reconcileToVaultShares({userId,liveShares:12n,key:"withdraw-8"});
+    expect(await ledger.getBalances(userId)).toEqual({
+      UNASSIGNED:0n,[`GOAL:${goalId}`]:12n,
+    });
+    const lots=await connection.pool.query<{
+      origin_kind:string;origin_event_id:string;shares_atomic:string;
+    }>(
+      "SELECT origin_kind,origin_event_id,shares_atomic::text FROM allocation_share_lots WHERE user_id=$1",
+      [userId],
+    );
+    expect(lots.rows).toHaveLength(1);
+    expect(lots.rows[0]?.origin_kind).toBe("EXTERNAL_DEPOSIT");
+    expect(lots.rows[0]?.shares_atomic).toBe("12");
+    const claimRow=await connection.pool.query<{ledger_event_id:string}>(
+      "SELECT ledger_event_id FROM allocation_deposit_claims WHERE user_id=$1",[userId],
+    );
+    expect(lots.rows[0]?.origin_event_id).toBe(claimRow.rows[0]?.ledger_event_id);
+  });
+
   it("credits verified shares and lineage once across idempotent replay",async()=>{
     const {userId,claim}=await fixture();
     const first=await ledger.claimIndexedDeposit(claim);
