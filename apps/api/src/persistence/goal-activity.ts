@@ -3,6 +3,7 @@ export interface GoalLedgerMovement {
   readonly eventId: string;
   readonly eventKind: string;
   readonly shareDeltaAtomic: string;
+  readonly transferAssetsAtomic: string | null;
   readonly createdAt: Date;
 }
 
@@ -14,6 +15,7 @@ export function toGoalActivity(rows: readonly GoalLedgerMovement[]) {
       eventId: row.eventId,
       kind: BigInt(row.shareDeltaAtomic) > 0n ? "ADDED" as const : "REMOVED" as const,
       shareDeltaAtomic: row.shareDeltaAtomic,
+      amountAtomic: row.transferAssetsAtomic,
       createdAt: row.createdAt.toISOString(),
     }));
 }
