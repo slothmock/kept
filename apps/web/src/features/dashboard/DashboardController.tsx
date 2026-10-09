@@ -176,6 +176,11 @@ export function DashboardController({ session }: { readonly session: Session }) 
       [api],
     );
 
+  const loadGoalActivity = useCallback(
+    async (goalId: string) => api ? api.listGoalActivity(goalId) : [],
+    [api],
+  );
+
   const readSolanaFundingBalances =
     useCallback(
       async (
@@ -863,6 +868,7 @@ export function DashboardController({ session }: { readonly session: Session }) 
         loadRecentTransactions={
           loadRecentTransactions
         }
+        loadGoalActivity={loadGoalActivity}
 
         readSolanaFundingBalances={
           readSolanaFundingBalances
