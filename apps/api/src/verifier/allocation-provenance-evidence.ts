@@ -11,6 +11,14 @@ export interface AllocationProvenanceMovement {
   readonly verifiedFreshUnassigned: boolean;
 }
 
+/** Immutable vault withdrawal from a particular goal bucket. */
+export interface AllocationGoalWithdrawal {
+  readonly entryId: string;
+  readonly at: Date;
+  readonly goalId: string;
+  readonly shares: bigint;
+}
+
 /**
  * This model is deliberately not inferred from current share lots. It requires
  * immutable, historical, per-transfer source-lot evidence from persistence.
@@ -20,6 +28,7 @@ export function calculateQualifiedGoalShares(input: {
   readonly startAt: Date;
   readonly endAt: Date;
   readonly movements: readonly AllocationProvenanceMovement[];
+  readonly withdrawals?: readonly AllocationGoalWithdrawal[];
 }): bigint {
   const start = input.startAt.getTime();
   const end = input.endAt.getTime();
@@ -49,6 +58,19 @@ export function calculateQualifiedGoalShares(input: {
     // Any departure from the committed goal reduces retained progress, even if
     // the withdrawn shares were not themselves eligible for a new bonus.
     if (movement.source === goal) netOut += movement.shares;
+  }
+  const withdrawalIds = new Set<string>();
+  let lastWithdrawalTime = start;
+  for (const withdrawal of input.withdrawals ?? []) {
+    const time = withdrawal.at.getTime();
+    if (!Number.isFinite(time) || time < start || time > end || time < lastWithdrawalTime) {
+      throw new Error("Withdrawal history is incomplete or unordered");
+    }
+    if (withdrawalIds.has(withdrawal.entryId)) throw new Error("Duplicate withdrawal entry");
+    if (withdrawal.shares <= 0n) throw new Error("Invalid withdrawal amount");
+    withdrawalIds.add(withdrawal.entryId);
+    lastWithdrawalTime = time;
+    if (withdrawal.goalId === input.goalId) netOut += withdrawal.shares;
   }
   const retained = eligible - netOut;
   return retained > 0n ? retained : 0n;
