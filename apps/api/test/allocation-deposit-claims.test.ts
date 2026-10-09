@@ -278,10 +278,14 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     await ledger.transfer({
       userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:20n,key:"first-week-allocation",
     });
-    const epochBoundary=new Date(Date.now()+1_000);
+    // Separate the periods using recorded wall-clock time rather than a
+    // future boundary: otherwise both transfers would land in week one.
+    await new Promise(resolve=>setTimeout(resolve,15));
+    const epochBoundary=new Date();
     expect(await readQualifiedGoalShares(connection.db,{
       userId,goalId,startAt:epochStart,endAt:epochBoundary,
     })).toBe(20n);
+    await new Promise(resolve=>setTimeout(resolve,15));
     await ledger.transfer({
       userId,from:`GOAL:${goalId}`,to:"UNASSIGNED",shares:20n,key:"recycle-out",
     });
