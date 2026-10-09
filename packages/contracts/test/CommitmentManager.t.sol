@@ -95,6 +95,13 @@ contract CommitmentManagerTest is Test {
         assertFalse(rewardClaimed);
     }
 
+    function test_CommitmentCreationRejectsTimestampBeyondUint64() public {
+        vm.warp(uint256(type(uint64).max) + 1);
+        vm.prank(alice);
+        vm.expectRevert();
+        manager.createCommitment(keccak256("timestamp-overflow"), type(uint64).max, type(uint64).max);
+    }
+
     function test_DuplicateReferenceFails() public {
         (, bytes32 referenceId) = _createAliceCommitment();
 
