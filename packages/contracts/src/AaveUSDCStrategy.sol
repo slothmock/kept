@@ -46,11 +46,14 @@ contract AaveUSDCStrategy is IYieldStrategy {
     IAaveAToken public immutable aToken;
 
     modifier onlyVault() {
+        _onlyVault();
+        _;
+    }
+
+    function _onlyVault() internal view {
         if (msg.sender != vault) {
             revert UnauthorizedVaultCaller(msg.sender);
         }
-
-        _;
     }
 
     constructor(address vault_, address asset_, address aavePool_, address aToken_) {
