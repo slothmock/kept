@@ -564,6 +564,11 @@ export class KeptPersistenceService {
       readonly vaultAddress?: string;
     },
     private readonly commitmentWindowOverrideSeconds?: number,
+    private readonly depositIndexStatus?: () => {
+      readonly ready: boolean;
+      readonly currentBlock: bigint | null;
+      readonly targetBlock: bigint | null;
+    },
   ) { }
 
   async joinWaitlist(input: {
@@ -1256,6 +1261,29 @@ export class KeptPersistenceService {
     return rows.rows.length === 1;
   }
 
+  /**
+   * Resolve verified deposits before entering the goal transaction. A nested
+   * claim transaction would deadlock on the same user-wide ledger lock.
+   * Missing/stale index evidence fails closed; balance reads never mint shares.
+   */
+  private async synchronizeCleanStartDeposits(userId: string, walletAddress: string): Promise<void> {
+    if (!this.vaultShares?.vaultAddress || !this.depositIndexStatus) return;
+    const initialized = await this.db.transaction(async tx => {
+      return this.isCleanStartLedger(tx,userId);
+    });
+    if (!initialized) return;
+    const {shares} = await this.readVaultShares(walletAddress);
+    const current = await new AllocationLedgerStore(this.db).getBalances(userId);
+    const accounted = Object.values(current).reduce((sum,value)=>sum+value,0n);
+    if (shares <= accounted) return;
+    const status = this.depositIndexStatus();
+    if (!status.ready || status.currentBlock === null ||
+        status.targetBlock === null || status.currentBlock < status.targetBlock) {
+      throw new Error("Vault deposit attribution pending: activity index is synchronizing");
+    }
+    await this.claimVerifiedVaultDeposits({userId,walletAddress});
+  }
+
   private async cleanLedgerBalances(tx: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0], userId: string, shares: bigint) {
     const ledger = new AllocationLedgerStore(this.db);
     const before = await ledger.getBalancesInTransaction(tx,userId);
@@ -1285,6 +1313,7 @@ export class KeptPersistenceService {
     goalId: string,
     walletAddress: string,
   ): Promise<GoalAllocationDto | null> {
+    await this.synchronizeCleanStartDeposits(userId,walletAddress);
     const { shares } =
       await this.readVaultShares(walletAddress);
 
@@ -1344,6 +1373,7 @@ export class KeptPersistenceService {
     const delta = requireSignedAtomicShareDelta(input.shareDeltaAtomic);
     const reason = requireNonBlank(input.reason, "reason");
     const { idempotencyKey, ...request } = input;
+    await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
     return this.executeIdempotent(
       input.userId,
       "goal:share-allocation:append",
@@ -1439,6 +1469,7 @@ export class KeptPersistenceService {
 
     const { idempotencyKey, ...request } = input;
 
+    await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
     return this.executeIdempotent(
       input.userId,
       "goal:share-reallocation",
