@@ -107,7 +107,7 @@ export class AllocationLedgerStore {
 
   async transfer(input: {
     userId: string; from: AllocationBucketKey; to: AllocationBucketKey;
-    shares: bigint; key: string;
+    shares: bigint; key: string; transferAssetsAtomic?: bigint;
   }): Promise<string> {
     if (input.shares <= 0n) throw new Error("Transfer shares must be positive");
     const legs = [
@@ -129,7 +129,7 @@ export class AllocationLedgerStore {
       {bucket: input.to, deltaShares: input.shares},
     ];
     assertLedgerEvent("TRANSFER", legs);
-    return this.writeEventInTransaction(tx, {userId:input.userId,kind:"TRANSFER",key:input.key,legs});
+    return this.writeEventInTransaction(tx, {userId:input.userId,kind:"TRANSFER",key:input.key,legs,transferAssetsAtomic:input.transferAssetsAtomic});
   }
 
   /** Apply an observed vault balance atomically after verified opening. */
@@ -348,6 +348,7 @@ export class AllocationLedgerStore {
   private async writeEventInTransaction(tx: LedgerTransaction, input: {
     userId: string; kind: AllocationEventKind; key: string;
     verifiedDeposit?: boolean;
+    transferAssetsAtomic?: bigint;
     legs: readonly {bucket: AllocationBucketKey; deltaShares: bigint}[];
   }): Promise<string> {
     if (!input.key.trim()) throw new Error("Ledger idempotency key required");
@@ -419,7 +420,7 @@ export class AllocationLedgerStore {
       const now = new Date();
       await tx.insert(allocationLedgerEvents).values({
         id, userId: input.userId, eventKind: input.kind,
-        idempotencyKey: input.key, createdAt: now,
+        idempotencyKey: input.key, transferAssetsAtomic: input.transferAssetsAtomic?.toString(), createdAt: now,
       });
       await tx.insert(allocationLedgerEntries).values(input.legs.map(leg => ({
         id: randomUUID(), eventId: id, userId: input.userId,
