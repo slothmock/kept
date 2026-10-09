@@ -343,6 +343,16 @@ contract VaultAndStrategyTest is Test {
         strategy.rescueToken(address(aToken), owner);
     }
 
+    function test_StrategyRescueRejectsInvalidAddresses() public {
+        vm.prank(address(vault));
+        vm.expectRevert(AaveUSDCStrategy.InvalidRescueToken.selector);
+        strategy.rescueToken(address(0), owner);
+
+        vm.prank(address(vault));
+        vm.expectRevert(AaveUSDCStrategy.InvalidRescueRecipient.selector);
+        strategy.rescueToken(address(pool), address(0));
+    }
+
     function testFuzz_DepositThenRedeemChargesOnlyEntryFeeAbsentYield(uint96 rawAmount) public {
         uint256 amount = bound(uint256(rawAmount), 1 * USDC, 1_000 * USDC);
         token.mint(alice, amount);
