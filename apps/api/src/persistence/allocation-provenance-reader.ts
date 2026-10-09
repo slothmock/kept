@@ -33,7 +33,7 @@ export async function readAllocationProvenanceMovements(
     .where(and(
       eq(allocationTransferLotMovements.userId, input.userId),
       gte(allocationLedgerEvents.createdAt, input.startAt),
-      lte(allocationLedgerEvents.createdAt, input.endAt),
+      lt(allocationLedgerEvents.createdAt, input.endAt),
     ))
     .orderBy(asc(allocationLedgerEvents.createdAt), asc(allocationTransferLotMovements.eventId), asc(allocationTransferLotMovements.id));
   return rows.map(row => {
