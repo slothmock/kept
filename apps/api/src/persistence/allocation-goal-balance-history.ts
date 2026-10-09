@@ -60,7 +60,7 @@ export function calculateAverageGoalShares(input:{
   const ids=new Set<string>();
   for(const delta of input.deltas){
     const at=delta.at.getTime();
-    if(!Number.isFinite(at)||at<cursor||at>end||ids.has(delta.entryId)) {
+    if(!Number.isFinite(at)||at<cursor||at>=end||ids.has(delta.entryId)) {
       throw new Error("Incomplete or unordered ledger balance history");
     }
     ids.add(delta.entryId);
