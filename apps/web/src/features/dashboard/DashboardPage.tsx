@@ -60,6 +60,7 @@ import { WithdrawView } from "@/features/withdrawals/WithdrawView";
 import type { RewardState } from "@/features/commitments/reward-claim";
 
 import { formatUsdc } from "@/features/savings/format";
+import { sortGoalsByTargetDate, type GoalSortOrder } from "@/features/goals/sort";
 
 import { readFiatEnabled } from "@/app/feature-flags";
 
@@ -568,6 +569,7 @@ export function DashboardPage(props: DashboardPageProps) {
   const [activityRevision, setActivityRevision] = useState(0);
 
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
+  const [goalSortOrder, setGoalSortOrder] = useState<GoalSortOrder>("soonest");
 
   const [commitmentGoal, setCommitmentGoal] = useState<GoalDto | null>(null);
 
@@ -580,16 +582,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const activeGoals = goals.filter((goal) => goal.status === "ACTIVE");
 
-  const sortedActiveGoals = [...activeGoals].sort((left, right) => {
-    const leftDate = left.targetDate
-      ? new Date(left.targetDate).getTime()
-      : Number.POSITIVE_INFINITY;
-    const rightDate = right.targetDate
-      ? new Date(right.targetDate).getTime()
-      : Number.POSITIVE_INFINITY;
-
-    return leftDate - rightDate;
-  });
+  const sortedActiveGoals = sortGoalsByTargetDate(activeGoals, goalSortOrder);
 
   const selectedGoal =
     goalDetailView && goalId
@@ -1146,13 +1139,15 @@ export function DashboardPage(props: DashboardPageProps) {
                 </p>
               </div>
 
-              <div
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-label text-foreground"
-                aria-label="Goals sorted by soonest target date"
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={`Sort goals by ${goalSortOrder === "soonest" ? "latest" : "soonest"} target date`}
+                onClick={() => setGoalSortOrder((current) => current === "soonest" ? "latest" : "soonest")}
               >
                 <SlidersHorizontal className="size-4 text-muted-foreground" />
-                Sort: Soonest
-              </div>
+                Sort: {goalSortOrder === "soonest" ? "Soonest" : "Latest"}
+              </Button>
             </div>
 
             {productState.kind === "error" ? (
