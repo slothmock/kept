@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, lt, gte, sql } from "drizzle-orm";
 import type { KeptDatabase } from "../db/client.js";
 import { allocationBuckets, allocationLedgerEntries, allocationLedgerEvents } from "../db/schema.js";
 
@@ -41,7 +41,7 @@ export async function readGoalLedgerBalanceHistory(
       eq(allocationBuckets.bucketKind,"GOAL"),
       eq(allocationBuckets.goalId,input.goalId),
       gte(allocationLedgerEvents.createdAt,input.startAt),
-      lte(allocationLedgerEvents.createdAt,input.endAt),
+      lt(allocationLedgerEvents.createdAt,input.endAt),
     ))
     .orderBy(asc(allocationLedgerEvents.createdAt),asc(allocationLedgerEntries.id));
   return {openingShares:BigInt(opening?.shares??"0"),
