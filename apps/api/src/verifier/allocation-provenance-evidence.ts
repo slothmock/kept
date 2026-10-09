@@ -32,7 +32,7 @@ export function calculateQualifiedGoalShares(input: {
 }): bigint {
   const start = input.startAt.getTime();
   const end = input.endAt.getTime();
-  if (!(end > start)) throw new Error("Invalid commitment epoch");
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !(end > start)) throw new Error("Invalid commitment epoch");
   const goal = `GOAL:${input.goalId}`;
   let eligible = 0n;
   let netOut = 0n;
@@ -40,7 +40,7 @@ export function calculateQualifiedGoalShares(input: {
   let previous = start;
   for (const movement of input.movements) {
     const time = movement.at.getTime();
-    if (!Number.isFinite(time) || time < start || time > end || time < previous) {
+    if (!Number.isFinite(time) || time < start || time >= end || time < previous) {
       throw new Error("Provenance history is incomplete or unordered");
     }
     if (ids.has(movement.movementId)) throw new Error("Duplicate provenance movement");
@@ -63,7 +63,7 @@ export function calculateQualifiedGoalShares(input: {
   let lastWithdrawalTime = start;
   for (const withdrawal of input.withdrawals ?? []) {
     const time = withdrawal.at.getTime();
-    if (!Number.isFinite(time) || time < start || time > end || time < lastWithdrawalTime) {
+    if (!Number.isFinite(time) || time < start || time >= end || time < lastWithdrawalTime) {
       throw new Error("Withdrawal history is incomplete or unordered");
     }
     if (withdrawalIds.has(withdrawal.entryId)) throw new Error("Duplicate withdrawal entry");
