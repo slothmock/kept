@@ -983,6 +983,7 @@ describe("Kept HTTP API", () => {
       eventId: "event-1",
       kind: "ADDED" as const,
       shareDeltaAtomic: "1000000",
+      amountAtomic: "1000000",
       createdAt: "2026-10-09T20:00:00.000Z",
     }]);
     const dependencies = buildDependencies();

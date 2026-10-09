@@ -92,6 +92,13 @@
       "when": 1791494000000,
       "tag": "0012_allocation_deposit_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791580000000,
+      "tag": "0013_goal_transfer_assets",
+      "breakpoints": true
     }
   ]
 }

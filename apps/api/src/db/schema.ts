@@ -173,6 +173,7 @@ export const allocationLedgerEvents = pgTable(
     eventKind: text("event_kind").notNull(),
     idempotencyKey: text("idempotency_key"),
     transactionHash: text("transaction_hash"),
+    transferAssetsAtomic: numeric("transfer_assets_atomic", { precision: 78, scale: 0 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => [

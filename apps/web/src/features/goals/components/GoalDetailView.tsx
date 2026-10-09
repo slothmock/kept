@@ -216,7 +216,7 @@ export function GoalDetailView({
               Recent activity
             </h2>
             <p className="mt-1 text-caption text-muted-foreground">
-              Savings movements recorded for this goal. Amounts are shown in vault shares.
+              Savings added to or removed from this goal.
             </p>
           </div>
 

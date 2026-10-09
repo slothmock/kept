@@ -125,6 +125,7 @@ export type TransactionStatus =
 
 export interface GoalActivityDto {
   readonly id: string;
+  readonly amountAtomic: string | null;
   readonly eventId: string;
   readonly kind: "ADDED" | "REMOVED";
   readonly shareDeltaAtomic: string;

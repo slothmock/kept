@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { GoalActivityDto } from "@/api/kept-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatUsdc } from "@/features/savings/format";
 
 export function GoalActivityPreview({
   goalId,
@@ -42,8 +43,10 @@ export function GoalActivityPreview({
                 {new Date(item.createdAt).toLocaleDateString()}
               </p>
             </div>
-            <span className="text-label tabular-nums" title="Vault share movement (not historical USDC)">
-              {item.kind === "ADDED" ? "+" : "−"}{(BigInt(item.shareDeltaAtomic) < 0n ? -BigInt(item.shareDeltaAtomic) : BigInt(item.shareDeltaAtomic)).toString()} shares
+            <span className="text-label tabular-nums">
+              {item.amountAtomic === null
+                ? "Amount unavailable"
+                : `${item.kind === "ADDED" ? "+" : "−"}${formatUsdc(BigInt(item.amountAtomic))} USDC`}
             </span>
           </div>
         ))}
