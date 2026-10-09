@@ -121,7 +121,7 @@ export class AllocationLedgerStore {
   /** Join the API idempotency transaction; do not open a nested transaction. */
   async transferInTransaction(tx: LedgerTransaction, input: {
     userId: string; from: AllocationBucketKey; to: AllocationBucketKey;
-    shares: bigint; key: string;
+    shares: bigint; key: string; transferAssetsAtomic?: bigint;
   }): Promise<string> {
     if (input.shares <= 0n) throw new Error("Transfer shares must be positive");
     const legs = [
