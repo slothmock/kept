@@ -20,7 +20,7 @@ contract VaultScopeTest is Test {
     function test_AutomaticDepositEntrypointIsUnavailable() public {
         (MockUSDC token, KeptSavingsVault vault) = _deploy();
         token.mint(address(this), 1e6);
-        token.approve(address(vault), type(uint256).max);
+        assertTrue(token.approve(address(vault), type(uint256).max));
 
         (bool succeeded,) = address(vault).call(abi.encodeWithSignature("depositAutomatically(uint256)", 1e6));
         assertFalse(succeeded);
@@ -49,7 +49,7 @@ contract VaultScopeTest is Test {
         vault.transfer(bob, shares / 2);
 
         vm.prank(alice);
-        vault.approve(address(this), shares);
+        assertTrue(vault.approve(address(this), shares));
         vm.expectRevert(KeptSavingsVault.ShareTransfersDisabled.selector);
         vault.transferFrom(alice, bob, shares);
     }
