@@ -62,6 +62,18 @@ describe("qualified allocation provenance", () => {
       goalId,startAt,endAt,movements:[],withdrawals:[{...withdrawal,shares:0n}],
     })).toThrow(/Invalid withdrawal/);
   });
+  it("uses a half-open epoch so an event at the end belongs only to the next week", () => {
+    const atEnd={...movement("e1","UNASSIGNED",A,10n,true),at:endAt};
+    expect(()=>score([atEnd])).toThrow(/incomplete or unordered/);
+    expect(calculateQualifiedGoalShares({
+      goalId,startAt:endAt,endAt:new Date("2026-10-15T00:00:00Z"),
+      movements:[atEnd],
+    })).toBe(10n);
+    const withdrawal={entryId:"end-withdrawal",at:endAt,goalId,shares:3n};
+    expect(()=>calculateQualifiedGoalShares({
+      goalId,startAt,endAt,movements:[],withdrawals:[withdrawal],
+    })).toThrow(/incomplete or unordered/);
+  });
   it("rejects duplicate and incomplete histories", () => {
     const x=movement('e1','UNASSIGNED',A,20n,true);
     expect(() => score([x,x])).toThrow(/Duplicate/);
