@@ -21,7 +21,6 @@ import { CryptoWithdrawalStep } from "@/features/withdrawals/components/CryptoWi
 
 type WithdrawalView =
   | "choose"
-  | "available-cash"
   | "crypto"
   | "bank";
 
@@ -33,16 +32,10 @@ interface WithdrawablePosition {
 interface WithdrawViewProps {
   readonly position: WithdrawablePosition | null;
   readonly positionLoading: boolean;
-  readonly amount: string;
-  readonly status: string | null;
-  readonly error: string | null;
-  readonly submitting: boolean;
   readonly cryptoAvailable?: boolean;
   readonly bankAvailable?: boolean;
   readonly bankEnabled?: boolean;
   readonly onBack: () => void;
-  readonly onAmountChange: (value: string) => void;
-  readonly onSubmitAvailableCash: () => void;
   readonly cryptoAmount: string;
   readonly cryptoRecipient: string;
   readonly cryptoDestinationAssets: readonly FundingAsset[];
@@ -84,16 +77,10 @@ interface WithdrawViewProps {
 export function WithdrawView({
   position,
   positionLoading,
-  amount,
-  status,
-  error,
-  submitting,
   cryptoAvailable = false,
   bankAvailable = false,
   bankEnabled = false,
   onBack,
-  onAmountChange,
-  onSubmitAvailableCash,
   cryptoAmount,
   cryptoRecipient,
   cryptoDestinationAssets,
@@ -165,8 +152,7 @@ export function WithdrawView({
           size="sm"
           className="-ml-3 text-muted-foreground"
           disabled={
-            submitting
-            || bankSubmitting
+            bankSubmitting
             || cryptoExecuting
           }
           onClick={handleBack}
@@ -197,7 +183,7 @@ export function WithdrawView({
                 </h2>
 
                 <p className="mt-1 text-caption text-muted-foreground">
-                  Available balance includes cash already in Kept and savings currently available to withdraw.
+                  Send available cash to an external destination. Move savings to available cash from your balance card first.
                 </p>
               </div>
 
@@ -212,14 +198,6 @@ export function WithdrawView({
               </div>
 
               <div className="space-y-3">
-                <WithdrawalMethod
-                  icon={<WalletCards className="size-4" />}
-                  title="Available cash"
-                  description="Move money out of savings while keeping it inside your Kept account."
-                  disabled={positionLoading}
-                  onClick={() => setView("available-cash")}
-                />
-
                 {cryptoAvailable ? (
                   <WithdrawalMethod
                     icon={<WalletCards className="size-4" />}
@@ -244,99 +222,6 @@ export function WithdrawView({
                   />
                 ) : null}
               </div>
-            </div>
-          ) : activeView === "available-cash" ? (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-h2 font-semibold tracking-tight">
-                  Move to available cash
-                </h2>
-
-                <p className="mt-2 text-caption text-muted-foreground">
-                  Withdraw money from savings while keeping it ready to use inside Kept.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="withdraw-available-cash-amount"
-                  className="text-label font-medium"
-                >
-                  Amount
-                </label>
-
-                <div className="relative">
-                  <Input
-                    id="withdraw-available-cash-amount"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={amount}
-                    disabled={submitting}
-                    placeholder="0.00"
-                    className="h-12 pr-16 text-body font-medium tabular-nums"
-                    onChange={(event) =>
-                      onAmountChange(event.target.value)
-                    }
-                  />
-
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-caption text-muted-foreground">
-                    USDC
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
-                  <span>Available from savings</span>
-
-                  <button
-                    type="button"
-                    disabled={
-                      submitting
-                      || withdrawableAssets === 0n
-                    }
-                    className="font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50"
-                    onClick={() =>
-                      onAmountChange(
-                        formatUsdc(withdrawableAssets),
-                      )
-                    }
-                  >
-                    {formatUsdc(withdrawableAssets)} USDC
-                  </button>
-                </div>
-              </div>
-
-              {error ? (
-                <p
-                  role="alert"
-                  className="rounded-lg border border-destructive/25 bg-danger-surface px-4 py-3 text-caption text-destructive"
-                >
-                  {error}
-                </p>
-              ) : null}
-
-              {status ? (
-                <p
-                  role="status"
-                  className="rounded-lg border border-border bg-surface px-4 py-3 text-caption"
-                >
-                  {status}
-                </p>
-              ) : null}
-
-              <Button
-                type="button"
-                className="w-full"
-                disabled={
-                  submitting
-                  || withdrawableAssets === 0n
-                  || amount.trim().length === 0
-                }
-                onClick={onSubmitAvailableCash}
-              >
-                {submitting
-                  ? "Withdrawing…"
-                  : "Move to available cash"}
-              </Button>
             </div>
           ) : activeView === "crypto" ? (
             <CryptoWithdrawalStep
