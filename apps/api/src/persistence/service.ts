@@ -1284,7 +1284,7 @@ export class KeptPersistenceService {
       readonly to: `GOAL:${string}` | "UNASSIGNED";
       readonly shares: bigint;
       readonly idempotencyKey: string;
-      readonly transferAssetsAtomic?: bigint;
+      readonly transferAssetsAtomic?: bigint | undefined;
     },
   ): Promise<void> {
     const ledger = new AllocationLedgerStore(this.db);
