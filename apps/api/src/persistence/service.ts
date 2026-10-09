@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import {
   getCommitmentDefinition,
@@ -7,6 +7,7 @@ import {
 } from "@kept/commitment-catalogue";
 
 import type { KeptDatabase } from "../db/client.js";
+import { allocationBuckets, allocationLedgerEntries, allocationLedgerEvents } from "../db/schema.js";
 import { assertAllocationCutoverParity } from "../domain/allocation-cutover.js";
 import { hasOverlappingRewardEpoch } from "../domain/commitment-overlap.js";
 import { AllocationLedgerStore } from "./allocation-ledger-store.js";
@@ -975,6 +976,40 @@ export class KeptPersistenceService {
   async listGoals(userId: string): Promise<readonly GoalDto[]> {
     const goals = await new KeptRepository(this.db).listGoalsForOwner(userId);
     return goals.map(mapGoal);
+  }
+
+  async listGoalActivity(userId: string, goalId: string) {
+    const repository = new KeptRepository(this.db);
+    if (!(await repository.findGoalForOwner(userId, goalId))) {
+      throw new NotFoundError("Savings goal");
+    }
+    const rows = await this.db
+      .select({
+        id: allocationLedgerEntries.id,
+        eventId: allocationLedgerEvents.id,
+        eventKind: allocationLedgerEvents.eventKind,
+        shareDeltaAtomic: allocationLedgerEntries.shareDeltaAtomic,
+        createdAt: allocationLedgerEvents.createdAt,
+      })
+      .from(allocationLedgerEntries)
+      .innerJoin(allocationBuckets, eq(allocationLedgerEntries.bucketId, allocationBuckets.id))
+      .innerJoin(allocationLedgerEvents, eq(allocationLedgerEntries.eventId, allocationLedgerEvents.id))
+      .where(and(
+        eq(allocationLedgerEntries.userId, userId),
+        eq(allocationBuckets.userId, userId),
+        eq(allocationBuckets.goalId, goalId),
+        eq(allocationLedgerEvents.userId, userId),
+        eq(allocationLedgerEvents.eventKind, "TRANSFER"),
+      ))
+      .orderBy(desc(allocationLedgerEvents.createdAt), desc(allocationLedgerEntries.id))
+      .limit(50);
+    return rows.map((row) => ({
+      id: row.id,
+      eventId: row.eventId,
+      kind: BigInt(row.shareDeltaAtomic) > 0n ? "ADDED" as const : "REMOVED" as const,
+      shareDeltaAtomic: row.shareDeltaAtomic,
+      createdAt: row.createdAt.toISOString(),
+    }));
   }
 
   async listTransactions(userId: string):
