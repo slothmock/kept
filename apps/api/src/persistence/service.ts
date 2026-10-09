@@ -1467,8 +1467,9 @@ export class KeptPersistenceService {
     const reason = requireNonBlank(input.reason, "reason");
     const { idempotencyKey, ...request } = input;
     await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
+    if (!this.vaultShares) throw new Error("Vault share reader is not configured");
     const transferAssetsAtomic = delta === 0n ? 0n :
-      await this.vaultShares!.reader.convertToAssets(delta > 0n ? delta : -delta);
+      await this.vaultShares.reader.convertToAssets(delta > 0n ? delta : -delta);
     return this.executeIdempotent(
       input.userId,
       "goal:share-allocation:append",
@@ -1567,8 +1568,9 @@ export class KeptPersistenceService {
     const { idempotencyKey, ...request } = input;
 
     await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
+    if (!this.vaultShares) throw new Error("Vault share reader is not configured");
     const transferAssetsAtomic =
-      await this.vaultShares!.reader.convertToAssets(amount);
+      await this.vaultShares.reader.convertToAssets(amount);
     return this.executeIdempotent(
       input.userId,
       "goal:share-reallocation",
