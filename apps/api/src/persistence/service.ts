@@ -1854,7 +1854,10 @@ export class KeptPersistenceService {
       "commitment:activate",
       idempotencyKey,
       request,
-      async (repository) => {
+      async (repository, transaction) => {
+        // Serialize activation checks across different commitments belonging
+        // to the same user, rather than only locking the selected draft.
+        await transaction.execute(sql`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR UPDATE`);
         const current = await repository.findCommitmentForOwnerForUpdate(
           input.userId,
           input.commitmentId,
@@ -1912,6 +1915,26 @@ export class KeptPersistenceService {
           current.verificationDeadline,
           this.commitmentWindowOverrideSeconds,
         );
+
+        // Do not allow multiple paid evaluations of the same new savings
+        // across overlapping epochs for the same goal. Half-open intervals
+        // permit adjacent weeks but not overlapping ones.
+        if (current.definitionCode === "WEEKLY_SAVINGS_V1") {
+          const commitments = await repository.listCommitmentsForOwner(input.userId);
+          const conflict = commitments.some(other =>
+            other.id !== current.id
+            && other.savingsGoalId === current.savingsGoalId
+            && other.definitionCode === "WEEKLY_SAVINGS_V1"
+            && (other.state === "ACTIVE" || other.state === "COMPLETED")
+            && other.epochStart < current.epochEnd
+            && current.epochStart < other.epochEnd
+          );
+          if (conflict) {
+            throw new PersistenceValidationError(
+              "This savings goal already has a qualifying commitment in the selected period",
+            );
+          }
+        }
 
         const transitioned = transitionCommitment({
           commitment: {
