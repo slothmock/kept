@@ -9,6 +9,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import { createPrivyAuthenticator } from "./auth.js";
 import { buildApp } from "./app.js";
+import { createResendWaitlist } from "./resend-waitlist.js";
 import { loadApiConfig } from "./config.js";
 import { connectDatabase } from "./db/client.js";
 import { createCommitmentSettlementVerifier } from "./commitment-settlement.js";
@@ -532,6 +533,13 @@ const app = buildApp(
     }),
 
     chainId: config.monadChainId,
+
+    ...(process.env.RESEND_API_KEY?.trim() && process.env.RESEND_WAITLIST_SEGMENT_ID?.trim()
+      ? { resendWaitlist: createResendWaitlist({
+          apiKey: process.env.RESEND_API_KEY.trim(),
+          segmentId: process.env.RESEND_WAITLIST_SEGMENT_ID.trim(),
+        }) }
+      : {}),
 
     persistence,
 
