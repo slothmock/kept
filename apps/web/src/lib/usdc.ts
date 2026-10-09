@@ -41,3 +41,12 @@ export function formatUsdcPrecise(value: bigint): string {
 
   return `${negative ? "-" : ""}${whole.toString()}.${visibleFraction}`;
 }
+
+/** Display two to four decimal places without rounding or trailing zeros. */
+export function formatUsdcUpToFour(value: bigint): string {
+  const { negative, whole, fractional } = splitUsdc(value);
+  const fourDigits = (fractional / 100n).toString().padStart(4, "0");
+  const visible = fourDigits.replace(/0+$/, "");
+  const decimals = visible.length < 2 ? fourDigits.slice(0, 2) : visible;
+  return `${negative ? "-" : ""}${whole.toString()}.${decimals}`;
+}
