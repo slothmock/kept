@@ -104,6 +104,7 @@ function buildDependencies(
       getGoal: async (_userId, id) => (id === goal.id ? goal : null),
       listGoals: async () => [goal],
       listTransactions: async () => [],
+      listGoalActivity: async () => [],
       createMoonPayOfframpOrder: vi.fn(async (input) => {
         currentMoonPayOrder = {
           ...currentMoonPayOrder,
