@@ -110,18 +110,11 @@ export async function readVaultDepositQuote({
     );
   }
 
-  const netBasisPoints =
-    bpsDenominator
-    - depositFeeBps;
-
+  // Charge the advertised fee on the amount the user wants to save,
+  // not on the wallet's gross spend. Round up to USDC precision.
   let grossAssets =
-    (
-      assets
-      * bpsDenominator
-      + netBasisPoints
-      - 1n
-    )
-    / netBasisPoints;
+    assets
+    + (assets * depositFeeBps + bpsDenominator - 1n) / bpsDenominator;
 
   let expectedNetAssets = 0n;
 
