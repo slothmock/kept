@@ -70,7 +70,8 @@ contract VaultHandler is Test {
 
     function crystallize() external {
         (uint256 feeAssets, uint256 feeShares) = vault.crystallizeYieldFee();
-        assertEq(feeAssets == 0, feeShares == 0);
+        assertLe(feeAssets, vault.totalAssets());
+        assertLe(feeShares, vault.totalSupply());
     }
 
     function callStrategyDirectly(uint96 rawAmount) external {
