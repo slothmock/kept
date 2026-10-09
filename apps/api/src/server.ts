@@ -338,6 +338,7 @@ const persistence = new KeptPersistenceService(
     reader: vaultShares,
   },
   config.commitmentWindowOverrideSeconds,
+  savingsActivityIndex ? () => savingsActivityIndex.status() : undefined,
 );
 
 const settlementVerifier = createCommitmentSettlementVerifier({
