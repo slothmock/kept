@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import type {
@@ -80,17 +79,14 @@ export function useStagingFaucetController({
   const available =
     chainId === 10_143;
 
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearNotice = useCallback(() => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
     setStatus(null);
     setError(null);
   }, []);
 
   // Only completed notices expire: progress stays until a claim settles.
   useEffect(() => {
-    if (claiming || (!status || status.startsWith("Adding test funds")) && !error) return;
+    if (claiming || (!error && (!status || status.startsWith("Adding test funds")))) return;
     const timeout = setTimeout(clearNotice, FAUCET_NOTICE_DURATION_MS);
     return () => clearTimeout(timeout);
   }, [status, error, claiming, clearNotice]);
@@ -98,9 +94,6 @@ export function useStagingFaucetController({
   // The notice belongs to the wallet/network on which it was produced.
   useEffect(() => {
     clearNotice();
-    return () => {
-      if (timer.current !== null) clearTimeout(timer.current);
-    };
   }, [account, chainId, clearNotice]);
 
   const claim =
