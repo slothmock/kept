@@ -16,6 +16,7 @@ import { createCommitmentSettlementVerifier } from "./commitment-settlement.js";
 import { KeptPersistenceService } from "./persistence/index.js";
 
 import { KeptRepository } from "./persistence/repository.js";
+import { AllocationLedgerStore } from "./persistence/allocation-ledger-store.js";
 
 import { createVaultShareBalanceReader } from "./vault-shares.js";
 
@@ -30,6 +31,8 @@ import { createSavingsMarketStatusReader } from "./savings-market-status.js";
 import {
   CommitmentVerificationWorker,
   CommitmentVerifier,
+  AllocationWeeklySavingsEvidenceSource,
+  RoutedWeeklySavingsEvidenceSource,
   FixedRewardPolicy,
   PersistenceVerificationStore,
   PersistenceWeeklySavingsEvidenceSource,
@@ -280,14 +283,49 @@ const savingsMarketStatus =
       : {}),
   });
 
-const weeklySavingsEvidence = new PersistenceWeeklySavingsEvidenceSource({
+const legacyWeeklySavingsEvidence = new PersistenceWeeklySavingsEvidenceSource({
   repository,
-
   vaultShares,
-
   vaultActivity,
-
   chainId: BigInt(config.monadChainId),
+});
+
+const allocationLedger = new AllocationLedgerStore(database.db);
+const ledgerWeeklySavingsEvidence = new AllocationWeeklySavingsEvidenceSource({
+  db: database.db,
+  repository,
+  vaultShares,
+  vaultActivity,
+  chainId: BigInt(config.monadChainId),
+});
+
+const weeklySavingsEvidence = new RoutedWeeklySavingsEvidenceSource({
+  legacy: legacyWeeklySavingsEvidence,
+  ledger: ledgerWeeklySavingsEvidence,
+  isLedgerInitialized: userId => database.db.transaction(
+    tx => allocationLedger.hasOpeningInTransaction(tx, userId),
+  ),
+  async assertLedgerEvidenceReady(userId) {
+    // Do not settle rewards from partial or stale deposit provenance.
+    // The activity index is currently provisioned for Monad testnet.
+    const index = savingsActivityIndex?.status();
+    if (!index?.ready || index.currentBlock === null) {
+      throw new Error("Savings deposit attribution index is unavailable");
+    }
+    const head = await publicClient.getBlockNumber();
+    const safeHead = head > 2n ? head - 2n : 0n;
+    if (index.currentBlock < safeHead) {
+      throw new Error("Savings deposit attribution index is catching up");
+    }
+    const wallet = await repository.findPrimaryWalletForOwnerOnChain(
+      userId, BigInt(config.monadChainId),
+    );
+    if (!wallet) throw new Error("No verified embedded savings wallet");
+    const liveShares = await vaultShares.readShares(wallet.address);
+    await database.db.transaction(tx =>
+      allocationLedger.assertVaultParityInTransaction(tx, userId, liveShares),
+    );
+  },
 });
 
 const verificationStore = new PersistenceVerificationStore(database.db);
