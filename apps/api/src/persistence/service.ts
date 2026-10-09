@@ -1325,6 +1325,49 @@ export class KeptPersistenceService {
     return {goal,allocated};
   }
 
+  /**
+   * One consistent vault and allocation snapshot for the dashboard.
+   * Clean-start accounts are ledger-authoritative; uninitialized accounts
+   * retain the existing legacy per-goal reconciliation path.
+   */
+  async getDashboardGoalAllocations(
+    userId: string,
+    walletAddress: string,
+    goalIds: readonly string[],
+  ): Promise<Record<string, GoalAllocationDto>> {
+    if (goalIds.length === 0) return {};
+    const uniqueIds = new Set(goalIds);
+    if (uniqueIds.size !== goalIds.length) throw new PersistenceValidationError("Duplicate dashboard goal");
+    const initialized = await this.db.transaction(tx => this.isCleanStartLedger(tx, userId));
+    if (!initialized) {
+      const entries = await Promise.all(goalIds.map(async goalId => {
+        const allocation = await this.getGoalAllocation(userId, goalId, walletAddress);
+        if (!allocation) throw new NotFoundError("Savings goal");
+        return [goalId, allocation] as const;
+      }));
+      return Object.fromEntries(entries);
+    }
+
+    await this.synchronizeCleanStartDeposits(userId, walletAddress);
+    const { shares } = await this.readVaultShares(walletAddress);
+    return this.db.transaction(async tx => {
+      const repository = new KeptRepository(tx);
+      await repository.lockGoalsForOwner(userId);
+      for (const goalId of goalIds) {
+        if (!(await repository.findGoalForOwner(userId, goalId))) {
+          throw new NotFoundError("Savings goal");
+        }
+      }
+      const balances = await this.cleanLedgerBalances(tx, userId, shares);
+      return Object.fromEntries(goalIds.map(goalId => {
+        const totals = this.cleanLedgerTotals(balances, goalId);
+        return [goalId, this.toGoalAllocationDto(
+          goalId, totals.goal, totals.allocated, shares,
+        )];
+      }));
+    });
+  }
+
   async getGoalAllocation(
     userId: string,
     goalId: string,

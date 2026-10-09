@@ -215,6 +215,38 @@ describe.sequential("allocation ledger persistence", () => {
     expect(lotsAfter.rows).toEqual(lotsBefore.rows);
   });
 
+  it("produces a single consistent ledger-backed dashboard allocation snapshot",async()=>{
+    const userId=await user();
+    const goalA=await goal(userId),goalB=await goal(userId);
+    let reads=0;
+    const walletAddress="0x0000000000000000000000000000000000000001";
+    const service=new KeptPersistenceService(connection.db,{
+      chainId:143n,reader:{
+        readShares:async()=>{reads+=1;return 50n;},
+        convertToAssets:async(shares:bigint)=>shares,
+      },
+    });
+    await connection.db.transaction(tx=>store.initializeEmptyAccountInTransaction(tx,{
+      userId,key:"clean-start:empty-account",
+    }));
+    await store.recordVaultChange({userId,shares:50n,kind:"VAULT_CREDIT",key:"verified-credit"});
+    await store.transfer({userId,from:"UNASSIGNED",to:`GOAL:${goalA}`,shares:15n,key:"a"});
+    await store.transfer({userId,from:"UNASSIGNED",to:`GOAL:${goalB}`,shares:10n,key:"b"});
+    const dashboard=await service.getDashboardGoalAllocations(userId,walletAddress,[goalA,goalB]);
+    expect(Object.keys(dashboard)).toHaveLength(2);
+    expect(dashboard[goalA]?.allocatedSharesAtomic).toBe("15");
+    expect(dashboard[goalB]?.allocatedSharesAtomic).toBe("10");
+    expect(dashboard[goalA]?.totalAllocatedSharesAtomic).toBe("25");
+    expect(dashboard[goalB]?.unallocatedSharesAtomic).toBe("25");
+    expect(dashboard[goalA]?.totalVaultSharesAtomic).toBe("50");
+    expect(reads).toBe(1);
+    await expect(service.getDashboardGoalAllocations(userId,walletAddress,[goalA,goalA]))
+      .rejects.toThrow(/Duplicate dashboard goal/);
+    expect(await store.getBalances(userId)).toEqual({
+      UNASSIGNED:25n,[`GOAL:${goalA}`]:15n,[`GOAL:${goalB}`]:10n,
+    });
+  });
+
   it("credits unassigned shares and atomically moves shares into a goal", async () => {
     const userId = await user();
     const goalId = await goal(userId);
