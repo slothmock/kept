@@ -30,7 +30,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SignOutAction } from "@/features/account/components/SignOutAction";
 import {
   readSavingsTransparency,
   type SavingsTransparency,
@@ -259,13 +258,7 @@ export function AccountPage({
   }
 
   return (
-    <AppShell
-      headerAction={
-        <SignOutAction
-onSignOut={session.logout}
-        />
-      }
-    >
+    <AppShell>
       <div className="space-y-8">
         <section>
           <h1 className="text-h1 font-semibold tracking-tight">
@@ -306,52 +299,6 @@ onSignOut={session.logout}
                     label="Sign-in method"
                     value="Email"
                   />
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="text-h3 font-semibold tracking-tight">
-                Wallet
-              </h2>
-
-              <Card className="shadow-none">
-                <CardContent className="divide-y divide-border p-5">
-                  {wallet.address ? (
-                    <AccountAddress address={wallet.address} />
-                  ) : (
-                    <DetailRow
-                      label="Kept wallet"
-                      value="Account not ready"
-                    />
-                  )}
-
-                  {transparencyLoading ? (
-                    <div className="space-y-3 py-4">
-                      <Skeleton className="h-5 w-full" />
-                      <Skeleton className="h-5 w-full" />
-                    </div>
-                  ) : transparency ? (
-                    <>
-                      <DetailRow
-                        label="Network"
-                        value={transparency.networkName}
-                      />
-
-                      <DetailRow
-                        label="Savings asset"
-                        value={transparency.savingsAsset}
-                      />
-                    </>
-                  ) : (
-                    <p className="py-4 text-caption text-muted-foreground">
-                      Wallet details are currently unavailable.
-                    </p>
-                  )}
-
-                  <p className="py-4 text-caption text-muted-foreground">
-                    Kept uses your embedded wallet behind the scenes for savings transactions.
-                  </p>
                 </CardContent>
               </Card>
             </section>
@@ -400,6 +347,52 @@ onSignOut={session.logout}
                 </CardContent>
               </Card>
             </section>
+            <section className="space-y-3">
+              <h2 className="text-h3 font-semibold tracking-tight">
+                Wallet
+              </h2>
+
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-5">
+                  {wallet.address ? (
+                    <AccountAddress address={wallet.address} />
+                  ) : (
+                    <DetailRow
+                      label="Kept wallet"
+                      value="Account not ready"
+                    />
+                  )}
+
+                  {transparencyLoading ? (
+                    <div className="space-y-3 py-4">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-full" />
+                    </div>
+                  ) : transparency ? (
+                    <>
+                      <DetailRow
+                        label="Network"
+                        value={transparency.networkName}
+                      />
+
+                      <DetailRow
+                        label="Savings asset"
+                        value={transparency.savingsAsset}
+                      />
+                    </>
+                  ) : (
+                    <p className="py-4 text-caption text-muted-foreground">
+                      Wallet details are currently unavailable.
+                    </p>
+                  )}
+
+                  <p className="py-4 text-caption text-muted-foreground">
+                    Kept uses your embedded wallet behind the scenes for savings transactions.
+                  </p>
+                </CardContent>
+              </Card>
+            </section>
+
           </div>
 
           <div className="space-y-6">
