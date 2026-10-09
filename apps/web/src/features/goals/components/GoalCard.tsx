@@ -61,7 +61,7 @@ export function GoalCard({
         <CardContent className="p-5">
           <button
             type="button"
-            className="w-full text-left focus-visible:outline-none"
+            className="w-full min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => onOpen(goal)}
           >
             <div className="flex items-start gap-3">
@@ -88,8 +88,8 @@ export function GoalCard({
               </div>
             </div>
 
-            <div className="mt-5 flex items-baseline justify-between gap-4 text-caption">
-              <span className="font-semibold text-muted-foreground tabular-nums">
+            <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2 sm:gap-4 text-caption">
+              <span className="break-words font-semibold text-muted-foreground tabular-nums">
                 {allocatedAssets === null
                   ? "Savings unavailable"
                   : `${formatUsdc(allocatedAssets)} USDC saved`}
@@ -116,7 +116,7 @@ export function GoalCard({
       <CardContent className="p-5">
         <button
           type="button"
-          className="w-full text-left focus-visible:outline-none"
+          className="w-full min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           onClick={() => onOpen(goal)}
         >
           <div className="flex items-start justify-between gap-4">
@@ -135,14 +135,14 @@ export function GoalCard({
             <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
           </div>
 
-          <div className="mt-5 flex items-baseline justify-between gap-4">
-            <p className="text-body font-semibold tabular-nums">
+          <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2 sm:gap-4">
+            <p className="min-w-0 break-words text-body font-semibold tabular-nums">
               {allocatedAssets === null
                 ? "—"
                 : `${formatUsdc(allocatedAssets)} USDC`}
             </p>
 
-            <p className="text-caption text-muted-foreground tabular-nums">
+            <p className="break-words text-caption text-muted-foreground tabular-nums">
               of {targetAmount(goal)} USDC
             </p>
           </div>
