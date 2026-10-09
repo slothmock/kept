@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
@@ -10,6 +10,7 @@ import { CommitmentCard } from "@/features/commitments/components/CommitmentCard
 import type { RewardState } from "@/features/commitments/reward-claim";
 import type { GoalFundingEntry } from "@/features/goals/funding";
 import { formatUsdc } from "@/features/savings/format";
+import { transactionsForGoal } from "@/features/goals/recent-activity";
 
 interface GoalDetailViewProps {
   readonly goal: GoalDto;
@@ -54,6 +55,11 @@ export function GoalDetailView({
   onAddToSavings,
 }: GoalDetailViewProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const loadGoalTransactions = useCallback(
+    async () => transactionsForGoal(await loadRecentTransactions(), goal.id),
+    [loadRecentTransactions, goal.id],
+  );
 
   const activeCommitments = commitments.filter(
     (commitment) => commitment.state === "ACTIVE",
@@ -215,12 +221,12 @@ export function GoalDetailView({
               Recent activity
             </h2>
             <p className="mt-1 text-caption text-muted-foreground">
-              Recent Kept transactions across your account.
+              Recent transactions linked to this goal.
             </p>
           </div>
 
           <HomeActivityPreview
-            loadTransactions={loadRecentTransactions}
+            loadTransactions={loadGoalTransactions}
           />
 
           <Card className="border-destructive/25 shadow-none">
