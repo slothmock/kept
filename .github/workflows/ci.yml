@@ -82,3 +82,30 @@ jobs:
 
       - name: Test contracts
         run: forge test --root packages/contracts
+
+  deploy-staging:
+    name: Trigger Vercel staging deployment
+    needs:
+      - app
+      - contracts
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+
+    steps:
+      - name: Trigger Vercel deploy hook
+        env:
+          DEPLOY_HOOK: ${{ secrets.VERCEL_STAGING_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEPLOY_HOOK" ]]; then
+            echo "::error::Missing VERCEL_STAGING_DEPLOY_HOOK secret in the staging environment"
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --retry 3 \
+            --request POST \
+            --output /dev/null \
+            "$DEPLOY_HOOK"
+          echo "Vercel staging deployment requested successfully."
