@@ -88,10 +88,9 @@ export function BalanceCard({
     void onRefresh();
   };
 
+  // The balance card withdraws from the vault, not from available wallet cash.
   const canWithdraw =
-    ready &&
-    (positionState.position.withdrawableAssets > 0n ||
-      positionState.position.usdcBalance > 0n);
+    ready && positionState.position.withdrawableAssets > 0n;
 
   const earnings =
     savingsPerformanceState.kind === "ready"
