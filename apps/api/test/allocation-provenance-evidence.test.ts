@@ -33,6 +33,35 @@ describe("qualified allocation provenance", () => {
     const old = {...fresh,movementId:"lot-two",shares:4n,verifiedFreshUnassigned:false};
     expect(score([fresh,old])).toBe(8n);
   });
+  it("subtracts direct withdrawals from the committed goal", () => {
+    const fresh = movement("e1","UNASSIGNED",A,20n,true);
+    const withdrawals = [{
+      entryId:"w1",at:new Date("2026-10-04T00:00:00Z"),
+      goalId,shares:8n,
+    }];
+    expect(calculateQualifiedGoalShares({goalId,startAt,endAt,movements:[fresh],withdrawals})).toBe(12n);
+    expect(calculateQualifiedGoalShares({
+      goalId,startAt,endAt,movements:[fresh],
+      withdrawals:[{...withdrawals[0]!,goalId:"another"}],
+    })).toBe(20n);
+  });
+  it("does not double-count transfers as vault withdrawals", () => {
+    const fresh=movement("e1","UNASSIGNED",A,20n,true);
+    const outbound=movement("e2",A,"UNASSIGNED",7n);
+    expect(calculateQualifiedGoalShares({
+      goalId,startAt,endAt,movements:[fresh,outbound],
+      withdrawals:[{entryId:"vault-withdrawal",at:new Date("2026-10-05T00:00:00Z"),goalId,shares:3n}],
+    })).toBe(10n);
+  });
+  it("rejects duplicate and malformed withdrawal evidence", () => {
+    const withdrawal={entryId:"w1",at:new Date("2026-10-04T00:00:00Z"),goalId,shares:5n};
+    expect(()=>calculateQualifiedGoalShares({
+      goalId,startAt,endAt,movements:[],withdrawals:[withdrawal,withdrawal],
+    })).toThrow(/Duplicate withdrawal/);
+    expect(()=>calculateQualifiedGoalShares({
+      goalId,startAt,endAt,movements:[],withdrawals:[{...withdrawal,shares:0n}],
+    })).toThrow(/Invalid withdrawal/);
+  });
   it("rejects duplicate and incomplete histories", () => {
     const x=movement('e1','UNASSIGNED',A,20n,true);
     expect(() => score([x,x])).toThrow(/Duplicate/);
