@@ -30,7 +30,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SignOutAction } from "@/features/account/components/SignOutAction";
 import {
   readSavingsTransparency,
   type SavingsTransparency,
@@ -259,13 +258,7 @@ export function AccountPage({
   }
 
   return (
-    <AppShell
-      headerAction={
-        <SignOutAction
-onSignOut={session.logout}
-        />
-      }
-    >
+    <AppShell>
       <div className="space-y-8">
         <section>
           <h1 className="text-h1 font-semibold tracking-tight">
