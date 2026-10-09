@@ -116,7 +116,7 @@ export function CommitmentsView({
       : completedCommitments;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-h1 font-semibold tracking-tight">
           Commitments
@@ -163,11 +163,11 @@ export function CommitmentsView({
       </div>
 
       <section
-        className="grid gap-4 sm:grid-cols-3"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4"
         aria-label="Commitments summary"
       >
         <Card className="shadow-none">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <p className="text-caption font-medium text-muted-foreground">
               Completed
             </p>
