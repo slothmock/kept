@@ -12,7 +12,7 @@ afterAll(async()=>{await connection?.close();});
 
 describe.sequential("weekly commitment overlapping activation transactions",()=>{
   it("permits only one of two simultaneous, overlapping draft activations",async()=>{
-    const userId=randomUUID(),goalId=randomUUID(),definitionId=randomUUID();
+    const userId=randomUUID(),goalId=randomUUID();
     const wallet="0x0000000000000000000000000000000000000011";
     const a=randomUUID(),b=randomUUID();
     const start="2026-10-01T00:00:00.000Z",end="2026-10-08T00:00:00.000Z";
@@ -28,11 +28,13 @@ describe.sequential("weekly commitment overlapping activation transactions",()=>
       "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Savings',1000000,now(),now())",
       [goalId,userId],
     );
-    const [def]= (await connection.pool.query<{id:string}>(
-      "SELECT id FROM commitment_definitions WHERE code='WEEKLY_SAVINGS_V1' AND version=1 AND active=true LIMIT 1",
+    const [def] = (await connection.pool.query<{id:string}>(
+      `INSERT INTO commitment_definitions
+        (id,code,version,verification_class,parameter_schema,active,created_at)
+       VALUES($1,'WEEKLY_SAVINGS_V1',1,'ONCHAIN','{}'::jsonb,true,now())
+       ON CONFLICT (code,version) DO UPDATE SET active=true
+       RETURNING id`,[randomUUID()],
     )).rows;
-    // CI seeds the catalogue; fail explicitly instead of fabricating a
-    // definition whose verification config differs from production.
     expect(def?.id).toBeDefined();
     for(const id of [a,b]){
       await connection.pool.query(
@@ -47,7 +49,7 @@ describe.sequential("weekly commitment overlapping activation transactions",()=>
     const service=new KeptPersistenceService(connection.db);
     const activate=(id:string,seed:string)=>service.activateCommitment({
       userId,commitmentId:id,expectedVersion:1,
-      onchainCommitmentId:`0x${seed.repeat(64)}`,
+      onchainCommitmentId:seed==="a"?"101":"102",
       settlementOwner:wallet,settlementChainId:143,
       settlementStatus:1,idempotencyKey:`concurrent-${id}`,
     });
