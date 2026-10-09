@@ -103,9 +103,24 @@ jobs:
             echo "::error::Missing VERCEL_STAGING_DEPLOY_HOOK secret in the staging environment"
             exit 1
           fi
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
           curl --fail --silent --show-error \
             --retry 3 \
             --request POST \
-            --output /dev/null \
+            --output "$response_file" \
             "$DEPLOY_HOOK"
-          echo "Vercel staging deployment requested successfully."
+          # Never print the hook URL or arbitrary API response. Only emit
+          # validated public job metadata, which is useful for Vercel support.
+          node - "$response_file" <<'NODE'
+          const fs = require('node:fs');
+          const response = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const id = response?.job?.id;
+          const state = response?.job?.state;
+          if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(id) ||
+              typeof state !== 'string' || !/^[A-Z_]{1,32}$/.test(state)) {
+            console.error('Vercel deploy hook did not return a valid job id and state');
+            process.exit(1);
+          }
+          console.log(`Vercel accepted staging deployment request: job=${id} state=${state}`);
+          NODE
