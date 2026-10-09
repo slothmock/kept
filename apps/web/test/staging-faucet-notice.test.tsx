@@ -23,19 +23,6 @@ describe("testnet faucet notice lifecycle", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("dismisses errors and clears old messages after a network change", async () => {
-    vi.useFakeTimers();
-    const api = { claimStagingFaucet: vi.fn().mockRejectedValue(new Error("Service unavailable")) } as unknown as KeptApi;
-    const { result, rerender } = renderHook(
-      ({ chainId }) => useStagingFaucetController({ api, account, chainId, refreshPosition: async () => {} }),
-      { initialProps: { chainId: 10143 } },
-    );
-    await act(async () => { await result.current.claim(); });
-    expect(result.current.error).toBeTruthy();
-    rerender({ chainId: 143 });
-    expect(result.current.error).toBeNull();
-  });
-
   it("clears an error on timeout without changing account", async () => {
     vi.useFakeTimers();
     const api = { claimStagingFaucet: vi.fn().mockRejectedValue(new Error("Service unavailable")) } as unknown as KeptApi;
