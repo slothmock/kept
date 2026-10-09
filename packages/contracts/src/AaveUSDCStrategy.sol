@@ -29,6 +29,8 @@ contract AaveUSDCStrategy is IYieldStrategy {
     error UnexpectedWithdrawAmount(uint256 requested, uint256 received);
 
     error ProtectedToken();
+    error InvalidRescueToken();
+    error InvalidRescueRecipient();
 
     event StrategyDeposit(uint256 assets);
     event StrategyWithdrawal(uint256 assets);
@@ -44,11 +46,14 @@ contract AaveUSDCStrategy is IYieldStrategy {
     IAaveAToken public immutable aToken;
 
     modifier onlyVault() {
+        _onlyVault();
+        _;
+    }
+
+    function _onlyVault() internal view {
         if (msg.sender != vault) {
             revert UnauthorizedVaultCaller(msg.sender);
         }
-
-        _;
     }
 
     constructor(address vault_, address asset_, address aavePool_, address aToken_) {
@@ -196,6 +201,9 @@ contract AaveUSDCStrategy is IYieldStrategy {
     /// @dev USDC and the Aave aToken are explicitly
     /// protected because they represent vault assets.
     function rescueToken(address token, address recipient) external onlyVault returns (uint256 amount) {
+        if (token == address(0) || token.code.length == 0) revert InvalidRescueToken();
+        if (recipient == address(0)) revert InvalidRescueRecipient();
+
         if (token == asset || token == address(aToken)) {
             revert ProtectedToken();
         }

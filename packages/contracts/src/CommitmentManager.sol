@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {IKeptTreasury} from "./interfaces/IKeptTreasury.sol";
 
@@ -85,11 +86,14 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     );
 
     modifier onlyVerifier() {
+        _onlyVerifier();
+        _;
+    }
+
+    function _onlyVerifier() internal view {
         if (msg.sender != verifier) {
             revert UnauthorizedVerifier(msg.sender);
         }
-
-        _;
     }
 
     constructor(
@@ -151,7 +155,7 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
         commitments[commitmentId] = Commitment({
             owner: msg.sender,
             referenceId: referenceId,
-            createdAt: uint64(block.timestamp),
+            createdAt: SafeCast.toUint64(block.timestamp),
             startAt: startAt,
             endAt: endAt,
             rewardAssets: 0,
@@ -251,7 +255,7 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     /// successfully verified commitment.
     function claimReward(
         uint256 commitmentId
-    ) external whenNotPaused nonReentrant {
+    ) external nonReentrant whenNotPaused {
         Commitment storage commitment = commitments[commitmentId];
 
         if (commitment.owner == address(0)) {

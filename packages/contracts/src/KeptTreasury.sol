@@ -56,11 +56,14 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     event AssetsWithdrawn(address indexed recipient, uint256 assets);
 
     modifier onlyRewardManager() {
+        _onlyRewardManager();
+        _;
+    }
+
+    function _onlyRewardManager() internal view {
         if (msg.sender != rewardManager) {
             revert UnauthorizedRewardManager(msg.sender);
         }
-
-        _;
     }
 
     constructor(IERC20 asset_, address initialOwner) Ownable(initialOwner) {
@@ -115,7 +118,7 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     }
 
     /// @notice Convert Kept-owned vault shares into USDC.
-    function redeemRevenue(uint256 assets) external onlyOwner nonReentrant returns (uint256 shares) {
+    function redeemRevenue(uint256 assets) external nonReentrant onlyOwner returns (uint256 shares) {
         if (assets == 0) {
             revert ZeroAssets();
         }
@@ -127,9 +130,9 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     /// Kept-owned revenue.
     function payReward(bytes32 rewardId, address recipient, uint256 assets)
         external
+        nonReentrant
         onlyRewardManager
         whenNotPaused
-        nonReentrant
     {
         if (rewardId == bytes32(0)) {
             revert InvalidRewardId();
@@ -171,7 +174,7 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
 
     /// @notice Withdraw realised Kept revenue for
     /// company operations.
-    function withdrawAssets(address recipient, uint256 assets) external onlyOwner nonReentrant {
+    function withdrawAssets(address recipient, uint256 assets) external nonReentrant onlyOwner {
         if (recipient == address(0)) {
             revert InvalidRecipient();
         }

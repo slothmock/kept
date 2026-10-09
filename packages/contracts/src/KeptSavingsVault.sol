@@ -22,6 +22,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     uint16 public constant DEPOSIT_FEE_BPS = 20;
 
     uint256 internal constant VIRTUAL_SHARES = 1e6;
+    uint8 internal constant USDC_DECIMALS = 6;
 
     error MintDisabled();
     error ShareTransfersDisabled();
@@ -51,7 +52,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     {
         if (
             address(asset_) == address(0) || address(asset_).code.length == 0
-                || IERC20Metadata(address(asset_)).decimals() != 6
+                || IERC20Metadata(address(asset_)).decimals() != USDC_DECIMALS
         ) {
             revert InvalidAsset();
         }
@@ -362,6 +363,6 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     }
 
     function _decimalsOffset() internal pure override returns (uint8) {
-        return 6;
+        return USDC_DECIMALS;
     }
 }

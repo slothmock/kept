@@ -95,6 +95,13 @@ contract CommitmentManagerTest is Test {
         assertFalse(rewardClaimed);
     }
 
+    function test_CommitmentCreationStoresExactTimestamp() public {
+        uint256 createdAt = block.timestamp;
+        (uint256 id,) = _createAliceCommitment();
+        (,, uint64 storedCreatedAt,,,,,) = manager.commitments(id);
+        assertEq(uint256(storedCreatedAt), createdAt);
+    }
+
     function test_DuplicateReferenceFails() public {
         (, bytes32 referenceId) = _createAliceCommitment();
 

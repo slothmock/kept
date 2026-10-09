@@ -25,7 +25,7 @@ contract VaultHandler is Test {
         aToken = aToken_;
         vault = vault_;
         strategy = strategy_;
-        token_.approve(address(vault_), type(uint256).max);
+        assertTrue(token_.approve(address(vault_), type(uint256).max));
     }
 
     function deposit(uint96 rawAmount) external {
@@ -51,7 +51,7 @@ contract VaultHandler is Test {
     function donate(uint96 rawAmount) external {
         uint256 amount = bound(uint256(rawAmount), 1, 100e6);
         token.mint(address(this), amount);
-        token.transfer(address(vault), amount);
+        assertTrue(token.transfer(address(vault), amount));
     }
 
     function accrueYieldAndCrystallize(uint96 rawYield) external {
@@ -69,7 +69,9 @@ contract VaultHandler is Test {
     }
 
     function crystallize() external {
-        vault.crystallizeYieldFee();
+        (uint256 feeAssets, uint256 feeShares) = vault.crystallizeYieldFee();
+        assertLe(feeAssets, vault.totalAssets());
+        assertLe(feeShares, vault.totalSupply());
     }
 
     function callStrategyDirectly(uint96 rawAmount) external {
