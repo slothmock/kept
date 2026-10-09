@@ -774,7 +774,6 @@ export function DashboardPage(props: DashboardPageProps) {
                 ? savingsOverview.marketStatusState.netApyBps
                 : null
             }
-            loadRecentTransactions={loadRecentTransactions}
             loadGoalActivity={loadGoalActivity}
             deleting={goalManagement.deletion.deleting}
             deleteStatus={goalManagement.deletion.status}
