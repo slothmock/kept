@@ -86,11 +86,14 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     );
 
     modifier onlyVerifier() {
+        _onlyVerifier();
+        _;
+    }
+
+    function _onlyVerifier() internal view {
         if (msg.sender != verifier) {
             revert UnauthorizedVerifier(msg.sender);
         }
-
-        _;
     }
 
     constructor(
