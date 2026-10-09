@@ -501,7 +501,7 @@ function PrivacyLink({
     <Button
       render={<Link to={to} />}
       variant="ghost"
-      className="h-auto w-full min-w-0 justify-between gap-3 rounded-none px-5 py-4 font-normal"
+      className="h-auto w-full min-w-0 justify-between gap-3 rounded-none px-5 py-4 font-normal first:rounded-t-lg last:rounded-b-lg"
     >
       <div className="min-w-0 flex-1 text-left">
         <p className="text-label font-medium">
