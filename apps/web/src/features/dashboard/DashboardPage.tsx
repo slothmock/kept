@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import type { CommitmentDto, GoalDto, TransactionDto } from "@/api/kept-api";
 import type { AccessTokenProvider } from "@/api/http-client";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,7 @@ import { WithdrawView } from "@/features/withdrawals/WithdrawView";
 import type { RewardState } from "@/features/commitments/reward-claim";
 
 import { formatUsdc } from "@/features/savings/format";
+import { GOAL_SORT_OPTIONS, sortGoals, type GoalSortOrder } from "@/features/goals/sort";
 
 import { readFiatEnabled } from "@/app/feature-flags";
 
@@ -568,6 +569,7 @@ export function DashboardPage(props: DashboardPageProps) {
   const [activityRevision, setActivityRevision] = useState(0);
 
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
+  const [goalSortOrder, setGoalSortOrder] = useState<GoalSortOrder>("soonest");
 
   const [commitmentGoal, setCommitmentGoal] = useState<GoalDto | null>(null);
 
@@ -580,16 +582,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const activeGoals = goals.filter((goal) => goal.status === "ACTIVE");
 
-  const sortedActiveGoals = [...activeGoals].sort((left, right) => {
-    const leftDate = left.targetDate
-      ? new Date(left.targetDate).getTime()
-      : Number.POSITIVE_INFINITY;
-    const rightDate = right.targetDate
-      ? new Date(right.targetDate).getTime()
-      : Number.POSITIVE_INFINITY;
-
-    return leftDate - rightDate;
-  });
+  const sortedActiveGoals = sortGoals(activeGoals, goalSortOrder, goalFundingState.kind === "ready" ? goalFundingState.funding.byGoal : undefined);
 
   const selectedGoal =
     goalDetailView && goalId
@@ -1146,13 +1139,19 @@ export function DashboardPage(props: DashboardPageProps) {
                 </p>
               </div>
 
-              <div
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-label text-foreground"
-                aria-label="Goals sorted by soonest target date"
-              >
-                <SlidersHorizontal className="size-4 text-muted-foreground" />
-                Sort: Soonest
-              </div>
+              <label className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-label text-foreground">
+                <span className="sr-only">Sort goals</span>
+                <select
+                  aria-label="Sort goals"
+                  className="min-w-0 max-w-56 cursor-pointer bg-transparent text-label text-foreground outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
+                  value={goalSortOrder}
+                  onChange={(event) => setGoalSortOrder(event.target.value as GoalSortOrder)}
+                >
+                  {GOAL_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {productState.kind === "error" ? (
