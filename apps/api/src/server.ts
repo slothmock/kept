@@ -615,8 +615,12 @@ async function runVaultActivitySync(): Promise<void> {
             result.toBlock.toString(),
           eventsIndexed:
             result.eventsIndexed,
+          currentBlock: result.status.currentBlock?.toString() ?? null,
+          targetBlock: result.status.targetBlock?.toString() ?? null,
+          progressPercent: result.status.progressPercent,
+          ready: result.status.ready,
         },
-        "Vault activity index synchronized",
+        "Vault activity index sync pass completed",
       );
     }
   } catch (error) {

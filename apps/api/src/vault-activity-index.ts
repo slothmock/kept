@@ -35,6 +35,8 @@ const vaultActivityAbi = [
 ] as const;
 
 const RPC_BLOCK_RANGE = 100n;
+const MAX_BLOCK_BATCHES_PER_PASS = 10;
+const RPC_TIMEOUT_MS = 15_000;
 const RPC_REQUEST_DELAY_MS = 150;
 const CONFIRMATION_DEPTH = 2n;
 
@@ -91,6 +93,26 @@ export interface VaultActivityIndex {
   ): Promise<IndexedVaultActivity>;
 }
 
+export async function withVaultIndexTimeout<T>(
+  operation: Promise<T>,
+  description: string,
+  timeoutMs = RPC_TIMEOUT_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Vault activity index RPC timed out: ${description}`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function waitForRpcBudget(): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, RPC_REQUEST_DELAY_MS);
@@ -110,9 +132,10 @@ async function findFirstBlockAtOrAfter(
       low + (high - low) / 2n;
 
     const block =
-      await publicClient.getBlock({
-        blockNumber: middle,
-      });
+      await withVaultIndexTimeout(
+        publicClient.getBlock({ blockNumber: middle }),
+        "getBlock",
+      );
 
     if (block.timestamp < targetTimestamp) {
       low = middle + 1n;
@@ -277,7 +300,7 @@ export function createVaultActivityIndex(input: {
 
   async function assertChain(): Promise<void> {
     const liveChainId =
-      await input.publicClient.getChainId();
+      await withVaultIndexTimeout(input.publicClient.getChainId(), "getChainId");
 
     if (liveChainId !== input.chainId) {
       throw new Error(
@@ -461,8 +484,10 @@ export function createVaultActivityIndex(input: {
       await assertChain();
 
       const latest =
-        await input.publicClient
-          .getBlockNumber();
+        await withVaultIndexTimeout(
+          input.publicClient.getBlockNumber(),
+          "getBlockNumber",
+        );
 
       const safeHead =
         latest > CONFIRMATION_DEPTH
@@ -495,8 +520,9 @@ export function createVaultActivityIndex(input: {
         fromBlock;
 
       let eventsIndexed = 0;
+      let batchesProcessed = 0;
 
-      while (fromBlock <= safeHead) {
+      while (fromBlock <= safeHead && batchesProcessed < MAX_BLOCK_BATCHES_PER_PASS) {
         const candidateTo =
           fromBlock
           + RPC_BLOCK_RANGE
@@ -508,13 +534,14 @@ export function createVaultActivityIndex(input: {
             : safeHead;
 
         const logs =
-          await input.publicClient
-            .getLogs({
-              address:
-                input.vault,
+          await withVaultIndexTimeout(
+            input.publicClient.getLogs({
+              address: input.vault,
               fromBlock,
               toBlock,
-            });
+            }),
+            "getLogs",
+          );
 
         eventsIndexed +=
           await persistChunk(
@@ -525,13 +552,14 @@ export function createVaultActivityIndex(input: {
 
         fromBlock =
           toBlock + 1n;
+        batchesProcessed += 1;
 
-        if (fromBlock <= safeHead) {
+        if (fromBlock <= safeHead && batchesProcessed < MAX_BLOCK_BATCHES_PER_PASS) {
           await waitForRpcBudget();
         }
       }
 
-      ready = true;
+      ready = processedBlock !== null && processedBlock >= safeHead;
 
       return {
         fromBlock:
