@@ -13,10 +13,11 @@ const readyPosition = {
   },
 };
 
-function renderBalanceCard(stagingFaucetAvailable: boolean) {
+function renderBalanceCard(stagingFaucetAvailable: boolean, demoYield = false) {
   return renderToStaticMarkup(
     <BalanceCard
       positionState={readyPosition}
+      demoYield={demoYield}
       savingsPerformanceState={{ kind: "ready", earningsAssets: -10_790_000n }}
       marketStatusState={{
         kind: "ready",
@@ -60,6 +61,21 @@ describe("redesigned balance card", () => {
     expect(html).toContain("Add to savings");
     expect(html).toContain("Withdraw");
     expect(html).not.toContain("Get test funds");
+  });
+
+  it("discloses simulated yield on testnet without suggesting Aave supply", () => {
+    const html = renderBalanceCard(false, true);
+    expect(html).toContain("4.50% Demo APY");
+    expect(html).toContain("547.31 USDC currently earning simulated testnet yield");
+    expect(html).toContain("yield is simulated, not supplied through Aave");
+    expect(html).toContain("commitment rewards still execute on-chain");
+  });
+
+  it("keeps live APY wording outside testnet", () => {
+    const html = renderBalanceCard(false, false);
+    expect(html).toContain("4.50% APY");
+    expect(html).not.toContain("Demo APY");
+    expect(html).not.toContain("simulated testnet yield");
   });
 
   it("only shows the testnet faucet action when available", () => {
