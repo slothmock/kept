@@ -403,7 +403,8 @@ export function AccountPage({
                 Privacy controls
               </h2>
 
-              <div className="divide-y divide-border">
+              <Card className="shadow-none">
+                <CardContent className="divide-y divide-border p-0">
                   <PrivacyLink
                     to="/privacy"
                     title="Privacy policy"
@@ -421,7 +422,8 @@ export function AccountPage({
                     title="Terms of service"
                     description="The terms that apply when using Kept."
                   />
-              </div>
+                </CardContent>
+              </Card>
             </section>
 
             <section className="space-y-3">
