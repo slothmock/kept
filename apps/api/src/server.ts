@@ -23,6 +23,7 @@ import { createVaultShareBalanceReader } from "./vault-shares.js";
 import { createVaultSavingsActivityReader } from "./vault-activity.js";
 
 import { createVaultActivityIndex } from "./vault-activity-index.js";
+import { resolveVaultActivityIndexStartAt } from "./vault-activity-index-config.js";
 
 import { createSavingsPerformanceReader } from "./savings-performance.js";
 
@@ -188,8 +189,13 @@ const savingsCurrentAssets = {
   },
 };
 
+const vaultActivityIndexStartAt = resolveVaultActivityIndexStartAt(
+  config.monadChainId,
+  process.env,
+);
+
 const savingsActivityIndex =
-  config.monadChainId === 10_143
+  vaultActivityIndexStartAt
     ? createVaultActivityIndex({
       db: database.db,
 
@@ -226,12 +232,7 @@ const savingsActivityIndex =
       chainId:
         config.monadChainId,
 
-      startAt:
-        new Date(
-          process.env
-            .VAULT_ACTIVITY_INDEX_START_AT
-          ?? "2026-10-02T00:00:00.000Z",
-        ),
+      startAt: vaultActivityIndexStartAt,
     })
     : undefined;
 
