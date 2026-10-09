@@ -71,6 +71,7 @@ export interface ApiDependencies {
     | "listGoals"
     | "archiveGoal"
     | "getGoalAllocation"
+    | "listGoalActivity"
     | "allocateGoalShares"
     | "reallocateGoalShares"
     | "createCommitmentDraft"
@@ -2671,6 +2672,17 @@ export function buildApp(
 
       return goal;
     }),
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/v1/goals/:id/activity",
+    async (request, reply) =>
+      handle(request, reply, async () =>
+        dependencies.persistence.listGoalActivity(
+          asAuthenticatedRequest(request).user.id,
+          request.params.id,
+        ),
+      ),
   );
 
   app.get<{ Params: { id: string } }>(
