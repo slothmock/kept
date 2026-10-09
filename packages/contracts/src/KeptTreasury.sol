@@ -56,11 +56,14 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     event AssetsWithdrawn(address indexed recipient, uint256 assets);
 
     modifier onlyRewardManager() {
+        _onlyRewardManager();
+        _;
+    }
+
+    function _onlyRewardManager() internal view {
         if (msg.sender != rewardManager) {
             revert UnauthorizedRewardManager(msg.sender);
         }
-
-        _;
     }
 
     constructor(IERC20 asset_, address initialOwner) Ownable(initialOwner) {
