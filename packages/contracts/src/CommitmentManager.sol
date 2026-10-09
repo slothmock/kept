@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {IKeptTreasury} from "./interfaces/IKeptTreasury.sol";
 
@@ -151,7 +152,7 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
         commitments[commitmentId] = Commitment({
             owner: msg.sender,
             referenceId: referenceId,
-            createdAt: uint64(block.timestamp),
+            createdAt: SafeCast.toUint64(block.timestamp),
             startAt: startAt,
             endAt: endAt,
             rewardAssets: 0,
