@@ -354,6 +354,8 @@ contract VaultAndStrategyTest is Test {
         uint256 assets = vault.redeem(shares, alice, alice);
         assertEq(assets, expected);
         assertLt(assets, amount);
-        assertApproxEqAbs(assets, amount * 9_980 / 10_000, 2);
+        // The 20 bps fee is charged on net savings, so the user's
+        // gross-deposit share is 10,000 / 10,020 absent yield.
+        assertApproxEqAbs(assets, amount * 10_000 / 10_020, 2);
     }
 }

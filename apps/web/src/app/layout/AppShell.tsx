@@ -18,6 +18,7 @@ interface AppShellProps {
 
 interface NavigationItem {
   readonly label: string;
+  readonly mobileLabel?: string;
   readonly icon: ComponentType<{
     readonly className?: string;
   }>;
@@ -41,6 +42,7 @@ const navigationItems: readonly NavigationItem[] = [
   },
   {
     label: "Commitments",
+    mobileLabel: "Commit",
     icon: HandCoins,
     to: "/commitments",
   },
@@ -89,7 +91,7 @@ function PrimaryNavigation({
       className={
         desktop
           ? "flex flex-col gap-1"
-          : "flex items-center gap-1 overflow-x-auto border-t border-border px-3 py-2"
+          : "grid grid-cols-5 gap-1 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
       }
       aria-label="Primary navigation"
     >
@@ -100,20 +102,21 @@ function PrimaryNavigation({
           <NavLink
             key={item.to}
             to={item.to}
+            aria-label={desktop ? undefined : item.label}
             className={({ isActive }) =>
               cn(
                 desktop
                   ? "flex items-center gap-3 rounded-md px-3 py-2 text-label text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  : "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-label text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                  : "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
                   && "bg-accent text-accent-foreground",
               )
             }
           >
-            <Icon className="size-4" />
+            <Icon aria-hidden="true" className={desktop ? "size-4" : "size-5"} />
 
-            <span>
-              {item.label}
+            <span className={desktop ? undefined : "w-full truncate text-center text-[11px] leading-4 font-medium"}>
+              {desktop ? item.label : (item.mobileLabel ?? item.label)}
             </span>
           </NavLink>
         );
@@ -151,11 +154,14 @@ export function AppShell({
           {headerAction}
         </div>
 
-        <PrimaryNavigation variant="mobile" />
       </header>
 
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur md:hidden">
+        <PrimaryNavigation variant="mobile" />
+      </div>
+
       <div className="md:pl-56">
-        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:px-8 md:py-12 lg:px-10">
+        <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:py-12 lg:px-10">
           {children}
         </main>
       </div>

@@ -820,19 +820,20 @@ export function DashboardPage(props: DashboardPageProps) {
 
       {homeView ? (
         <>
-          <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-h1 font-semibold tracking-tight">
               Home
             </h1>
 
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => navigate("/add-money")}>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <Button className="min-h-11 sm:min-h-0" onClick={() => navigate("/add-money")}>
                 <Plus className="size-4" />
                 Add money
               </Button>
 
               <Button
                 variant="outline"
+                className="min-h-11 sm:min-h-0"
                 onClick={() => navigate("/withdraw")}
               >
                 Withdraw

@@ -152,7 +152,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     function previewDeposit(uint256 assets) public view override returns (uint256) {
         uint256 grossShares = _convertToSharesAfterPendingFee(assets, Math.Rounding.Floor);
 
-        uint256 feeShares = Math.mulDiv(grossShares, DEPOSIT_FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Floor);
+        uint256 feeShares = Math.mulDiv(grossShares, DEPOSIT_FEE_BPS, BPS_DENOMINATOR + DEPOSIT_FEE_BPS, Math.Rounding.Floor);
 
         return grossShares - feeShares;
     }
@@ -197,7 +197,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
 
         if (shares == 0) revert ZeroShares();
 
-        // Gross entitlement before Kept's deposit fee.
+        // Gross entitlement includes a fee applied to the net amount saved.
         uint256 grossShares = _convertToSharesAfterPendingFee(assets, Math.Rounding.Floor);
 
         uint256 feeShares = grossShares - shares;
@@ -206,7 +206,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         // mints the net shares to the user.
         super._deposit(caller, receiver, assets, shares);
 
-        // Kept receives ownership rather than removing assets.
+        // Kept receives fee shares without removing assets.
         if (feeShares != 0) {
             _mint(feeRecipient, feeShares);
 

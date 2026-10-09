@@ -38,8 +38,8 @@ describe("vault fee disclosure", () => {
 
     expect(quote).toEqual({
       assets: 100_000_000n,
-      grossAssets: 100_200_401n,
-      depositFeeAssets: 200_401n,
+      grossAssets: 100_200_000n,
+      depositFeeAssets: 200_000n,
       depositFeeBps: 20n,
       expectedNetAssets: 100_000_000n,
       performanceFeeBps: 1_000n,
@@ -55,8 +55,29 @@ describe("vault fee disclosure", () => {
     ]);
 
     expect(calls[3]?.args).toEqual([
-      100_200_401n,
+      100_200_000n,
     ]);
+  });
+
+  it("quotes exactly 2 USDC on a 1,000 USDC deposit at 0.2%", async () => {
+    const quote = await readVaultDepositQuote({
+      assets: 1_000_000_000n,
+      vault,
+      publicClient: {
+        async readContract(input) {
+          const { functionName } = input as { readonly functionName: string };
+          if (functionName === "BPS_DENOMINATOR") return 10_000n;
+          if (functionName === "DEPOSIT_FEE_BPS") return 20n;
+          if (functionName === "PROFIT_FEE_BPS") return 1_000n;
+          if (functionName === "previewDeposit") return 1_000_000_000_000_000n;
+          if (functionName === "convertToAssets") return 1_000_000_000n;
+          return 0n;
+        },
+      },
+    });
+    expect(quote.grossAssets).toBe(1_002_000_000n);
+    expect(quote.depositFeeAssets).toBe(2_000_000n);
+    expect(quote.assets).toBe(1_000_000_000n);
   });
 
   it("fails closed when the returned fee configuration is invalid", async () => {
