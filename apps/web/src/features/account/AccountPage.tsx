@@ -271,8 +271,8 @@ export function AccountPage({
           </p>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(20rem,0.95fr)]">
-          <div className="space-y-6">
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(20rem,0.95fr)]">
+          <div className="min-w-0 space-y-6">
             <section className="space-y-3">
               <h2 className="text-h3 font-semibold tracking-tight">
                 Your Kept account
@@ -396,7 +396,7 @@ export function AccountPage({
 
           </div>
 
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             <InstallKeptCard />
             <section className="space-y-3">
               <h2 className="text-h3 font-semibold tracking-tight">
@@ -501,9 +501,9 @@ function PrivacyLink({
     <Button
       render={<Link to={to} />}
       variant="ghost"
-      className="h-auto w-full justify-between rounded-none px-5 py-4 font-normal"
+      className="h-auto w-full min-w-0 justify-between gap-3 rounded-none px-5 py-4 font-normal"
     >
-      <div className="text-left">
+      <div className="min-w-0 flex-1 text-left">
         <p className="text-label font-medium">
           {title}
         </p>
@@ -513,7 +513,7 @@ function PrivacyLink({
         </p>
       </div>
 
-      <ExternalLink className="size-4 text-muted-foreground" />
+      <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
     </Button>
   );
 }
