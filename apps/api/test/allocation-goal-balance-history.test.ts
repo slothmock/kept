@@ -12,6 +12,17 @@ describe("ledger goal time-weighted balances",()=>{
       {entryId:"b",at:threeQuarters,deltaShares:-100n},
     ]})).toBe(150n);
   });
+  it("rejects a goal delta at the exclusive end boundary",()=>{
+    expect(()=>calculateAverageGoalShares({
+      startAt,endAt,openingShares:0n,
+      deltas:[{entryId:"next-week",at:endAt,deltaShares:10n}],
+    })).toThrow(/Incomplete or unordered/);
+    expect(calculateAverageGoalShares({
+      startAt:endAt,endAt:new Date("2026-10-17T00:00:00Z"),
+      openingShares:0n,
+      deltas:[{entryId:"next-week",at:endAt,deltaShares:10n}],
+    })).toBe(10n);
+  });
   it("returns zero for a goal that receives and withdraws no shares",()=>{
     expect(calculateAverageGoalShares({startAt,endAt,openingShares:0n,deltas:[]})).toBe(0n);
   });
