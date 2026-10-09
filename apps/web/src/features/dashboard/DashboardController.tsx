@@ -907,8 +907,7 @@ onSignOut={async () => {
             error:
               stagingFaucetError,
 
-            onClaim: () =>
-              void claimStagingFaucet(),
+            onClaim: claimStagingFaucet,
           },
         }}
 
