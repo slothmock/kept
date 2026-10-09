@@ -10,6 +10,8 @@ export {
 export {
   PersistenceWeeklySavingsEvidenceSource,
 } from "./weekly-savings-evidence.js";
+export { AllocationWeeklySavingsEvidenceSource } from "./allocation-weekly-savings-evidence.js";
+export { RoutedWeeklySavingsEvidenceSource } from "./routed-weekly-savings-evidence.js";
 
 export {
   FixedRewardPolicy,

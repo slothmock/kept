@@ -57,6 +57,41 @@
       "when": 1791483000000,
       "tag": "0007_waitlist_signups",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791490000000,
+      "tag": "0008_allocation_ledger_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791491000000,
+      "tag": "0009_allocation_share_lots",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791492000000,
+      "tag": "0010_allocation_transfer_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791493000000,
+      "tag": "0011_vault_activity_shares",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791494000000,
+      "tag": "0012_allocation_deposit_claims",
+      "breakpoints": true
     }
   ]
 }

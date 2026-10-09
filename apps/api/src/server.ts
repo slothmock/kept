@@ -16,12 +16,14 @@ import { createCommitmentSettlementVerifier } from "./commitment-settlement.js";
 import { KeptPersistenceService } from "./persistence/index.js";
 
 import { KeptRepository } from "./persistence/repository.js";
+import { AllocationLedgerStore } from "./persistence/allocation-ledger-store.js";
 
 import { createVaultShareBalanceReader } from "./vault-shares.js";
 
 import { createVaultSavingsActivityReader } from "./vault-activity.js";
 
 import { createVaultActivityIndex } from "./vault-activity-index.js";
+import { resolveVaultActivityIndexStartAt } from "./vault-activity-index-config.js";
 
 import { createSavingsPerformanceReader } from "./savings-performance.js";
 
@@ -30,6 +32,8 @@ import { createSavingsMarketStatusReader } from "./savings-market-status.js";
 import {
   CommitmentVerificationWorker,
   CommitmentVerifier,
+  AllocationWeeklySavingsEvidenceSource,
+  RoutedWeeklySavingsEvidenceSource,
   FixedRewardPolicy,
   PersistenceVerificationStore,
   PersistenceWeeklySavingsEvidenceSource,
@@ -185,8 +189,13 @@ const savingsCurrentAssets = {
   },
 };
 
+const vaultActivityIndexStartAt = resolveVaultActivityIndexStartAt(
+  config.monadChainId,
+  process.env,
+);
+
 const savingsActivityIndex =
-  config.monadChainId === 10_143
+  vaultActivityIndexStartAt
     ? createVaultActivityIndex({
       db: database.db,
 
@@ -223,12 +232,7 @@ const savingsActivityIndex =
       chainId:
         config.monadChainId,
 
-      startAt:
-        new Date(
-          process.env
-            .VAULT_ACTIVITY_INDEX_START_AT
-          ?? "2026-10-02T00:00:00.000Z",
-        ),
+      startAt: vaultActivityIndexStartAt,
     })
     : undefined;
 
@@ -280,14 +284,49 @@ const savingsMarketStatus =
       : {}),
   });
 
-const weeklySavingsEvidence = new PersistenceWeeklySavingsEvidenceSource({
+const legacyWeeklySavingsEvidence = new PersistenceWeeklySavingsEvidenceSource({
   repository,
-
   vaultShares,
-
   vaultActivity,
-
   chainId: BigInt(config.monadChainId),
+});
+
+const allocationLedger = new AllocationLedgerStore(database.db);
+const ledgerWeeklySavingsEvidence = new AllocationWeeklySavingsEvidenceSource({
+  db: database.db,
+  repository,
+  vaultShares,
+  vaultActivity,
+  chainId: BigInt(config.monadChainId),
+});
+
+const weeklySavingsEvidence = new RoutedWeeklySavingsEvidenceSource({
+  legacy: legacyWeeklySavingsEvidence,
+  ledger: ledgerWeeklySavingsEvidence,
+  isLedgerInitialized: userId => database.db.transaction(
+    tx => allocationLedger.hasOpeningInTransaction(tx, userId),
+  ),
+  async assertLedgerEvidenceReady(userId) {
+    // Do not settle rewards from partial or stale deposit provenance.
+    // The activity index is currently provisioned for Monad testnet.
+    const index = savingsActivityIndex?.status();
+    if (!index?.ready || index.currentBlock === null) {
+      throw new Error("Savings deposit attribution index is unavailable");
+    }
+    const head = await publicClient.getBlockNumber();
+    const safeHead = head > 2n ? head - 2n : 0n;
+    if (index.currentBlock < safeHead) {
+      throw new Error("Savings deposit attribution index is catching up");
+    }
+    const wallet = await repository.findPrimaryWalletForOwnerOnChain(
+      userId, BigInt(config.monadChainId),
+    );
+    if (!wallet) throw new Error("No verified embedded savings wallet");
+    const liveShares = await vaultShares.readShares(wallet.address);
+    await database.db.transaction(tx =>
+      allocationLedger.assertVaultParityInTransaction(tx, userId, liveShares),
+    );
+  },
 });
 
 const verificationStore = new PersistenceVerificationStore(database.db);
@@ -333,9 +372,12 @@ const persistence = new KeptPersistenceService(
   {
     chainId: BigInt(config.monadChainId),
 
+    vaultAddress: config.keptSavingsVaultAddress,
+
     reader: vaultShares,
   },
   config.commitmentWindowOverrideSeconds,
+  savingsActivityIndex ? () => savingsActivityIndex.status() : undefined,
 );
 
 const settlementVerifier = createCommitmentSettlementVerifier({

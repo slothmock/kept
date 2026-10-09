@@ -84,7 +84,7 @@ export interface ApiDependencies {
     | "getMoonPayOfframpOrder"
     | "recordMoonPayOfframpWebhook"
     | "markMoonPayOfframpFundsSent"
-  >;
+  > & Partial<Pick<KeptPersistenceService, "getDashboardGoalAllocations">>;
 
   readonly commitmentSettlementVerifier?: CommitmentSettlementVerifier;
 
@@ -2234,45 +2234,24 @@ export function buildApp(
               marketStatusPromise,
             ]);
 
-          const allocationEntries =
-            await Promise.all(
-              goals.map(
-                async (
-                  goal,
-                ) => {
-                  const allocation =
-                    await dependencies
-                      .persistence
-                      .getGoalAllocation(
-                        auth.user.id,
-                        goal.id,
-                        auth.identity
-                          .wallet!,
-                      );
-
-                  if (
-                    !allocation
-                  ) {
-                    throw new NotFoundError(
-                      "Savings goal",
-                    );
-                  }
-
-                  return [
-                    goal.id,
-                    allocation,
-                  ] as const;
-                },
-              ),
-            );
+          const allocations = dependencies.persistence.getDashboardGoalAllocations
+            ? await dependencies.persistence.getDashboardGoalAllocations(
+                auth.user.id,
+                auth.identity.wallet!,
+                goals.map(goal => goal.id),
+              )
+            : Object.fromEntries(await Promise.all(goals.map(async goal => {
+                const allocation = await dependencies.persistence.getGoalAllocation(
+                  auth.user.id, goal.id, auth.identity.wallet!,
+                );
+                if (!allocation) throw new NotFoundError("Savings goal");
+                return [goal.id, allocation] as const;
+              })));
 
           return {
             goals,
             commitments,
-            allocations:
-              Object.fromEntries(
-                allocationEntries,
-              ),
+            allocations,
             savings: {
               performance:
                 savingsPerformance,

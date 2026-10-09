@@ -141,6 +141,158 @@ export const goalShareAllocations = pgTable(
   ],
 );
 
+export const allocationBuckets = pgTable(
+  "allocation_buckets",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    bucketKind: text("bucket_kind").notNull(),
+    goalId: uuid("goal_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("allocation_buckets_id_user_unique").on(table.id, table.userId),
+    foreignKey({
+      columns: [table.goalId, table.userId],
+      foreignColumns: [savingsGoals.id, savingsGoals.userId],
+      name: "allocation_buckets_goal_owner_fk",
+    }),
+    uniqueIndex("allocation_unassigned_unique").on(table.userId)
+      .where(sql`${table.bucketKind} = 'UNASSIGNED'`),
+    uniqueIndex("allocation_goal_unique").on(table.userId, table.goalId)
+      .where(sql`${table.bucketKind} = 'GOAL'`),
+    check("allocation_buckets_kind_check", sql`(${table.bucketKind} = 'UNASSIGNED' AND ${table.goalId} IS NULL) OR (${table.bucketKind} = 'GOAL' AND ${table.goalId} IS NOT NULL)`),
+  ],
+);
+
+export const allocationLedgerEvents = pgTable(
+  "allocation_ledger_events",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    eventKind: text("event_kind").notNull(),
+    idempotencyKey: text("idempotency_key"),
+    transactionHash: text("transaction_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("allocation_ledger_events_id_user_unique").on(table.id, table.userId),
+    uniqueIndex("allocation_ledger_event_idempotency_unique").on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    index("allocation_ledger_events_user_created_idx").on(table.userId, table.createdAt),
+    check("allocation_ledger_events_kind_check", sql`${table.eventKind} IN ('OPENING','TRANSFER','VAULT_CREDIT','VAULT_DEBIT','RECONCILIATION_CREDIT','RECONCILIATION_DEBIT')`),
+  ],
+);
+
+export const allocationDepositClaims = pgTable(
+  "allocation_deposit_claims",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    ledgerEventId: uuid("ledger_event_id"),
+    chainId: bigint("chain_id", {mode:"bigint"}).notNull(),
+    vaultAddress: text("vault_address").notNull(),
+    transactionHash: text("transaction_hash").notNull(),
+    logIndex: integer("log_index").notNull(),
+    sharesAtomic: numeric("shares_atomic",{precision:78,scale:0}).notNull(),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at",{withTimezone:true}).notNull(),
+  },
+  (table) => [
+    foreignKey({columns:[table.ledgerEventId,table.userId],foreignColumns:[allocationLedgerEvents.id,allocationLedgerEvents.userId],name:"allocation_deposit_claims_event_owner_fk"}),
+    uniqueIndex("allocation_deposit_claims_log_unique").on(table.chainId,sql`lower(${table.vaultAddress})`,sql`lower(${table.transactionHash})`,table.logIndex),
+    index("allocation_deposit_claims_user_idx").on(table.userId,table.createdAt),
+    check("allocation_deposit_claims_shares_positive",sql`${table.sharesAtomic} > 0`),
+    check("allocation_deposit_claims_status_valid",sql`${table.status} IN ('CREDITED','ALREADY_REFLECTED')`),
+    check("allocation_deposit_claims_credit_consistency",sql`(${table.status} = 'CREDITED' AND ${table.ledgerEventId} IS NOT NULL) OR (${table.status} = 'ALREADY_REFLECTED' AND ${table.ledgerEventId} IS NULL)`),
+  ],
+);
+
+export const allocationLedgerEntries = pgTable(
+  "allocation_ledger_entries",
+  {
+    id: uuid("id").primaryKey(),
+    eventId: uuid("event_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    bucketId: uuid("bucket_id").notNull(),
+    shareDeltaAtomic: numeric("share_delta_atomic", { precision: 78, scale: 0 }).notNull(),
+    originEventId: uuid("origin_event_id"),
+    originKind: text("origin_kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.eventId, table.userId],
+      foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId],
+      name: "allocation_ledger_entries_event_owner_fk",
+    }),
+    foreignKey({
+      columns: [table.bucketId, table.userId],
+      foreignColumns: [allocationBuckets.id, allocationBuckets.userId],
+      name: "allocation_ledger_entries_bucket_owner_fk",
+    }),
+    foreignKey({
+      columns: [table.originEventId, table.userId],
+      foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId],
+      name: "allocation_ledger_entries_origin_fk",
+    }),
+    index("allocation_ledger_entries_user_bucket_idx").on(table.userId, table.bucketId),
+    index("allocation_ledger_entries_event_idx").on(table.eventId),
+    check("allocation_ledger_entries_delta_check", sql`${table.shareDeltaAtomic} <> 0`),
+    check("allocation_ledger_entries_origin_check", sql`${table.originKind} IN ('OPENING','EXTERNAL_DEPOSIT','LEGACY','UNKNOWN')`),
+  ],
+);
+
+export const allocationShareLots = pgTable(
+  "allocation_share_lots",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    bucketId: uuid("bucket_id").notNull(),
+    originEventId: uuid("origin_event_id").notNull(),
+    originKind: text("origin_kind").notNull(),
+    sharesAtomic: numeric("shares_atomic", { precision: 78, scale: 0 }).notNull(),
+    everGoalAllocated: boolean("ever_goal_allocated").notNull().default(false),
+    firstGoalId: uuid("first_goal_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    foreignKey({columns: [table.bucketId, table.userId], foreignColumns: [allocationBuckets.id, allocationBuckets.userId], name: "allocation_share_lots_bucket_owner_fk"}),
+    foreignKey({columns: [table.originEventId, table.userId], foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId], name: "allocation_share_lots_origin_owner_fk"}),
+    foreignKey({columns: [table.firstGoalId, table.userId], foreignColumns: [savingsGoals.id, savingsGoals.userId], name: "allocation_share_lots_first_goal_owner_fk"}),
+    index("allocation_share_lots_owner_bucket_idx").on(table.userId,table.bucketId,table.createdAt,table.id),
+    check("allocation_share_lots_amount_positive", sql`${table.sharesAtomic} > 0`),
+    check("allocation_share_lots_origin_kind", sql`${table.originKind} IN ('OPENING','EXTERNAL_DEPOSIT','LEGACY','UNKNOWN')`),
+  ],
+);
+
+export const allocationTransferLotMovements = pgTable(
+  "allocation_transfer_lot_movements",
+  {
+    id: uuid("id").primaryKey(),
+    eventId: uuid("event_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    sourceBucketId: uuid("source_bucket_id").notNull(),
+    destinationBucketId: uuid("destination_bucket_id").notNull(),
+    originEventId: uuid("origin_event_id").notNull(),
+    originKind: text("origin_kind").notNull(),
+    sharesAtomic: numeric("shares_atomic", {precision: 78, scale: 0}).notNull(),
+    wasEverGoalAllocated: boolean("was_ever_goal_allocated").notNull(),
+    createdAt: timestamp("created_at", {withTimezone: true}).notNull(),
+  },
+  (table) => [
+    foreignKey({columns: [table.eventId, table.userId], foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId], name: "allocation_transfer_lot_movements_event_owner_fk"}),
+    foreignKey({columns: [table.sourceBucketId, table.userId], foreignColumns: [allocationBuckets.id, allocationBuckets.userId], name: "allocation_transfer_lot_movements_source_owner_fk"}),
+    foreignKey({columns: [table.destinationBucketId, table.userId], foreignColumns: [allocationBuckets.id, allocationBuckets.userId], name: "allocation_transfer_lot_movements_dest_owner_fk"}),
+    foreignKey({columns: [table.originEventId, table.userId], foreignColumns: [allocationLedgerEvents.id, allocationLedgerEvents.userId], name: "allocation_transfer_lot_movements_origin_owner_fk"}),
+    index("allocation_transfer_lot_movements_owner_time_idx").on(table.userId,table.createdAt,table.eventId),
+    index("allocation_transfer_lot_movements_event_idx").on(table.eventId),
+    check("allocation_transfer_lot_movements_positive", sql`${table.sharesAtomic} > 0`),
+    check("allocation_transfer_lot_movements_origin", sql`${table.originKind} IN ('OPENING','EXTERNAL_DEPOSIT','LEGACY','UNKNOWN')`),
+    check("allocation_transfer_lot_movements_distinct_buckets", sql`${table.sourceBucketId} <> ${table.destinationBucketId}`),
+  ],
+);
+
 export const accountTransactions = pgTable(
   "account_transactions",
   {
@@ -304,6 +456,7 @@ export const vaultActivityEvents = pgTable(
       precision: 78,
       scale: 0,
     }).notNull(),
+    sharesAtomic: numeric("shares_atomic", { precision: 78, scale: 0 }),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     transactionHash: text("transaction_hash").notNull(),
     logIndex: integer("log_index").notNull(),
@@ -330,6 +483,10 @@ export const vaultActivityEvents = pgTable(
     check(
       "vault_activity_events_assets_nonnegative",
       sql`${table.assetsAtomic} >= 0`,
+    ),
+    check(
+      "vault_activity_events_shares_nonnegative",
+      sql`${table.sharesAtomic} IS NULL OR ${table.sharesAtomic} >= 0`,
     ),
   ],
 );
@@ -452,6 +609,11 @@ export const schema = {
   wallets,
   savingsGoals,
   goalShareAllocations,
+  allocationBuckets,
+  allocationLedgerEvents,
+  allocationLedgerEntries,
+  allocationShareLots,
+  allocationTransferLotMovements,
   accountTransactions,
   moonPayOfframpOrders,
   vaultActivityEvents,

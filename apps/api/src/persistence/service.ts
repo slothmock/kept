@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 
 import {
   getCommitmentDefinition,
@@ -6,6 +7,9 @@ import {
 } from "@kept/commitment-catalogue";
 
 import type { KeptDatabase } from "../db/client.js";
+import { assertAllocationCutoverParity } from "../domain/allocation-cutover.js";
+import { hasOverlappingRewardEpoch } from "../domain/commitment-overlap.js";
+import { AllocationLedgerStore } from "./allocation-ledger-store.js";
 import {
   decodeOnchainCommitmentId,
   encodeOnchainCommitmentId,
@@ -558,8 +562,14 @@ export class KeptPersistenceService {
     private readonly vaultShares?: {
       readonly reader: VaultShareBalanceReader;
       readonly chainId: bigint;
+      readonly vaultAddress?: string;
     },
     private readonly commitmentWindowOverrideSeconds?: number,
+    private readonly depositIndexStatus?: () => {
+      readonly ready: boolean;
+      readonly currentBlock: bigint | null;
+      readonly targetBlock: bigint | null;
+    },
   ) { }
 
   async joinWaitlist(input: {
@@ -730,6 +740,22 @@ export class KeptPersistenceService {
       throw new Error(
         "Embedded wallet could not be created",
       );
+    }
+
+    // A newly registered wallet can enter the clean-start ledger only when
+    // its vault position is independently verified as empty. Never infer an
+    // opening position or import historical goal allocations.
+    if (this.vaultShares && this.vaultShares.chainId === chainId) {
+      const { shares } = await this.readVaultShares(address);
+      if (shares === 0n) {
+        const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+        if (legacy.length === 0) {
+          await this.initializeFreshAllocationLedger({
+            userId: input.userId,
+            walletAddress: address,
+          });
+        }
+      }
     }
 
     return mapWallet(created);
@@ -1066,11 +1092,288 @@ export class KeptPersistenceService {
     );
   }
 
+  /**
+   * Trusted entry point for indexed Deposit claims. The live share balance is
+   * always read independently from the configured vault reader.
+   * Do not expose a client-supplied live balance as an API parameter.
+   */
+  async claimVerifiedVaultDeposit(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+    readonly transactionHash: string;
+    readonly logIndex: number;
+  }): Promise<{status:"CREDITED"|"ALREADY_REFLECTED";eventId:string|null}> {
+    if (!this.vaultShares?.vaultAddress) throw new Error("Trusted vault address is not configured");
+    const {shares} = await this.readVaultShares(input.walletAddress);
+    const ledger = new AllocationLedgerStore(this.db);
+    return ledger.claimIndexedDeposit({
+      userId:input.userId,
+      chainId:this.vaultShares.chainId,
+      vaultAddress:this.vaultShares.vaultAddress,
+      ownerAddress:input.walletAddress,
+      transactionHash:input.transactionHash,
+      logIndex:input.logIndex,
+      liveVaultShares:shares,
+    });
+  }
+
+  /** Batch confirmed deposits before generic vault-share reconciliation. */
+  async claimVerifiedVaultDeposits(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<{credited:number;shares:bigint}> {
+    if (!this.vaultShares?.vaultAddress) throw new Error("Trusted vault address is not configured");
+    const {shares} = await this.readVaultShares(input.walletAddress);
+    return new AllocationLedgerStore(this.db).claimIndexedDepositBatch({
+      userId:input.userId,chainId:this.vaultShares.chainId,
+      vaultAddress:this.vaultShares.vaultAddress,
+      ownerAddress:input.walletAddress,liveVaultShares:shares,
+    });
+  }
+
+  /**
+   * Prepare a clean pre-launch account. This never imports legacy allocations
+   * and only initializes after confirming the live vault position is empty.
+   */
+  async initializeFreshAllocationLedger(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<void> {
+    const { shares } = await this.readVaultShares(input.walletAddress);
+    if (shares !== 0n) {
+      throw new Error("Cannot clean-start an account holding vault shares");
+    }
+    await this.db.transaction(async transaction => {
+      const repository = new KeptRepository(transaction);
+      await repository.lockGoalsForOwner(input.userId);
+      const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+      if (legacy.length > 0) {
+        throw new Error("Cannot clean-start an account with legacy goal allocations");
+      }
+      const ledger = new AllocationLedgerStore(this.db);
+      await ledger.initializeEmptyAccountInTransaction(transaction, {
+        userId: input.userId, key: "clean-start:empty-account",
+      });
+    });
+  }
+
+  /**
+   * Reconcile an explicitly initialized account against the live vault in
+   * one transaction, alongside legacy goal reductions. Uninitialized accounts
+   * remain exclusively on the legacy path.
+   */
+  async reconcileInitializedGoalLedger(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<boolean> {
+    const { shares } = await this.readVaultShares(input.walletAddress);
+    return this.db.transaction(async transaction => {
+      const repository = new KeptRepository(transaction);
+      await repository.lockGoalsForOwner(input.userId);
+      return this.reconcileGoalAndLedgerInTransaction(transaction, repository, input.userId, shares);
+    });
+  }
+
+  /**
+   * Reconcile legacy allocations and initialized ledger buckets under
+   * the caller's existing transaction and user-wide goal lock.
+   */
+  private async reconcileGoalAndLedgerInTransaction(
+    transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0],
+    repository: KeptRepository,
+    userId: string,
+    shares: bigint,
+  ): Promise<boolean> {
+    const ledger = new AllocationLedgerStore(this.db);
+    const hasOpening = await ledger.hasOpeningInTransaction(transaction, userId);
+    if (!hasOpening) {
+      await this.reconcileGoalAllocationsToVaultBalance(repository, userId, shares);
+      return false;
+    }
+    const oldRows = await repository.listPositiveGoalAllocationsForOwner(userId);
+    const oldBalances = await ledger.getBalancesInTransaction(transaction, userId);
+    const beforeTotal = Object.values(oldBalances).reduce((sum, n) => sum + n, 0n);
+    assertAllocationCutoverParity({
+      hasOpening: true, liveVaultShares: beforeTotal,
+      legacyGoalShares: Object.fromEntries(oldRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
+      ledgerBalances: oldBalances,
+    });
+    await this.reconcileGoalAllocationsToVaultBalance(repository, userId, shares);
+    await ledger.reconcileToVaultSharesInTransaction(transaction, {
+      userId, liveShares: shares, key: `vault-reconciliation:${randomUUID()}`,
+    });
+    const newRows = await repository.listPositiveGoalAllocationsForOwner(userId);
+    const newBalances = await ledger.getBalancesInTransaction(transaction, userId);
+    assertAllocationCutoverParity({
+      hasOpening: true, liveVaultShares: shares,
+      legacyGoalShares: Object.fromEntries(newRows.map(row => [row.goalId, BigInt(row.allocatedSharesAtomic)])),
+      ledgerBalances: newBalances,
+    });
+    return true;
+  }
+
+  /**
+   * Read-only ledger cutover preflight. Does not activate the ledger,
+   * mutate legacy allocations, or infer historical provenance.
+   */
+  async assertGoalAllocationCutoverReady(input: {
+    readonly userId: string;
+    readonly walletAddress: string;
+  }): Promise<void> {
+    const { shares } = await this.readVaultShares(input.walletAddress);
+    await this.db.transaction(async (transaction) => {
+      const repository = new KeptRepository(transaction);
+      await repository.lockGoalsForOwner(input.userId);
+      const ledger = new AllocationLedgerStore(this.db);
+      const hasOpening = await ledger.hasOpeningInTransaction(transaction, input.userId);
+      const balances = await ledger.getBalancesInTransaction(transaction, input.userId);
+      const legacyRows = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+      assertAllocationCutoverParity({
+        hasOpening,
+        liveVaultShares: shares,
+        legacyGoalShares: Object.fromEntries(legacyRows.map(row => [
+          row.goalId, BigInt(row.allocatedSharesAtomic),
+        ])),
+        ledgerBalances: balances,
+      });
+    });
+  }
+
+  /**
+   * Mirror an already initialized allocation in the same DB transaction.
+   * Legacy remains authoritative for API reads and commitment verification.
+   */
+  private async mirrorGoalAllocationIfReady(
+    transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0],
+    repository: KeptRepository,
+    input: {
+      readonly userId: string;
+      readonly vaultShares: bigint;
+      readonly from: `GOAL:${string}` | "UNASSIGNED";
+      readonly to: `GOAL:${string}` | "UNASSIGNED";
+      readonly shares: bigint;
+      readonly idempotencyKey: string;
+    },
+  ): Promise<void> {
+    const ledger = new AllocationLedgerStore(this.db);
+    if (!(await ledger.hasOpeningInTransaction(transaction, input.userId))) return;
+    await ledger.assertVaultParityInTransaction(transaction, input.userId, input.vaultShares);
+    await ledger.transferInTransaction(transaction, {
+      userId: input.userId, from: input.from, to: input.to,
+      shares: input.shares, key: input.idempotencyKey,
+    });
+    const legacy = await repository.listPositiveGoalAllocationsForOwner(input.userId);
+    const balances = await ledger.getBalancesInTransaction(transaction, input.userId);
+    assertAllocationCutoverParity({
+      hasOpening: true, liveVaultShares: input.vaultShares,
+      legacyGoalShares: Object.fromEntries(legacy.map(row => [
+        row.goalId, BigInt(row.allocatedSharesAtomic),
+      ])),
+      ledgerBalances: balances,
+    });
+  }
+
+  private async isCleanStartLedger(tx: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0], userId: string): Promise<boolean> {
+    const rows = await tx.execute(sql`SELECT 1 FROM allocation_ledger_events WHERE user_id = ${userId}::uuid AND event_kind = 'OPENING' AND idempotency_key = 'clean-start:empty-account' LIMIT 1`);
+    return rows.rows.length === 1;
+  }
+
+  /**
+   * Resolve verified deposits before entering the goal transaction. A nested
+   * claim transaction would deadlock on the same user-wide ledger lock.
+   * Missing/stale index evidence fails closed; balance reads never mint shares.
+   */
+  private async synchronizeCleanStartDeposits(userId: string, walletAddress: string): Promise<void> {
+    if (!this.vaultShares?.vaultAddress || !this.depositIndexStatus) return;
+    const initialized = await this.db.transaction(async tx => {
+      return this.isCleanStartLedger(tx,userId);
+    });
+    if (!initialized) return;
+    const {shares} = await this.readVaultShares(walletAddress);
+    const current = await new AllocationLedgerStore(this.db).getBalances(userId);
+    const accounted = Object.values(current).reduce((sum,value)=>sum+value,0n);
+    if (shares <= accounted) return;
+    const status = this.depositIndexStatus();
+    if (!status.ready || status.currentBlock === null ||
+        status.targetBlock === null || status.currentBlock < status.targetBlock) {
+      throw new Error("Vault deposit attribution pending: activity index is synchronizing");
+    }
+    await this.claimVerifiedVaultDeposits({userId,walletAddress});
+  }
+
+  private async cleanLedgerBalances(tx: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0], userId: string, shares: bigint) {
+    const ledger = new AllocationLedgerStore(this.db);
+    const before = await ledger.getBalancesInTransaction(tx,userId);
+    const accounted = Object.values(before).reduce((total,value)=>total+value,0n);
+    if (accounted < shares) {
+      throw new Error("Vault deposit attribution pending: verified deposits must be claimed before goal reconciliation");
+    }
+    // Withdrawals still reconcile down; positive reconciliation would erase
+    // fresh-deposit evidence by creating ineligible UNKNOWN shares.
+    if (accounted > shares) {
+      await ledger.reconcileToVaultSharesInTransaction(tx,{
+        userId,liveShares:shares,key:`clean-vault-withdrawal:${randomUUID()}`,
+      });
+    }
+    await ledger.assertVaultParityInTransaction(tx,userId,shares);
+    return ledger.getBalancesInTransaction(tx,userId);
+  }
+
+  private cleanLedgerTotals(balances: Readonly<Record<string,bigint>>, goalId: string) {
+    const goal = balances[`GOAL:${goalId}`] ?? 0n;
+    const allocated = Object.entries(balances).reduce((n,[key,value])=> key.startsWith("GOAL:") ? n+value : n,0n);
+    return {goal,allocated};
+  }
+
+  /**
+   * One consistent vault and allocation snapshot for the dashboard.
+   * Clean-start accounts are ledger-authoritative; uninitialized accounts
+   * retain the existing legacy per-goal reconciliation path.
+   */
+  async getDashboardGoalAllocations(
+    userId: string,
+    walletAddress: string,
+    goalIds: readonly string[],
+  ): Promise<Record<string, GoalAllocationDto>> {
+    if (goalIds.length === 0) return {};
+    const uniqueIds = new Set(goalIds);
+    if (uniqueIds.size !== goalIds.length) throw new PersistenceValidationError("Duplicate dashboard goal");
+    const initialized = await this.db.transaction(tx => this.isCleanStartLedger(tx, userId));
+    if (!initialized) {
+      const entries = await Promise.all(goalIds.map(async goalId => {
+        const allocation = await this.getGoalAllocation(userId, goalId, walletAddress);
+        if (!allocation) throw new NotFoundError("Savings goal");
+        return [goalId, allocation] as const;
+      }));
+      return Object.fromEntries(entries);
+    }
+
+    await this.synchronizeCleanStartDeposits(userId, walletAddress);
+    const { shares } = await this.readVaultShares(walletAddress);
+    return this.db.transaction(async tx => {
+      const repository = new KeptRepository(tx);
+      await repository.lockGoalsForOwner(userId);
+      for (const goalId of goalIds) {
+        if (!(await repository.findGoalForOwner(userId, goalId))) {
+          throw new NotFoundError("Savings goal");
+        }
+      }
+      const balances = await this.cleanLedgerBalances(tx, userId, shares);
+      return Object.fromEntries(goalIds.map(goalId => {
+        const totals = this.cleanLedgerTotals(balances, goalId);
+        return [goalId, this.toGoalAllocationDto(
+          goalId, totals.goal, totals.allocated, shares,
+        )];
+      }));
+    });
+  }
+
   async getGoalAllocation(
     userId: string,
     goalId: string,
     walletAddress: string,
   ): Promise<GoalAllocationDto | null> {
+    await this.synchronizeCleanStartDeposits(userId,walletAddress);
     const { shares } =
       await this.readVaultShares(walletAddress);
 
@@ -1089,10 +1392,15 @@ export class KeptPersistenceService {
         return null;
       }
 
-      await this.reconcileGoalAllocationsToVaultBalance(
-        repository,
-        userId,
-        shares,
+      if (await this.isCleanStartLedger(transaction,userId)) {
+        const balances = await this.cleanLedgerBalances(transaction,userId,shares);
+        const totals = this.cleanLedgerTotals(balances,goalId);
+        return this.toGoalAllocationDto(goalId,totals.goal,totals.allocated,shares);
+      }
+
+
+      await this.reconcileGoalAndLedgerInTransaction(
+        transaction, repository, userId, shares,
       );
 
       const allocationTotals =
@@ -1125,22 +1433,37 @@ export class KeptPersistenceService {
     const delta = requireSignedAtomicShareDelta(input.shareDeltaAtomic);
     const reason = requireNonBlank(input.reason, "reason");
     const { idempotencyKey, ...request } = input;
+    await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
     return this.executeIdempotent(
       input.userId,
       "goal:share-allocation:append",
       idempotencyKey,
       request,
-      async (repository) => {
+      async (repository, transaction) => {
         await repository.lockGoalsForOwner(input.userId);
         if (!(await repository.findGoalForOwner(input.userId, input.goalId))) {
           throw new NotFoundError("Savings goal");
         }
         const { shares } = await this.readVaultShares(input.walletAddress);
 
-        await this.reconcileGoalAllocationsToVaultBalance(
-          repository,
-          input.userId,
-          shares,
+        if (await this.isCleanStartLedger(transaction,input.userId)) {
+          const ledger = new AllocationLedgerStore(this.db);
+          const balances = await this.cleanLedgerBalances(transaction,input.userId,shares);
+          const totals = this.cleanLedgerTotals(balances,input.goalId);
+          if (totals.goal + delta < 0n) throw new PersistenceValidationError("Goal allocation cannot become negative");
+          if (totals.allocated + delta > shares) throw new PersistenceValidationError("Goal allocations exceed current vault shares");
+          if (delta !== 0n) await ledger.transferInTransaction(transaction,{
+            userId:input.userId,
+            from:delta>0n?"UNASSIGNED":`GOAL:${input.goalId}`,
+            to:delta>0n?`GOAL:${input.goalId}`:"UNASSIGNED",
+            shares:delta>0n?delta:-delta,key:`goal-allocation:${idempotencyKey}`,
+          });
+          return this.toGoalAllocationDto(input.goalId,totals.goal+delta,totals.allocated+delta,shares);
+        }
+
+
+        await this.reconcileGoalAndLedgerInTransaction(
+          transaction, repository, input.userId, shares,
         );
 
         const allocationTotals = await repository.getAllocationTotals(input.userId, input.goalId);
@@ -1163,6 +1486,15 @@ export class KeptPersistenceService {
           transactionHash: null,
           createdAt: new Date(),
         });
+        if (delta !== 0n) {
+          await this.mirrorGoalAllocationIfReady(transaction, repository, {
+            userId: input.userId, vaultShares: shares,
+            from: delta > 0n ? "UNASSIGNED" : `GOAL:${input.goalId}`,
+            to: delta > 0n ? `GOAL:${input.goalId}` : "UNASSIGNED",
+            shares: delta > 0n ? delta : -delta,
+            idempotencyKey: `goal-allocation:${idempotencyKey}`,
+          });
+        }
         return this.toGoalAllocationDto(input.goalId, nextGoalAllocation, nextTotalAllocation, shares);
       },
     );
@@ -1197,12 +1529,13 @@ export class KeptPersistenceService {
 
     const { idempotencyKey, ...request } = input;
 
+    await this.synchronizeCleanStartDeposits(input.userId,input.walletAddress);
     return this.executeIdempotent(
       input.userId,
       "goal:share-reallocation",
       idempotencyKey,
       request,
-      async (repository) => {
+      async (repository, transaction) => {
         /*
          * Use the same owner-wide goal lock as normal
          * allocation changes. This serializes changes
@@ -1234,6 +1567,25 @@ export class KeptPersistenceService {
 
         const { shares } = await this.readVaultShares(
           input.walletAddress,
+        );
+        if (await this.isCleanStartLedger(transaction,input.userId)) {
+          const ledger = new AllocationLedgerStore(this.db);
+          const balances = await this.cleanLedgerBalances(transaction,input.userId,shares);
+          const from = this.cleanLedgerTotals(balances,input.fromGoalId);
+          const to = this.cleanLedgerTotals(balances,input.toGoalId);
+          if (from.goal < amount) throw new PersistenceValidationError("Source goal does not have enough allocated shares");
+          await ledger.transferInTransaction(transaction,{
+            userId:input.userId,from:`GOAL:${input.fromGoalId}`,to:`GOAL:${input.toGoalId}`,
+            shares:amount,key:`goal-reallocation:${idempotencyKey}`,
+          });
+          return {
+            from:this.toGoalAllocationDto(input.fromGoalId,from.goal-amount,from.allocated,shares),
+            to:this.toGoalAllocationDto(input.toGoalId,to.goal+amount,to.allocated,shares),
+          };
+        }
+
+        await this.reconcileGoalAndLedgerInTransaction(
+          transaction, repository, input.userId, shares,
         );
 
         const fromTotals =
@@ -1312,6 +1664,14 @@ export class KeptPersistenceService {
           reason: "reallocation",
           transactionHash: null,
           createdAt: now,
+        });
+
+        await this.mirrorGoalAllocationIfReady(transaction, repository, {
+          userId: input.userId, vaultShares: shares,
+          from: `GOAL:${input.fromGoalId}`,
+          to: `GOAL:${input.toGoalId}`,
+          shares: amount,
+          idempotencyKey: `goal-reallocation:${idempotencyKey}`,
         });
 
         return {
@@ -1554,7 +1914,10 @@ export class KeptPersistenceService {
       "commitment:activate",
       idempotencyKey,
       request,
-      async (repository) => {
+      async (repository, transaction) => {
+        // Serialize activation checks across different commitments belonging
+        // to the same user, rather than only locking the selected draft.
+        await transaction.execute(sql`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR UPDATE`);
         const current = await repository.findCommitmentForOwnerForUpdate(
           input.userId,
           input.commitmentId,
@@ -1612,6 +1975,26 @@ export class KeptPersistenceService {
           current.verificationDeadline,
           this.commitmentWindowOverrideSeconds,
         );
+
+        // Do not allow multiple paid evaluations of the same new savings
+        // across overlapping epochs for the same goal. Half-open intervals
+        // permit adjacent weeks but not overlapping ones.
+        if (current.definitionCode === "WEEKLY_SAVINGS_V1") {
+          const commitments = await repository.listCommitmentsForOwner(input.userId);
+          const conflict = hasOverlappingRewardEpoch({
+            commitmentId: current.id,
+            goalId: current.savingsGoalId,
+            definitionCode: current.definitionCode,
+            epochStart: current.epochStart,
+            epochEnd: current.epochEnd,
+            existing: commitments,
+          });
+          if (conflict) {
+            throw new PersistenceValidationError(
+              "This savings goal already has a qualifying commitment in the selected period",
+            );
+          }
+        }
 
         const transitioned = transitionCommitment({
           commitment: {
@@ -1985,7 +2368,7 @@ export class KeptPersistenceService {
     scope: string,
     idempotencyKey: string,
     request: unknown,
-    operation: (repository: KeptRepository) => Promise<T>,
+    operation: (repository: KeptRepository, transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0]) => Promise<T>,
   ): Promise<T> {
     const key = requireNonBlank(idempotencyKey, "idempotencyKey");
     const requestHash = hashRequest(request);
@@ -2018,7 +2401,7 @@ export class KeptPersistenceService {
         return existing.responseBody as unknown as T;
       }
 
-      const result = await operation(repository);
+      const result = await operation(repository, transaction);
       const serializedResult = toJsonValue(result);
       await repository.completeIdempotency(id, serializedResult);
       return serializedResult as unknown as T;
