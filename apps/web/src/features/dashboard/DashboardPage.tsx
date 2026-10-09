@@ -51,6 +51,7 @@ import type {
 } from "@/features/savings/state";
 
 import { DepositDialog } from "@/features/savings/components/DepositDialog";
+import { WithdrawSavingsDialog } from "@/features/savings/components/WithdrawSavingsDialog";
 
 import type { DepositQuoteState } from "@/features/savings/deposit-quote";
 
@@ -563,6 +564,7 @@ export function DashboardPage(props: DashboardPageProps) {
   } = props;
 
   const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawSavingsOpen, setWithdrawSavingsOpen] = useState(false);
 
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
 
@@ -664,10 +666,6 @@ export function DashboardPage(props: DashboardPageProps) {
               : null
           }
           positionLoading={savingsOverview.positionState.kind === "loading"}
-          amount={savingsTransactions.withdrawal.amount}
-          status={savingsTransactions.withdrawal.status}
-          error={savingsTransactions.withdrawal.error}
-          submitting={savingsTransactions.pendingTransaction === "withdraw"}
           cryptoAvailable={cryptoWithdrawal.destinationAssets.length > 0}
           cryptoAmount={cryptoWithdrawal.amount}
           cryptoRecipient={cryptoWithdrawal.recipient}
@@ -682,10 +680,6 @@ export function DashboardPage(props: DashboardPageProps) {
           cryptoExecutionError={cryptoWithdrawal.executionError}
           cryptoEstimatedReceive={cryptoWithdrawal.estimatedReceive}
           onBack={() => navigate("/dashboard")}
-          onAmountChange={savingsTransactions.withdrawal.onAmountChange}
-          onSubmitAvailableCash={() => {
-            void savingsTransactions.withdrawal.onSubmit();
-          }}
           onCryptoAmountChange={cryptoWithdrawal.onAmountChange}
           onCryptoRecipientChange={cryptoWithdrawal.onRecipientChange}
           onCryptoDestinationAssetChange={cryptoWithdrawal.onDestinationAssetChange}
@@ -854,7 +848,7 @@ export function DashboardPage(props: DashboardPageProps) {
             showActions={false}
             transactionPending={savingsTransactions.pendingTransaction !== null}
             onAddMoney={() => navigate("/add-money")}
-            onWithdraw={() => navigate("/withdraw")}
+            onWithdraw={() => setWithdrawSavingsOpen(true)}
             onAddToSavings={() => setDepositOpen(true)}
             onRefresh={async () => {
               await Promise.all([
@@ -1287,6 +1281,32 @@ export function DashboardPage(props: DashboardPageProps) {
           )();
         }}
 
+      />
+
+      <WithdrawSavingsDialog
+        open={withdrawSavingsOpen}
+        amount={savingsTransactions.withdrawal.amount}
+        status={savingsTransactions.withdrawal.status}
+        error={savingsTransactions.withdrawal.error}
+        availableBalance={
+          savingsOverview.positionState.kind === "ready"
+            ? savingsOverview.positionState.position.withdrawableAssets
+            : null
+        }
+        ready={savingsOverview.positionState.kind === "ready" && Boolean(walletAddress)}
+        submitting={savingsTransactions.pendingTransaction === "withdraw"}
+        onOpenChange={(open) =>
+          updateDialogOpenState(open, setWithdrawSavingsOpen, savingsTransactions.withdrawal.onDismiss)
+        }
+        onAmountChange={savingsTransactions.withdrawal.onAmountChange}
+        onSubmit={() => {
+          void (async () => {
+            const succeeded = await savingsTransactions.withdrawal.onSubmit();
+            if (succeeded) {
+              setWithdrawSavingsOpen(false);
+            }
+          })();
+        }}
       />
 
       <CreateGoalDialog
