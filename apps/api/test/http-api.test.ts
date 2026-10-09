@@ -977,6 +977,32 @@ describe("Kept HTTP API", () => {
     vi.unstubAllGlobals();
   });
 
+  it("returns authenticated goal-specific allocation activity", async () => {
+    const listGoalActivity = vi.fn(async (_userId: string, _goalId: string) => [{
+      id: "entry-1",
+      eventId: "event-1",
+      kind: "ADDED" as const,
+      shareDeltaAtomic: "1000000",
+      createdAt: "2026-10-09T20:00:00.000Z",
+    }]);
+    const dependencies = buildDependencies();
+    const app = buildApp({
+      ...dependencies,
+      persistence: { ...dependencies.persistence, listGoalActivity },
+    });
+    const denied = await app.inject({
+      method: "GET", url: `/v1/goals/${goal.id}/activity`,
+    });
+    expect(denied.statusCode).toBe(401);
+    const response = await app.inject({
+      method: "GET", url: `/v1/goals/${goal.id}/activity`, headers: auth,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([expect.objectContaining({ kind: "ADDED" })]);
+    expect(listGoalActivity).toHaveBeenCalledWith(user.id, goal.id);
+    await app.close();
+  });
+
   it("lists and reads goals", async () => {
     const app = buildApp(buildDependencies());
     const list = await app.inject({ method: "GET", url: "/v1/goals", headers: auth });
