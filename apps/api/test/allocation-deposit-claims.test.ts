@@ -3,6 +3,7 @@ import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {connectDatabase,type DatabaseConnection} from "../src/db/client.js";
 import {AllocationLedgerStore} from "../src/persistence/allocation-ledger-store.js";
 import {KeptPersistenceService} from "../src/persistence/service.js";
+import {readAllocationGoalWithdrawals} from "../src/persistence/allocation-provenance-reader.js";
 
 const url = process.env.TEST_DATABASE_URL ??
   "postgresql://kept:kept_local_dev@127.0.0.1:55432/kept_test";
@@ -162,6 +163,28 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     );
     expect(claims.rows).toHaveLength(0);
     expect(await ledger.getBalances(userId)).toEqual({UNASSIGNED:10n});
+  });
+
+  it("reads direct goal withdrawal entries without counting internal transfers",async()=>{
+    const {userId,claim}=await fixture();
+    const goalId=randomUUID();
+    await connection.pool.query(
+      "INSERT INTO savings_goals(id,user_id,name,target_amount_atomic,created_at,updated_at) VALUES($1,$2,'Goal',100,now(),now())",
+      [goalId,userId],
+    );
+    const startAt=new Date(Date.now()-60_000);
+    await ledger.claimIndexedDeposit(claim);
+    await ledger.transfer({
+      userId,from:"UNASSIGNED",to:`GOAL:${goalId}`,shares:15n,key:"allocate",
+    });
+    await ledger.reconcileToVaultShares({userId,liveShares:10n,key:"withdraw-all-unassigned"});
+    await ledger.reconcileToVaultShares({userId,liveShares:7n,key:"withdraw-from-goal"});
+    const withdrawals=await readAllocationGoalWithdrawals(connection.db,{
+      userId,startAt,endAt:new Date(Date.now()+60_000),
+    });
+    expect(withdrawals).toHaveLength(1);
+    expect(withdrawals[0]?.goalId).toBe(goalId);
+    expect(withdrawals[0]?.shares).toBe(3n);
   });
 
   it("preserves genuine deposit provenance on surviving lots after a withdrawal",async()=>{
