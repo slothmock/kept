@@ -11,7 +11,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatUsdc } from "../format";
+import { formatUsdcUpToFour } from "@/lib/usdc";
 
 import type {
   PositionState,
@@ -144,14 +144,14 @@ export function BalanceCard({
             ) : (
               <p className="mt-3 break-words text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
                 {totalBalance !== null
-                  ? `${formatUsdc(totalBalance)} USDC`
+                  ? `${formatUsdcUpToFour(totalBalance)} USDC`
                   : "—"}
               </p>
             )}
 
             {ready ? (
               <p className="mt-3 text-sm text-balance-foreground/70">
-                {formatUsdc(positionState.position.assets)} USDC currently earning {demoYield ? "simulated testnet yield" : "yield"}
+                {formatUsdcUpToFour(positionState.position.assets)} USDC currently earning {demoYield ? "simulated testnet yield" : "yield"}
               </p>
             ) : null}
           </div>
@@ -180,7 +180,7 @@ export function BalanceCard({
               <p className="text-sm text-balance-foreground/70">Available cash</p>
               <p className="mt-1 break-words text-base font-semibold tabular-nums">
                 {ready
-                  ? `${formatUsdc(positionState.position.usdcBalance)} USDC`
+                  ? `${formatUsdcUpToFour(positionState.position.usdcBalance)} USDC`
                   : "—"}
               </p>
             </div>
@@ -194,7 +194,7 @@ export function BalanceCard({
               <p className="mt-1 break-words text-base font-semibold tabular-nums">
                 {allocatedGoalSavings === null
                   ? "—"
-                  : `${formatUsdc(allocatedGoalSavings)} USDC`}
+                  : `${formatUsdcUpToFour(allocatedGoalSavings)} USDC`}
               </p>
             </div>
           </div>
@@ -215,7 +215,7 @@ export function BalanceCard({
               ) : savingsPerformanceState.kind === "ready" ? (
                 <p className="mt-1 break-words text-base font-semibold tabular-nums">
                   {earnings !== null && earnings > 0n ? "+" : ""}
-                  {formatUsdc(earnings ?? 0n)} USDC
+                  {formatUsdcUpToFour(earnings ?? 0n)} USDC
                 </p>
               ) : (
                 <p className="mt-1 text-base font-semibold">—</p>
