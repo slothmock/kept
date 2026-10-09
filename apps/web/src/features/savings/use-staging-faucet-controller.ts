@@ -91,11 +91,6 @@ export function useStagingFaucetController({
     return () => clearTimeout(timeout);
   }, [status, error, claiming, clearNotice]);
 
-  // The notice belongs to the wallet/network on which it was produced.
-  useEffect(() => {
-    clearNotice();
-  }, [account, chainId, clearNotice]);
-
   const claim =
     useCallback(
       async () => {
