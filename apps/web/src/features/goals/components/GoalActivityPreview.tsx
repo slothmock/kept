@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { GoalActivityDto } from "@/api/kept-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatUsdc } from "@/features/savings/format";
 
 export function GoalActivityPreview({
   goalId,
@@ -45,7 +46,7 @@ export function GoalActivityPreview({
             <span className="text-label tabular-nums">
               {item.amountAtomic === null
                 ? "Amount unavailable"
-                : `${item.kind === "ADDED" ? "+" : "−"}${(Number(BigInt(item.amountAtomic)) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`}
+                : `${item.kind === "ADDED" ? "+" : "−"}${formatUsdc(BigInt(item.amountAtomic))} USDC`}
             </span>
           </div>
         ))}
