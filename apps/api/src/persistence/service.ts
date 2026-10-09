@@ -8,6 +8,7 @@ import {
 
 import type { KeptDatabase } from "../db/client.js";
 import { assertAllocationCutoverParity } from "../domain/allocation-cutover.js";
+import { hasOverlappingRewardEpoch } from "../domain/commitment-overlap.js";
 import { AllocationLedgerStore } from "./allocation-ledger-store.js";
 import {
   decodeOnchainCommitmentId,
@@ -1921,14 +1922,14 @@ export class KeptPersistenceService {
         // permit adjacent weeks but not overlapping ones.
         if (current.definitionCode === "WEEKLY_SAVINGS_V1") {
           const commitments = await repository.listCommitmentsForOwner(input.userId);
-          const conflict = commitments.some(other =>
-            other.id !== current.id
-            && other.savingsGoalId === current.savingsGoalId
-            && other.definitionCode === "WEEKLY_SAVINGS_V1"
-            && (other.state === "ACTIVE" || other.state === "COMPLETED")
-            && other.epochStart < current.epochEnd
-            && current.epochStart < other.epochEnd
-          );
+          const conflict = hasOverlappingRewardEpoch({
+            commitmentId: current.id,
+            goalId: current.savingsGoalId,
+            definitionCode: current.definitionCode,
+            epochStart: current.epochStart,
+            epochEnd: current.epochEnd,
+            existing: commitments,
+          });
           if (conflict) {
             throw new PersistenceValidationError(
               "This savings goal already has a qualifying commitment in the selected period",
