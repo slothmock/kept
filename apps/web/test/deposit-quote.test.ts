@@ -9,9 +9,10 @@ const readyQuote: DepositQuoteState = {
   kind: "ready",
   quote: {
     assets: 100_000_000n,
-    depositFeeAssets: 500_000n,
+    grossAssets: 100_200_401n,
+    depositFeeAssets: 200_401n,
     depositFeeBps: 50n,
-    expectedNetAssets: 99_500_000n,
+    expectedNetAssets: 100_000_000n,
     performanceFeeBps: 1_000n,
     bpsDenominator: 10_000n,
   },

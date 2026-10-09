@@ -49,6 +49,9 @@ function networkName(
         case 143:
             return "Monad";
 
+        case 10143:
+            return "Monad Testnet";
+
         case 31337:
             return "Local development network";
 

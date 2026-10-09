@@ -8,42 +8,54 @@ import {
 const vault = "0x3333333333333333333333333333333333333333";
 
 describe("vault fee disclosure", () => {
-  it("reads the configured fees and contract preview for the expected net amount", async () => {
-    const calls: string[] = [];
-    const values: Record<string, bigint | number> = {
-      BPS_DENOMINATOR: 10_000n,
-      DEPOSIT_FEE_BPS: 20,
-      PROFIT_FEE_BPS: 1_000,
-      previewDeposit: 99_800_000_000_000n,
-      convertToAssets: 99_800_000n,
-    };
+  it("adds the 0.2% deposit fee on top of the requested savings amount", async () => {
+    const calls: {
+      readonly functionName: string;
+      readonly args?: readonly bigint[];
+    }[] = [];
 
     const quote = await readVaultDepositQuote({
       assets: 100_000_000n,
       vault,
       publicClient: {
         async readContract(input) {
-          const call = input as { readonly functionName: string };
-          calls.push(call.functionName);
-          return values[call.functionName] ?? 0n;
+          const call = input as {
+            readonly functionName: string;
+            readonly args?: readonly bigint[];
+          };
+          calls.push(call);
+
+          if (call.functionName === "BPS_DENOMINATOR") return 10_000n;
+          if (call.functionName === "DEPOSIT_FEE_BPS") return 20n;
+          if (call.functionName === "PROFIT_FEE_BPS") return 1_000n;
+          if (call.functionName === "previewDeposit") return 99_800_000_000_000n;
+          if (call.functionName === "convertToAssets") return 100_000_000n;
+
+          return 0n;
         },
       },
     });
 
     expect(quote).toEqual({
       assets: 100_000_000n,
-      depositFeeAssets: 200_000n,
+      grossAssets: 100_200_401n,
+      depositFeeAssets: 200_401n,
       depositFeeBps: 20n,
-      expectedNetAssets: 99_800_000n,
+      expectedNetAssets: 100_000_000n,
       performanceFeeBps: 1_000n,
       bpsDenominator: 10_000n,
     });
-    expect(calls).toEqual([
+
+    expect(calls.map(({ functionName }) => functionName)).toEqual([
       "BPS_DENOMINATOR",
       "DEPOSIT_FEE_BPS",
       "PROFIT_FEE_BPS",
       "previewDeposit",
       "convertToAssets",
+    ]);
+
+    expect(calls[3]?.args).toEqual([
+      100_200_401n,
     ]);
   });
 

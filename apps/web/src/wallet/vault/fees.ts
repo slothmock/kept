@@ -44,6 +44,7 @@ interface ContractReader {
 
 export interface VaultDepositQuote {
   readonly assets: bigint;
+  readonly grossAssets: bigint;
   readonly depositFeeAssets: bigint;
   readonly depositFeeBps: bigint;
   readonly expectedNetAssets: bigint;
@@ -62,7 +63,11 @@ export async function readVaultDepositQuote({
   vault,
   assets,
 }: ReadVaultDepositQuoteInput): Promise<VaultDepositQuote> {
-  const [rawBpsDenominator, rawDepositFeeBps, rawPerformanceFeeBps, rawExpectedShares] = await Promise.all([
+  const [
+    rawBpsDenominator,
+    rawDepositFeeBps,
+    rawPerformanceFeeBps,
+  ] = await Promise.all([
     publicClient.readContract({
       address: vault,
       abi: vaultFeeAbi,
@@ -78,44 +83,103 @@ export async function readVaultDepositQuote({
       abi: vaultFeeAbi,
       functionName: "PROFIT_FEE_BPS",
     }),
-    publicClient.readContract({
-      address: vault,
-      abi: vaultFeeAbi,
-      functionName: "previewDeposit",
-      args: [assets],
-    }),
   ]);
-  const bpsDenominator = asBigInt(rawBpsDenominator);
-  const depositFeeBps = asBigInt(rawDepositFeeBps);
-  const performanceFeeBps = asBigInt(rawPerformanceFeeBps);
-  const expectedShares = asBigInt(rawExpectedShares);
+
+  const bpsDenominator =
+    asBigInt(rawBpsDenominator);
+  const depositFeeBps =
+    asBigInt(rawDepositFeeBps);
+  const performanceFeeBps =
+    asBigInt(rawPerformanceFeeBps);
 
   if (
     bpsDenominator <= 0n
     || depositFeeBps < 0n
     || performanceFeeBps < 0n
-    || depositFeeBps > bpsDenominator
+    || depositFeeBps >= bpsDenominator
     || performanceFeeBps > bpsDenominator
   ) {
-    throw new Error("Invalid vault fee configuration");
-  }
-  if (assets <= 0n || expectedShares <= 0n) {
-    throw new Error("Invalid vault deposit preview");
+    throw new Error(
+      "Invalid vault fee configuration",
+    );
   }
 
-  const expectedNetAssets = asBigInt(await publicClient.readContract({
-    address: vault,
-    abi: vaultFeeAbi,
-    functionName: "convertToAssets",
-    args: [expectedShares],
-  }));
-  if (expectedNetAssets <= 0n || expectedNetAssets > assets) {
-    throw new Error("Invalid vault deposit preview");
+  if (assets <= 0n) {
+    throw new Error(
+      "Invalid vault deposit preview",
+    );
+  }
+
+  const netBasisPoints =
+    bpsDenominator
+    - depositFeeBps;
+
+  let grossAssets =
+    (
+      assets
+      * bpsDenominator
+      + netBasisPoints
+      - 1n
+    )
+    / netBasisPoints;
+
+  let expectedNetAssets = 0n;
+
+  for (
+    let attempt = 0;
+    attempt < 4;
+    attempt += 1
+  ) {
+    const expectedShares =
+      asBigInt(
+        await publicClient.readContract({
+          address: vault,
+          abi: vaultFeeAbi,
+          functionName: "previewDeposit",
+          args: [grossAssets],
+        }),
+      );
+
+    if (expectedShares <= 0n) {
+      throw new Error(
+        "Invalid vault deposit preview",
+      );
+    }
+
+    expectedNetAssets =
+      asBigInt(
+        await publicClient.readContract({
+          address: vault,
+          abi: vaultFeeAbi,
+          functionName: "convertToAssets",
+          args: [expectedShares],
+        }),
+      );
+
+    if (expectedNetAssets >= assets) {
+      break;
+    }
+
+    grossAssets +=
+      assets
+      - expectedNetAssets;
+  }
+
+  if (
+    expectedNetAssets < assets
+    || expectedNetAssets > grossAssets
+  ) {
+    throw new Error(
+      "Invalid vault deposit preview",
+    );
   }
 
   return {
     assets,
-    depositFeeAssets: assets - expectedNetAssets,
+    grossAssets,
+    depositFeeAssets:
+      grossAssets
+      - assets,
     depositFeeBps,
     expectedNetAssets,
     performanceFeeBps,
