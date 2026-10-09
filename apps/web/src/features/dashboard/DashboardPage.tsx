@@ -317,7 +317,7 @@ interface DashboardPageProps {
       string | null;
 
       readonly onClaim:
-      () => void;
+      () => Promise<void>;
 
     };
 
@@ -565,6 +565,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawSavingsOpen, setWithdrawSavingsOpen] = useState(false);
+  const [activityRevision, setActivityRevision] = useState(0);
 
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
 
@@ -861,7 +862,11 @@ export function DashboardPage(props: DashboardPageProps) {
             stagingFaucetClaiming={savingsOverview.stagingFaucet.claiming}
             stagingFaucetStatus={savingsOverview.stagingFaucet.status}
             stagingFaucetError={savingsOverview.stagingFaucet.error}
-            onClaimStagingFaucet={savingsOverview.stagingFaucet.onClaim}
+            onClaimStagingFaucet={() => {
+              void savingsOverview.stagingFaucet.onClaim().finally(() => {
+                setActivityRevision((current) => current + 1);
+              });
+            }}
           />
 
           <section className="space-y-4" aria-labelledby="home-goals-heading">
@@ -1042,6 +1047,7 @@ export function DashboardPage(props: DashboardPageProps) {
               </div>
 
               <HomeActivityPreview
+                key={activityRevision}
                 loadTransactions={loadRecentTransactions}
               />
             </section>

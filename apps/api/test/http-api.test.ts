@@ -988,6 +988,62 @@ describe("Kept HTTP API", () => {
     await app.close();
   });
 
+  it("records a confirmed staging faucet mint as incoming account activity", async () => {
+    const dependencies = buildDependencies({ chainId: 10_143 });
+    const claim = vi.fn(async () => ({
+      amountAtomic: "1000000000",
+      transactionHash: "0xabc123" as `0x${string}`,
+    }));
+    const recordTransaction = vi.spyOn(dependencies.persistence, "recordTransaction");
+    const app = buildApp({ ...dependencies, stagingFaucet: { claim } });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/staging/faucet",
+      headers: auth,
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      amountAtomic: "1000000000",
+      transactionHash: "0xabc123",
+    });
+    expect(claim).toHaveBeenCalledWith("0x0000000000000000000000000000000000000001");
+    expect(recordTransaction).toHaveBeenCalledWith({
+      userId: user.id,
+      idempotencyKey: "staging-faucet:0xabc123",
+      type: "CRYPTO_FUNDING",
+      amountAtomic: "1000000000",
+      asset: "USDC",
+      description: "Test funds added (faucet)",
+      chainId: 10143n,
+      transactionHash: "0xabc123",
+      externalReference: "0xabc123",
+    });
+    await app.close();
+  });
+
+  it("never records a failed faucet mint and does not allow faucet on mainnet", async () => {
+    const deps = buildDependencies({ chainId: 10_143 });
+    const recordTransaction = vi.spyOn(deps.persistence, "recordTransaction");
+    const claim = vi.fn().mockRejectedValue(new Error("Mint reverted"));
+    const app = buildApp({ ...deps, stagingFaucet: { claim } });
+    const failed = await app.inject({
+      method: "POST", url: "/v1/staging/faucet", headers: auth, payload: {},
+    });
+    expect(failed.statusCode).toBeGreaterThanOrEqual(400);
+    expect(recordTransaction).not.toHaveBeenCalled();
+    await app.close();
+
+    const prod = buildApp({ ...deps, chainId: 143, stagingFaucet: { claim } });
+    const unavailable = await prod.inject({
+      method: "POST", url: "/v1/staging/faucet", headers: auth, payload: {},
+    });
+    expect(unavailable.statusCode).toBe(404);
+    expect(claim).toHaveBeenCalledTimes(1);
+    await prod.close();
+  });
+
   it("lists and records account transactions for the authenticated user", async () => {
     const transaction = {
       id: "transaction-1",
