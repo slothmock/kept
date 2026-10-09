@@ -155,7 +155,7 @@ export function HomeActivityPreview({
           return (
             <div
               key={transaction.id}
-              className="flex items-center gap-3 px-5 py-3.5"
+              className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:flex-nowrap sm:px-5"
             >
               <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
                 <Icon className="size-4" />
@@ -171,7 +171,7 @@ export function HomeActivityPreview({
                 </p>
               </div>
 
-              <p className="shrink-0 text-label font-medium tabular-nums">
+              <p className="min-w-0 break-all text-right text-label font-medium tabular-nums max-sm:ml-12 max-sm:w-[calc(100%-3rem)] sm:shrink-0 sm:break-normal">
                 {incoming ? "+" : "−"}
                 {formatAmount(
                   transaction.amountAtomic,
