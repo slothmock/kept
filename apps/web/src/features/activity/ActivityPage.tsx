@@ -24,7 +24,6 @@ import type { Session } from "@/app/providers/session";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SignOutAction } from "@/features/account/components/SignOutAction";
 import { consumerErrorMessage } from "@/lib/consumer-error";
 import { diagnostics } from "@/lib/diagnostics";
 import {
@@ -336,13 +335,7 @@ export function ActivityPage({
     );
 
   return (
-    <AppShell
-      headerAction={
-        <SignOutAction
-onSignOut={session.logout}
-        />
-      }
-    >
+    <AppShell>
       <div className="space-y-8">
         <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-h1 font-semibold tracking-tight">
