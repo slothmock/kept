@@ -42,8 +42,10 @@ export function GoalActivityPreview({
                 {new Date(item.createdAt).toLocaleDateString()}
               </p>
             </div>
-            <span className="text-label tabular-nums" title="Vault share movement (not historical USDC)">
-              {item.kind === "ADDED" ? "+" : "−"}{(BigInt(item.shareDeltaAtomic) < 0n ? -BigInt(item.shareDeltaAtomic) : BigInt(item.shareDeltaAtomic)).toString()} shares
+            <span className="text-label tabular-nums">
+              {item.amountAtomic === null
+                ? "Amount unavailable"
+                : `${item.kind === "ADDED" ? "+" : "−"}${(Number(BigInt(item.amountAtomic)) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`}
             </span>
           </div>
         ))}
