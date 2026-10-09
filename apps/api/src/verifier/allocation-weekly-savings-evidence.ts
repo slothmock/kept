@@ -42,7 +42,7 @@ export class AllocationWeeklySavingsEvidenceSource implements WeeklySavingsEvide
         const history=await readGoalLedgerBalanceHistory(tx,input);
         const qualifiedShares=await readQualifiedGoalShares(tx,input);
         return {history,qualifiedShares};
-      },{isolationLevel:"repeatable read",readOnly:true}),
+      },{isolationLevel:"repeatable read"}),
       this.dependencies.vaultActivity.readActivity({
         account:wallet.address,startAt:input.startAt,endAt:input.endAt,
       }),
