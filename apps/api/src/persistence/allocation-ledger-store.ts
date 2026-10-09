@@ -107,7 +107,7 @@ export class AllocationLedgerStore {
 
   async transfer(input: {
     userId: string; from: AllocationBucketKey; to: AllocationBucketKey;
-    shares: bigint; key: string; transferAssetsAtomic?: bigint;
+    shares: bigint; key: string; transferAssetsAtomic?: bigint | undefined;
   }): Promise<string> {
     if (input.shares <= 0n) throw new Error("Transfer shares must be positive");
     const legs = [
@@ -121,7 +121,7 @@ export class AllocationLedgerStore {
   /** Join the API idempotency transaction; do not open a nested transaction. */
   async transferInTransaction(tx: LedgerTransaction, input: {
     userId: string; from: AllocationBucketKey; to: AllocationBucketKey;
-    shares: bigint; key: string; transferAssetsAtomic?: bigint;
+    shares: bigint; key: string; transferAssetsAtomic?: bigint | undefined;
   }): Promise<string> {
     if (input.shares <= 0n) throw new Error("Transfer shares must be positive");
     const legs = [
@@ -348,7 +348,7 @@ export class AllocationLedgerStore {
   private async writeEventInTransaction(tx: LedgerTransaction, input: {
     userId: string; kind: AllocationEventKind; key: string;
     verifiedDeposit?: boolean;
-    transferAssetsAtomic?: bigint;
+    transferAssetsAtomic?: bigint | undefined;
     legs: readonly {bucket: AllocationBucketKey; deltaShares: bigint}[];
   }): Promise<string> {
     if (!input.key.trim()) throw new Error("Ledger idempotency key required");
