@@ -23,6 +23,7 @@ import {
   type SavingsMarketStatusDto,
 } from "@/api/kept-api";
 import { AppShell } from "@/app/layout/AppShell";
+import { InstallKeptCard } from "@/features/account/components/InstallKeptCard";
 import type { Session } from "@/app/providers/session";
 import { Button } from "@/components/ui/button";
 import {
@@ -396,6 +397,7 @@ export function AccountPage({
           </div>
 
           <div className="space-y-6">
+            <InstallKeptCard />
             <section className="space-y-3">
               <h2 className="text-h3 font-semibold tracking-tight">
                 Privacy controls

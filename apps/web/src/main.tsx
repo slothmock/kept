@@ -8,6 +8,7 @@ import {
 } from "@/app/bootstrap-config";
 import { App } from "@/app/App";
 import { diagnostics } from "@/lib/diagnostics";
+import { registerKeptServiceWorker } from "@/lib/register-service-worker";
 
 import "@/styles/globals.css";
 
@@ -33,6 +34,8 @@ window.addEventListener(
     );
   },
 );
+
+registerKeptServiceWorker();
 
 const root =
   document.getElementById(
