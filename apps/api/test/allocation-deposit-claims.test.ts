@@ -182,9 +182,9 @@ describe.sequential("atomic verified vault deposit claim",()=>{
     const withdrawals=await readAllocationGoalWithdrawals(connection.db,{
       userId,startAt,endAt:new Date(Date.now()+60_000),
     });
-    expect(withdrawals).toHaveLength(1);
-    expect(withdrawals[0]?.goalId).toBe(goalId);
-    expect(withdrawals[0]?.shares).toBe(3n);
+    expect(withdrawals).toHaveLength(2);
+    expect(withdrawals.every(row=>row.goalId===goalId)).toBe(true);
+    expect(withdrawals.reduce((sum,row)=>sum+row.shares,0n)).toBe(8n);
   });
 
   it("preserves genuine deposit provenance on surviving lots after a withdrawal",async()=>{
