@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
-import type { CommitmentDto, GoalDto, GoalActivityDto, TransactionDto } from "@/api/kept-api";
+import type { CommitmentDto, GoalDto, GoalActivityDto } from "@/api/kept-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GoalActivityPreview } from "@/features/goals/components/GoalActivityPreview";
@@ -17,7 +17,6 @@ interface GoalDetailViewProps {
   readonly funding: GoalFundingEntry | null;
   readonly commitments: readonly CommitmentDto[];
   readonly currentApyBps: number | null;
-  readonly loadRecentTransactions: () => Promise<readonly TransactionDto[]>;
   readonly loadGoalActivity: (goalId: string) => Promise<readonly GoalActivityDto[]>;
   readonly deleting: boolean;
   readonly deleteStatus: string | null;
@@ -41,7 +40,6 @@ export function GoalDetailView({
   funding,
   commitments,
   currentApyBps,
-  loadRecentTransactions,
   loadGoalActivity,
   deleting,
   deleteStatus,
