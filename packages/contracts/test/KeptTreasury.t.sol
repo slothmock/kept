@@ -239,7 +239,7 @@ contract KeptTreasuryTest is Test {
             );
 
         vm.prank(rewardManager);
-        treasury.reserveReward(rewardId, 5 * USDC);
+        treasury.reserveReward(rewardId, 1 * USDC);
 
         vm.prank(rewardManager);
         treasury.payReward(
@@ -302,11 +302,7 @@ contract KeptTreasuryTest is Test {
             )
         );
 
-        treasury.payReward(
-            keccak256("too-large"),
-            bob,
-            11 * USDC
-        );
+        treasury.reserveReward(keccak256("too-large"), 11 * USDC);
     }
 
     function test_RewardCannotExceedTreasuryValue()
@@ -322,11 +318,7 @@ contract KeptTreasuryTest is Test {
 
         vm.expectRevert();
 
-        treasury.payReward(
-            keccak256("underfunded"),
-            bob,
-            10 * USDC
-        );
+        treasury.reserveReward(keccak256("underfunded"), 10 * USDC);
     }
 
     function test_PerformanceFeesAccumulateToTreasury()
