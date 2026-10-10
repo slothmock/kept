@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 
 import { AppShell } from "@/app/layout/AppShell";
+import { requiresStagingAccess } from "@/app/staging-access-config";
 import {
   StagingAccessBoundary,
 } from "@/app/StagingAccessBoundary";
@@ -53,6 +54,12 @@ function ProtectedRoute({
         replace
       />
     );
+  }
+
+  // Only testnet accounts require staging allowlist verification.
+  // Production authentication is enforced by Privy and the API itself.
+  if (!requiresStagingAccess(import.meta.env.VITE_MONAD_CHAIN_ID)) {
+    return children;
   }
 
   return (
