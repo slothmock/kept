@@ -41,10 +41,10 @@ export function createResendWaitlist(input: {
             // Log a bounded provider message, without addresses, keys or URLs.
             // Keep the field-validation explanation so HTTP 400 is actionable.
             providerDetail = payload.message
-              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email]")
+              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
               .replace(/re_[A-Za-z0-9_-]+/g, "[key]")
-              .replace(/https?:\\/\\/\\S+/gi, "[url]")
-              .replace(/[\\r\\n\\t]/g, " ")
+              .replace(/https?:\/\/\S+/gi, "[url]")
+              .replace(/[\r\n\t]/g, " ")
               .slice(0, 240);
           }
         }
