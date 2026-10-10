@@ -38,7 +38,9 @@ export async function joinWaitlist(input: {
     throw new Error(
       response.status === 429
         ? "Too many requests. Try again shortly."
-        : "We couldn't add you to the waitlist. Try again.",
+        : response.status === 503
+          ? "Waitlist signup is temporarily unavailable. Please try again later."
+          : "We couldn't add you to the waitlist. Try again.",
     );
   }
 }
