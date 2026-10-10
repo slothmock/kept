@@ -225,6 +225,37 @@ describe("CommitmentVerifier", () => {
     expect(store.finalized?.targetState).toBe("COMPLETED");
   });
 
+
+  it("retries database finalization after a successful onchain settlement", async () => {
+    const active = commitment();
+    let attempts = 0;
+    let writes = 0;
+    let completed = false;
+    const verifier = new CommitmentVerifier({
+      store: {
+        async getCommitment() { return active; },
+        async finalize() { attempts++; return attempts > 1; },
+      },
+      weeklySavings: {
+        async evaluatePeriod() {
+          return { netSavedAtomic: 50_000_000n, averageEligibleBalanceAtomic: 100_000_000n };
+        },
+      },
+      activity: { async countActivities() { return 0; } },
+      settlement: {
+        async completeCommitment() {
+          if (!completed) { writes++; completed = true; }
+        },
+        async failCommitment() { throw new Error("Unexpected fail"); },
+      },
+      rewards: new FixedRewardPolicy(5_000_000n),
+      now: () => new Date("2026-09-08T12:00:00Z"),
+    });
+    await expect(verifier.verify(active.id)).rejects.toThrow("Commitment changed");
+    expect((await verifier.verify(active.id)).decision.outcome).toBe("COMPLETED");
+    expect(attempts).toBe(2);
+    expect(writes).toBe(1);
+  });
   it("returns RETRY when an evidence source is temporarily unavailable", async () => {
     const store = new MemoryStore(commitment());
     const settlement = new SettlementSpy();
