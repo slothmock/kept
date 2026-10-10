@@ -8,6 +8,9 @@ evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 
+[profile.monad]
+network = "monad"
+
 [fuzz]
 runs = 512
 
