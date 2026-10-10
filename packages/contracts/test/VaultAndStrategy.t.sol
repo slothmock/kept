@@ -78,6 +78,57 @@ contract VaultAndStrategyTest is Test {
     }
 
 
+
+    function test_StrategyMigrationRequiresPauseAndPreservesSavings() public {
+        vm.prank(alice);
+        vault.deposit(100 * USDC, alice);
+        uint256 beforeShares = vault.balanceOf(alice);
+        uint256 beforeAssets = vault.totalAssets();
+
+        AaveUSDCStrategy replacement = new AaveUSDCStrategy(
+            address(vault), address(token), address(pool), address(aToken)
+        );
+
+        vm.prank(owner);
+        vm.expectRevert();
+        vault.migrateStrategy(address(replacement));
+
+        vm.prank(owner);
+        vault.pause();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.migrateStrategy(address(replacement));
+
+        vm.prank(owner);
+        vault.migrateStrategy(address(replacement));
+        assertEq(address(vault.strategy()), address(replacement));
+        assertEq(vault.balanceOf(alice), beforeShares);
+        assertEq(vault.totalAssets(), beforeAssets);
+        assertEq(strategy.totalAssets(), 0);
+        assertEq(replacement.totalAssets(), beforeAssets);
+
+        vm.prank(alice);
+        vault.redeem(beforeShares, alice, alice);
+        assertEq(vault.balanceOf(alice), 0);
+    }
+
+    function test_StrategyMigrationRevertsAtomicallyWhenAaveIlliquid() public {
+        vm.prank(alice);
+        vault.deposit(100 * USDC, alice);
+        aToken.removeLiquidity(bob, 50 * USDC);
+        AaveUSDCStrategy replacement = new AaveUSDCStrategy(
+            address(vault), address(token), address(pool), address(aToken)
+        );
+        vm.prank(owner);
+        vault.pause();
+        vm.prank(owner);
+        vm.expectRevert();
+        vault.migrateStrategy(address(replacement));
+        assertEq(address(vault.strategy()), address(strategy));
+        assertEq(strategy.totalAssets(), 100 * USDC);
+    }
+
     function test_MaxDepositReflectsAaveSupplyCapAndReserveStatus() public {
         pool.setSupplyCap(100);
         assertEq(vault.maxDeposit(alice), 100 * USDC);
