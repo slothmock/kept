@@ -30,16 +30,28 @@ export function createResendWaitlist(input: {
       // Preserve the provider error code for server-side diagnostics, not the
       // response message (which could contain an email address).
       let providerCode = "unknown";
+      let providerDetail = "unavailable";
       try {
         const payload: unknown = await response.json();
-        if (payload && typeof payload === "object" && "name" in payload
-          && typeof payload.name === "string") {
-          providerCode = payload.name.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60);
+        if (payload && typeof payload === "object") {
+          if ("name" in payload && typeof payload.name === "string") {
+            providerCode = payload.name.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60);
+          }
+          if ("message" in payload && typeof payload.message === "string") {
+            // Log a bounded provider message, without addresses, keys or URLs.
+            // Keep the field-validation explanation so HTTP 400 is actionable.
+            providerDetail = payload.message
+              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+              .replace(/re_[A-Za-z0-9_-]+/g, "[key]")
+              .replace(/https?:\/\/\S+/gi, "[url]")
+              .replace(/[\r\n\t]/g, " ")
+              .slice(0, 240);
+          }
         }
       } catch {
         // A non-JSON response should still be diagnosed by its HTTP status.
       }
-      throw new Error(`Resend waitlist signup failed (HTTP ${response.status}, code ${providerCode})`);
+      throw new Error(`Resend waitlist signup failed (HTTP ${response.status}, code ${providerCode}, detail ${providerDetail})`);
     }
   };
 }

@@ -28,6 +28,15 @@ describe("Resend waitlist", () => {
       .rejects.toThrow("HTTP 503");
   });
 
+  it("records the provider validation reason while redacting email addresses", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      name: "validation_error",
+      message: "Invalid segments for user@example.com",
+    }), { status: 400 }));
+    await expect(createResendWaitlist({ ...settings, fetcher })("user@example.com"))
+      .rejects.toThrow("HTTP 400, code validation_error, detail Invalid segments for [email]");
+  });
+
   it("rejects invalid email before calling provider", async () => {
     const fetcher = vi.fn();
     await expect(createResendWaitlist({ ...settings, fetcher })("invalid")).rejects.toThrow("Invalid waitlist email");
