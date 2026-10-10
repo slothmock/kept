@@ -137,7 +137,7 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     /// @dev Counts idle USDC and redeemable treasury-owned shares only.
     function availableRewardAssets() public view returns (uint256) {
         uint256 value = asset.balanceOf(address(this));
-        if (address(vault) != address(0)) {
+        if (address(vault) != address(0) && vault.balanceOf(address(this)) != 0) {
             value += vault.maxWithdraw(address(this));
         }
         return value > totalReservedAssets ? value - totalReservedAssets : 0;
