@@ -13,4 +13,5 @@ interface IYieldStrategy {
     function totalAssets() external view returns (uint256);
 
     function availableLiquidity() external view returns (uint256);
+    function availableDepositCapacity() external view returns (uint256);
 }
