@@ -156,7 +156,7 @@ contract StagingYieldStrategy is IYieldStrategy {
     }
 
     // No unrelated-token rescue on the testnet-only strategy.
-    function rescueToken(address, address) external onlyVault returns (uint256) {
+    function rescueToken(address, address) external view onlyVault returns (uint256) {
         return 0;
     }
 
