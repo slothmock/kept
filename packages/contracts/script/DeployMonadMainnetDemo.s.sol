@@ -34,7 +34,9 @@ contract DeployMonadMainnetDemo is Script {
 
         address owner = vm.envAddress("MAINNET_DEMO_OWNER");
         // The deploying signer must also own both contracts to bind them.
-        address deployer = vm.envAddress("MAINNET_DEMO_DEPLOYER_ADDRESS");
+        uint256 signerKey = vm.envUint("MAINNET_DEMO_DEPLOYER_PRIVATE_KEY");
+        if (signerKey == 0) revert InvalidOwner();
+        address deployer = vm.addr(signerKey);
         if (owner == address(0) || owner != deployer) revert InvalidOwner();
         address verifier = vm.envAddress("MAINNET_DEMO_COMMITMENT_VERIFIER");
         if (verifier == address(0) || verifier == owner) revert InvalidVerifier();
@@ -43,7 +45,8 @@ contract DeployMonadMainnetDemo is Script {
                 || IAaveAToken(A_USDC).UNDERLYING_ASSET_ADDRESS() != USDC
         ) revert AaveReserveMismatch();
 
-        vm.startBroadcast();
+        // Explicitly broadcast with the signer whose address passed validation.
+        vm.startBroadcast(signerKey);
         treasury = new KeptTreasury(IERC20(USDC), owner);
         vault = new KeptSavingsVault(IERC20(USDC), owner, address(treasury));
         treasury.bindVault(address(vault));
