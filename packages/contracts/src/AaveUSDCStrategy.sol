@@ -99,6 +99,18 @@ contract AaveUSDCStrategy is IYieldStrategy {
         IERC20(asset_).forceApprove(aavePool_, type(uint256).max);
     }
 
+    // Aave V3 ReserveConfigurationMap: active=56, frozen=57, paused=60,
+    // supply cap=116..151 (whole underlying token units; zero means unlimited).
+    function availableDepositCapacity() public view returns (uint256) {
+        uint256 configuration = aavePool.getConfiguration(asset);
+        if ((configuration & (1 << 56)) == 0 || (configuration & (1 << 57)) != 0 || (configuration & (1 << 60)) != 0) return 0;
+        uint256 capWholeTokens = (configuration >> 116) & ((1 << 36) - 1);
+        if (capWholeTokens == 0) return type(uint256).max;
+        uint256 cap = capWholeTokens * 1e6;
+        uint256 supplied = IERC20(address(aToken)).totalSupply();
+        return cap > supplied ? cap - supplied : 0;
+    }
+
     function deposit(uint256 assets) external onlyVault returns (uint256 deposited) {
         if (assets == 0) {
             revert ZeroAssets();

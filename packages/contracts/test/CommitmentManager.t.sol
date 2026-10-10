@@ -280,6 +280,21 @@ contract CommitmentManagerTest is Test {
         manager.cancelCommitment(id);
     }
 
+    function test_EarnedRewardClaimRemainsAvailableDuringManagerPause() public {
+        (uint256 id,) = _createAliceCommitment();
+        _warpToCommitmentEnd(id);
+        vm.prank(verifier);
+        manager.completeCommitment(id, 1e6);
+
+        vm.prank(owner);
+        manager.pause();
+        vm.prank(alice);
+        manager.claimReward(id);
+
+        assertEq(treasury.paymentCount(), 1);
+        assertEq(treasury.lastRecipient(), alice);
+    }
+
     function test_CompletedCommitmentCanClaimReward() public {
         (uint256 id, bytes32 referenceId) = _createAliceCommitment();
         
@@ -408,7 +423,7 @@ contract CommitmentManagerTest is Test {
         manager.completeCommitment(id, 5e6);
     }
 
-    function test_PauseBlocksRewardClaim() public {
+    function test_PauseDoesNotBlockRewardClaim() public {
         (uint256 id, ) = _createAliceCommitment();
 
         _warpToCommitmentEnd(id);
@@ -421,8 +436,7 @@ contract CommitmentManagerTest is Test {
         manager.pause();
 
         vm.prank(alice);
-        vm.expectRevert();
-
         manager.claimReward(id);
+        assertEq(treasury.paymentCount(), 1);
     }
 }

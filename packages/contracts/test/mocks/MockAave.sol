@@ -76,6 +76,26 @@ contract MockAavePool {
     MockAToken public immutable aToken;
     bool public failSupply;
     bool public returnWrongWithdrawAmount;
+    uint256 public reserveConfiguration = (1 << 56);
+
+    function setSupplyCap(uint256 capWholeTokens) external {
+        reserveConfiguration = (reserveConfiguration & ~(((uint256(1) << 36) - 1) << 116)) | (capWholeTokens << 116);
+    }
+
+    function setFrozen(bool frozen) external {
+        if (frozen) reserveConfiguration |= (1 << 57);
+        else reserveConfiguration &= ~(uint256(1) << 57);
+    }
+
+    function setReservePaused(bool paused) external {
+        if (paused) reserveConfiguration |= (1 << 60);
+        else reserveConfiguration &= ~(uint256(1) << 60);
+    }
+
+    function getConfiguration(address reserveAsset) external view returns (uint256 data) {
+        require(reserveAsset == address(asset), "WRONG_ASSET");
+        return reserveConfiguration;
+    }
 
     constructor(MockUSDC asset_, MockAToken aToken_) {
         asset = asset_;

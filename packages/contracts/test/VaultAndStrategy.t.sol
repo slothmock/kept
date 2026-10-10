@@ -35,6 +35,14 @@ contract WrongAssetStrategy is IYieldStrategy {
     function availableLiquidity() external pure returns (uint256) {
         return 0;
     }
+
+    function availableDepositCapacity() external pure returns (uint256) {
+        return type(uint256).max;
+    }
+
+    function rescueToken(address, address) external pure returns (uint256) {
+        return 0;
+    }
 }
 
 contract VaultAndStrategyTest is Test {
@@ -67,6 +75,99 @@ contract VaultAndStrategyTest is Test {
         token.approve(address(vault), type(uint256).max);
         vm.prank(bob);
         token.approve(address(vault), type(uint256).max);
+    }
+
+
+
+    function test_StrategyMigrationRequiresPauseAndPreservesSavings() public {
+        vm.prank(alice);
+        vault.deposit(100 * USDC, alice);
+        uint256 beforeShares = vault.balanceOf(alice);
+        uint256 beforeAssets = vault.totalAssets();
+
+        AaveUSDCStrategy replacement = new AaveUSDCStrategy(
+            address(vault), address(token), address(pool), address(aToken)
+        );
+
+        vm.prank(owner);
+        vm.expectRevert();
+        vault.migrateStrategy(address(replacement));
+
+        vm.prank(owner);
+        vault.pause();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.migrateStrategy(address(replacement));
+
+        vm.prank(owner);
+        vault.migrateStrategy(address(replacement));
+        assertEq(address(vault.strategy()), address(replacement));
+        assertEq(vault.balanceOf(alice), beforeShares);
+        assertEq(vault.totalAssets(), beforeAssets);
+        assertEq(strategy.totalAssets(), 0);
+        assertEq(replacement.totalAssets(), beforeAssets);
+
+        vm.prank(alice);
+        vault.redeem(beforeShares, alice, alice);
+        assertEq(vault.balanceOf(alice), 0);
+    }
+
+    function test_StrategyMigrationRevertsAtomicallyWhenAaveIlliquid() public {
+        vm.prank(alice);
+        vault.deposit(100 * USDC, alice);
+        aToken.removeLiquidity(bob, 50 * USDC);
+        AaveUSDCStrategy replacement = new AaveUSDCStrategy(
+            address(vault), address(token), address(pool), address(aToken)
+        );
+        vm.prank(owner);
+        vault.pause();
+        vm.prank(owner);
+        vm.expectRevert();
+        vault.migrateStrategy(address(replacement));
+        assertEq(address(vault.strategy()), address(strategy));
+        assertEq(strategy.totalAssets(), 100 * USDC);
+    }
+
+    function test_MaxDepositReflectsAaveSupplyCapAndReserveStatus() public {
+        pool.setSupplyCap(100);
+        assertEq(vault.maxDeposit(alice), 100 * USDC);
+        vm.prank(alice);
+        vault.deposit(40 * USDC, alice);
+        assertEq(vault.maxDeposit(bob), 60 * USDC);
+
+        vm.prank(bob);
+        vm.expectRevert();
+        vault.deposit(61 * USDC, bob);
+
+        pool.setFrozen(true);
+        assertEq(vault.maxDeposit(alice), 0);
+        pool.setFrozen(false);
+        pool.setReservePaused(true);
+        assertEq(vault.maxDeposit(alice), 0);
+        pool.setReservePaused(false);
+        pool.setSupplyCap(0);
+        assertEq(vault.maxDeposit(alice), type(uint256).max);
+    }
+
+    function test_SafeOwnerCanRescueOnlyUnrelatedStrategyTokens() public {
+        MockUSDC unrelated = new MockUSDC();
+        unrelated.mint(address(strategy), 7 * USDC);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.rescueStrategyToken(address(unrelated), alice);
+
+        vm.prank(owner);
+        assertEq(vault.rescueStrategyToken(address(unrelated), owner), 7 * USDC);
+        assertEq(unrelated.balanceOf(owner), 7 * USDC);
+
+        vm.prank(owner);
+        vm.expectRevert(AaveUSDCStrategy.ProtectedToken.selector);
+        vault.rescueStrategyToken(address(token), owner);
+        vm.prank(owner);
+        vm.expectRevert(AaveUSDCStrategy.ProtectedToken.selector);
+        vault.rescueStrategyToken(address(aToken), owner);
     }
 
     function test_FirstDepositSuppliesAllAssetsAndSplitsShares() public {

@@ -5,10 +5,12 @@ on:
     branches:
       - staging
       - main
+      - prod
   push:
     branches:
       - staging
       - main
+      - prod
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

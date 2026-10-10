@@ -28,6 +28,8 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     error ShareTransfersDisabled();
     error StrategyNotBound();
     error StrategyAlreadyBound();
+    error StrategyHasAssets();
+    error StrategyMigrationInsufficientLiquidity(uint256 requested, uint256 available);
     error InvalidAsset();
     error InvalidStrategy();
     error StrategyAssetMismatch();
@@ -38,6 +40,8 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     error ZeroShares();
 
     event StrategyBound(address indexed strategy);
+    event StrategyMigrated(address indexed previousStrategy, address indexed newStrategy, uint256 assets);
+    event StrategyTokenRescued(address indexed token, address indexed recipient, uint256 amount);
     event YieldFeeCrystallized(uint256 feeAssets, uint256 feeShares, uint256 highWaterMarkAssets);
     event DepositFeeSharesMinted(address indexed receiver, uint256 assets, uint256 feeShares);
 
@@ -86,6 +90,46 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         strategy = candidate;
 
         emit StrategyBound(strategy_);
+    }
+
+
+    /// @notice Move all strategy assets to a replacement during a paused emergency.
+    /// @dev Reverts atomically if the old strategy cannot return the full position.
+    ///      The owner must review the replacement strategy separately.
+    function migrateStrategy(address newStrategy) external onlyOwner nonReentrant {
+        _requirePaused();
+        IYieldStrategy previous = strategy;
+        if (address(previous) == address(0)) revert StrategyNotBound();
+        if (newStrategy == address(0) || newStrategy.code.length == 0 || newStrategy == address(previous)) {
+            revert InvalidStrategy();
+        }
+        IYieldStrategy replacement = IYieldStrategy(newStrategy);
+        if (replacement.asset() != asset()) revert StrategyAssetMismatch();
+        if (replacement.vault() != address(this)) revert StrategyVaultMismatch();
+        if (replacement.totalAssets() != 0) revert StrategyHasAssets();
+
+        uint256 moving = previous.totalAssets();
+        uint256 liquid = previous.availableLiquidity();
+        if (moving > liquid) revert StrategyMigrationInsufficientLiquidity(moving, liquid);
+
+        if (moving != 0) {
+            uint256 withdrawn = previous.withdraw(moving);
+            if (withdrawn != moving) revert InsufficientStrategyLiquidity(moving, withdrawn);
+            IERC20(asset()).safeTransfer(newStrategy, moving);
+            uint256 deposited = replacement.deposit(moving);
+            if (deposited != moving) revert InsufficientStrategyLiquidity(moving, deposited);
+        }
+
+        strategy = replacement;
+        emit StrategyMigrated(address(previous), newStrategy, moving);
+    }
+
+    /// @notice Recover unrelated tokens from the strategy; USDC and aUSDC are protected there.
+    function rescueStrategyToken(address token, address recipient) external onlyOwner nonReentrant returns (uint256 amount) {
+        IYieldStrategy bound = strategy;
+        if (address(bound) == address(0)) revert StrategyNotBound();
+        amount = bound.rescueToken(token, recipient);
+        emit StrategyTokenRescued(token, recipient, amount);
     }
 
     function pause() external onlyOwner {
@@ -172,7 +216,9 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
 
     function maxDeposit(address receiver) public view override returns (uint256) {
         if (paused() || address(strategy) == address(0)) return 0;
-        return super.maxDeposit(receiver);
+        uint256 cap = strategy.availableDepositCapacity();
+        uint256 standardMaximum = super.maxDeposit(receiver);
+        return cap < standardMaximum ? cap : standardMaximum;
     }
 
     function maxMint(address) public pure override returns (uint256) {
