@@ -1338,7 +1338,14 @@ export function buildApp(
 
           const email = requireString(body, "email");
           if (dependencies.resendWaitlist) {
-            await dependencies.resendWaitlist(email);
+            try {
+              await dependencies.resendWaitlist(email);
+            } catch (error) {
+              request.log.error({ err: error }, "Waitlist provider rejected signup");
+              return reply.code(503).send({
+                error: { code: "WAITLIST_UNAVAILABLE" },
+              });
+            }
           } else {
             await dependencies.persistence.joinWaitlist({ email });
           }
