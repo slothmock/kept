@@ -727,8 +727,7 @@ export function buildApp(
         ) * 1_000;
 
       const promise =
-        dependencies.chainId
-          === 10_143
+        (dependencies.chainId === 143 || dependencies.chainId === 10_143)
         && dependencies
           .savingsCurrentAssets
         && dependencies
@@ -2357,7 +2356,7 @@ export function buildApp(
             Math.floor(now / 1_000) * 1_000;
 
           const promise =
-            dependencies.chainId === 10_143
+            (dependencies.chainId === 143 || dependencies.chainId === 10_143)
             && dependencies.savingsCurrentAssets
             && dependencies.savingsActivityIndex
               ? (async () => {
