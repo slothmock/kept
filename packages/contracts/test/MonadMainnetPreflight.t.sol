@@ -33,5 +33,18 @@ contract MonadMainnetPreflightTest is Test {
         assertEq(address(vault.strategy()), address(strategy));
         assertEq(strategy.asset(), USDC);
         assertEq(vault.maxDeposit(demoOwner) > 0, true);
+
+        // Exercise the real Aave pool on the fork. No mainnet broadcast.
+        address saver = makeAddr("demoSaver");
+        deal(USDC, saver, 20e6);
+        vm.startPrank(saver);
+        IERC20(USDC).approve(address(vault), 10e6);
+        uint256 shares = vault.deposit(10e6, saver);
+        assertGt(shares, 0);
+        assertGt(strategy.totalAssets(), 0);
+        uint256 received = vault.redeem(shares, saver, saver);
+        vm.stopPrank();
+        assertGt(received, 0);
+        assertEq(vault.balanceOf(saver), 0);
     }
 }
