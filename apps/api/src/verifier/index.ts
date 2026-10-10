@@ -15,6 +15,7 @@ export { RoutedWeeklySavingsEvidenceSource } from "./routed-weekly-savings-evide
 
 export {
   FixedRewardPolicy,
+  ProportionalWeeklySavingsRewardPolicy,
 } from "./rewards.js";
 
 export {
