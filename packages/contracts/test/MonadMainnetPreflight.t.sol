@@ -26,20 +26,24 @@ contract MonadMainnetPreflightTest is Test {
         assertEq(IAavePool(AAVE_POOL).getReserveAToken(USDC), A_USDC);
         assertEq(IAaveAToken(A_USDC).UNDERLYING_ASSET_ADDRESS(), USDC);
 
-        address demoOwner = makeAddr("demoOwner");
-        address demoFeeRecipient = makeAddr("demoFeeRecipient");
-        KeptSavingsVault vault = new KeptSavingsVault(IERC20(USDC), demoOwner, demoFeeRecipient);
+        _testAaveDepositAndRedemption();
+        _testRewardReservationAndClaim();
+    }
+
+    function _testAaveDepositAndRedemption() internal {
+        address owner = makeAddr("demoOwner");
+        KeptSavingsVault vault = new KeptSavingsVault(
+            IERC20(USDC), owner, makeAddr("demoFeeRecipient")
+        );
         AaveUSDCStrategy strategy = new AaveUSDCStrategy(
             address(vault), USDC, AAVE_POOL, A_USDC
         );
-        vm.prank(demoOwner);
+        vm.prank(owner);
         vault.bindStrategy(address(strategy));
-
         assertEq(address(vault.strategy()), address(strategy));
         assertEq(strategy.asset(), USDC);
-        assertEq(vault.maxDeposit(demoOwner) > 0, true);
+        assertGt(vault.maxDeposit(owner), 0);
 
-        // Exercise the real Aave pool on the fork. No mainnet broadcast.
         address saver = makeAddr("demoSaver");
         deal(USDC, saver, 20e6);
         vm.startPrank(saver);
@@ -51,42 +55,48 @@ contract MonadMainnetPreflightTest is Test {
         vm.stopPrank();
         assertGt(received, 0);
         assertEq(vault.balanceOf(saver), 0);
+    }
 
-        KeptTreasury treasury = new KeptTreasury(IERC20(USDC), demoOwner);
-        KeptSavingsVault rewardVault = new KeptSavingsVault(IERC20(USDC), demoOwner, address(treasury));
-        vm.prank(demoOwner);
-        treasury.bindVault(address(rewardVault));
+    function _testRewardReservationAndClaim() internal {
+        address owner = makeAddr("demoOwner");
         address verifier = makeAddr("verifier");
-        CommitmentManager manager = new CommitmentManager(
-            IKeptTreasury(address(treasury)), demoOwner, verifier
+        address participant = makeAddr("participant");
+        KeptTreasury treasury = new KeptTreasury(IERC20(USDC), owner);
+        KeptSavingsVault vault = new KeptSavingsVault(
+            IERC20(USDC), owner, address(treasury)
         );
-        vm.prank(demoOwner);
+        vm.prank(owner);
+        treasury.bindVault(address(vault));
+        CommitmentManager manager = new CommitmentManager(
+            IKeptTreasury(address(treasury)), owner, verifier
+        );
+        vm.prank(owner);
         treasury.setRewardManager(address(manager));
 
-        address participant = makeAddr("participant");
-        bytes32 referenceId = keccak256("fork-mainnet-reward");
-        uint64 startAt = uint64(block.timestamp + 1);
-        uint64 endAt = startAt + 1;
+        uint64 endAt = uint64(block.timestamp + 2);
         vm.prank(participant);
-        uint256 commitmentId = manager.createCommitment(referenceId, startAt, endAt);
+        uint256 commitmentId = manager.createCommitment(
+            keccak256("fork-mainnet-reward"),
+            uint64(block.timestamp + 1),
+            endAt
+        );
         vm.warp(endAt);
-        // Prefund before verification, because completion reserves the obligation.
         deal(USDC, address(treasury), 5e6);
         vm.prank(verifier);
         manager.completeCommitment(commitmentId, 5e6);
         assertEq(treasury.totalReservedAssets(), 5e6);
         assertEq(treasury.availableRewardAssets(), 0);
-        vm.prank(demoOwner);
+
+        vm.prank(owner);
         vm.expectRevert(
             abi.encodeWithSelector(KeptTreasury.InsufficientTreasuryValue.selector, 1e6, 0)
         );
-        treasury.withdrawAssets(demoOwner, 1e6);
+        treasury.withdrawAssets(owner, 1e6);
 
-        // Prefund the reward explicitly; no real mainnet funds are transferred.
-        uint256 beforeBalance = IERC20(USDC).balanceOf(participant);
+        uint256 balanceBefore = IERC20(USDC).balanceOf(participant);
         vm.prank(participant);
         manager.claimReward(commitmentId);
-        assertEq(IERC20(USDC).balanceOf(participant) - beforeBalance, 5e6);
+        assertEq(IERC20(USDC).balanceOf(participant) - balanceBefore, 5e6);
         assertEq(IERC20(USDC).balanceOf(address(treasury)), 0);
         assertEq(treasury.totalReservedAssets(), 0);
     }
