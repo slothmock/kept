@@ -25,6 +25,8 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     address public rewardManager;
 
     mapping(bytes32 rewardId => bool used) public rewardUsed;
+    mapping(bytes32 rewardId => uint256 assets) public rewardReservations;
+    uint256 public totalReservedAssets;
 
     error InvalidAsset();
     error InvalidVault();
@@ -42,6 +44,9 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     error RewardTooLarge(uint256 requested, uint256 maximum);
 
     error ZeroAssets();
+    error RewardNotReserved(bytes32 rewardId);
+    error RewardReservationMismatch(uint256 expected, uint256 actual);
+    error OutstandingRewardReservations(uint256 assets);
 
     error InsufficientTreasuryValue(uint256 requested, uint256 available);
 
@@ -52,6 +57,7 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
     event TreasurySharesRedeemed(uint256 assets, uint256 shares);
 
     event RewardPaid(bytes32 indexed rewardId, address indexed recipient, uint256 assets);
+    event RewardReserved(bytes32 indexed rewardId, uint256 assets);
 
     event AssetsWithdrawn(address indexed recipient, uint256 assets);
 
@@ -110,6 +116,7 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
             revert InvalidRewardManager();
         }
 
+        if (totalReservedAssets != 0) revert OutstandingRewardReservations(totalReservedAssets);
         address previousManager = rewardManager;
 
         rewardManager = newRewardManager;
@@ -124,6 +131,36 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
         }
 
         shares = _realiseRevenue(assets);
+    }
+
+    /// @notice Spendable treasury value, net of outstanding verified commitments.
+    /// @dev Counts idle USDC and redeemable treasury-owned shares only.
+    function availableRewardAssets() public view returns (uint256) {
+        uint256 value = asset.balanceOf(address(this));
+        if (address(vault) != address(0)) {
+            value += vault.maxWithdraw(address(this));
+        }
+        return value > totalReservedAssets ? value - totalReservedAssets : 0;
+    }
+
+    /// @notice Reserve funds as soon as a commitment is verified.
+    function reserveReward(bytes32 rewardId, uint256 assets)
+        external
+        nonReentrant
+        onlyRewardManager
+        whenNotPaused
+    {
+        if (rewardId == bytes32(0)) revert InvalidRewardId();
+        if (assets == 0) revert ZeroAssets();
+        if (assets > MAX_REWARD) revert RewardTooLarge(assets, MAX_REWARD);
+        if (rewardUsed[rewardId] || rewardReservations[rewardId] != 0) {
+            revert RewardAlreadyUsed(rewardId);
+        }
+        uint256 available = availableRewardAssets();
+        if (assets > available) revert InsufficientTreasuryValue(assets, available);
+        rewardReservations[rewardId] = assets;
+        totalReservedAssets += assets;
+        emit RewardReserved(rewardId, assets);
     }
 
     /// @notice Pay a verified commitment reward using
@@ -153,6 +190,11 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
         if (rewardUsed[rewardId]) {
             revert RewardAlreadyUsed(rewardId);
         }
+        uint256 reserved = rewardReservations[rewardId];
+        if (reserved == 0) revert RewardNotReserved(rewardId);
+        if (reserved != assets) revert RewardReservationMismatch(reserved, assets);
+        delete rewardReservations[rewardId];
+        totalReservedAssets -= assets;
 
         /*
          * Mark before external interaction.
@@ -183,6 +225,8 @@ contract KeptTreasury is Ownable2Step, Pausable, ReentrancyGuard {
             revert ZeroAssets();
         }
 
+        uint256 available = availableRewardAssets();
+        if (assets > available) revert InsufficientTreasuryValue(assets, available);
         uint256 idle = asset.balanceOf(address(this));
 
         if (idle < assets) {
