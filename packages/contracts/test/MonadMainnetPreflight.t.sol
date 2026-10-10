@@ -16,6 +16,7 @@ contract MonadMainnetPreflightTest is Test {
     address internal constant USDC = 0x754704Bc059F8C67012fEd69BC8A327a5aafb603;
     address internal constant AAVE_POOL = 0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef;
     address internal constant A_USDC = 0x35a73BAcb179d3740395A3ceCc87FF2e581d6042;
+    address internal constant ADMIN_SAFE = 0xF13040db22dB552b8bC89C33F181491E91A6f7e1;
 
     function testMainnetAaveReserveAndStrategyConstruction() public {
         string memory rpcUrl = vm.envOr("MONAD_MAINNET_RPC_URL", string(""));
@@ -28,6 +29,55 @@ contract MonadMainnetPreflightTest is Test {
 
         _testAaveDepositAndRedemption();
         _testRewardReservationAndClaim();
+        _testAdministrativeOwnershipTransfer();
+    }
+
+    function _testAdministrativeOwnershipTransfer() internal {
+        // Calls from ADMIN_SAFE are impersonated on the fork. This tests the
+        // contract ownership handshake, NOT Safe signature collection.
+        assertGt(ADMIN_SAFE.code.length, 0, "Configured Safe is not deployed on this fork");
+        address deployer = makeAddr("ownershipDeployer");
+        address verifier = makeAddr("ownershipVerifier");
+
+        KeptTreasury treasury = new KeptTreasury(IERC20(USDC), deployer);
+        KeptSavingsVault vault = new KeptSavingsVault(
+            IERC20(USDC), deployer, address(treasury)
+        );
+        CommitmentManager manager = new CommitmentManager(
+            IKeptTreasury(address(treasury)), deployer, verifier
+        );
+
+        vm.startPrank(deployer);
+        treasury.bindVault(address(vault));
+        treasury.setRewardManager(address(manager));
+        vault.transferOwnership(ADMIN_SAFE);
+        treasury.transferOwnership(ADMIN_SAFE);
+        manager.transferOwnership(ADMIN_SAFE);
+        vm.stopPrank();
+
+        assertEq(vault.pendingOwner(), ADMIN_SAFE);
+        assertEq(treasury.pendingOwner(), ADMIN_SAFE);
+        assertEq(manager.pendingOwner(), ADMIN_SAFE);
+
+        vm.startPrank(ADMIN_SAFE);
+        vault.acceptOwnership();
+        treasury.acceptOwnership();
+        manager.acceptOwnership();
+        vm.stopPrank();
+
+        assertEq(vault.owner(), ADMIN_SAFE);
+        assertEq(treasury.owner(), ADMIN_SAFE);
+        assertEq(manager.owner(), ADMIN_SAFE);
+        assertEq(vault.pendingOwner(), address(0));
+        assertEq(treasury.pendingOwner(), address(0));
+        assertEq(manager.pendingOwner(), address(0));
+
+        // The old deployer must no longer have administrative permissions.
+        vm.prank(deployer);
+        vm.expectRevert();
+        manager.setVerifier(makeAddr("unauthorisedVerifier"));
+        vm.prank(ADMIN_SAFE);
+        manager.setVerifier(makeAddr("newVerifier"));
     }
 
     function _testAaveDepositAndRedemption() internal {
