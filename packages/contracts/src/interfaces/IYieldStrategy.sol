@@ -14,4 +14,6 @@ interface IYieldStrategy {
 
     function availableLiquidity() external view returns (uint256);
     function availableDepositCapacity() external view returns (uint256);
+
+    function rescueToken(address token, address recipient) external returns (uint256 amount);
 }
