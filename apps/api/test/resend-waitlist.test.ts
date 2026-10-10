@@ -5,7 +5,7 @@ describe("Resend waitlist", () => {
   const settings = { apiKey: "test-key", segmentId: "test-segment" };
 
   it("normalizes email and submits it to the chosen segment", async () => {
-    const fetcher = vi.fn(async () => new Response("{}", { status: 201 }));
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response("{}", { status: 201 }));
     await createResendWaitlist({ ...settings, fetcher })("  SOMEONE@Example.com  ");
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0]?.[0]).toBe("https://api.resend.com/contacts");
