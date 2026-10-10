@@ -260,7 +260,7 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
     /// successfully verified commitment.
     function claimReward(
         uint256 commitmentId
-    ) external nonReentrant whenNotPaused {
+    ) external nonReentrant {
         Commitment storage commitment = commitments[commitmentId];
 
         if (commitment.owner == address(0)) {
