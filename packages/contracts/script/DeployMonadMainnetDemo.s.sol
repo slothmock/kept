@@ -30,7 +30,7 @@ contract DeployMonadMainnetDemo is Script {
         if (!vm.envOr("ENABLE_MONAD_MAINNET_DEMO_DEPLOY", false)) revert NotExplicitlyEnabled();
 
         address owner = vm.envAddress("MAINNET_DEMO_OWNER");
-        if (owner == address(0)) revert InvalidOwner();
+        // The deploying signer must also own both contracts to bind them.\n        address deployer = vm.envAddress("MAINNET_DEMO_DEPLOYER_ADDRESS");\n        if (owner == address(0) || owner != deployer) revert InvalidOwner();
         if (
             IAavePool(AAVE_POOL).getReserveAToken(USDC) != A_USDC
                 || IAaveAToken(A_USDC).UNDERLYING_ASSET_ADDRESS() != USDC
