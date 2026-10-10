@@ -79,7 +79,7 @@ contract MockAavePool {
     uint256 public reserveConfiguration = (1 << 56);
 
     function setSupplyCap(uint256 capWholeTokens) external {
-        reserveConfiguration = (reserveConfiguration & ~(((1 << 36) - 1) << 116)) | (capWholeTokens << 116);
+        reserveConfiguration = (reserveConfiguration & ~(((uint256(1) << 36) - 1) << 116)) | (capWholeTokens << 116);
     }
 
     function setFrozen(bool frozen) external {
