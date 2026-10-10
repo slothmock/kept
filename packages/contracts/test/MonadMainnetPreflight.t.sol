@@ -70,11 +70,12 @@ contract MonadMainnetPreflightTest is Test {
         vm.prank(participant);
         uint256 commitmentId = manager.createCommitment(referenceId, startAt, endAt);
         vm.warp(endAt);
+        // Prefund before verification, because completion reserves the obligation.
+        deal(USDC, address(treasury), 5e6);
         vm.prank(verifier);
         manager.completeCommitment(commitmentId, 5e6);
 
         // Prefund the reward explicitly; no real mainnet funds are transferred.
-        deal(USDC, address(treasury), 5e6);
         uint256 beforeBalance = IERC20(USDC).balanceOf(participant);
         vm.prank(participant);
         manager.claimReward(commitmentId);
