@@ -7,7 +7,7 @@ export function createResendWaitlist(input: {
   const fetcher = input.fetcher ?? fetch;
   return async (email: string): Promise<void> => {
     const normalized = email.trim().toLowerCase();
-    if (normalized.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalized)) {
+    if (normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       throw new Error("Invalid waitlist email");
     }
 
