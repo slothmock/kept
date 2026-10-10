@@ -74,6 +74,13 @@ contract MonadMainnetPreflightTest is Test {
         deal(USDC, address(treasury), 5e6);
         vm.prank(verifier);
         manager.completeCommitment(commitmentId, 5e6);
+        assertEq(treasury.totalReservedAssets(), 5e6);
+        assertEq(treasury.availableRewardAssets(), 0);
+        vm.prank(demoOwner);
+        vm.expectRevert(
+            abi.encodeWithSelector(KeptTreasury.InsufficientTreasuryValue.selector, 1e6, 0)
+        );
+        treasury.withdrawAssets(demoOwner, 1e6);
 
         // Prefund the reward explicitly; no real mainnet funds are transferred.
         uint256 beforeBalance = IERC20(USDC).balanceOf(participant);
@@ -81,5 +88,6 @@ contract MonadMainnetPreflightTest is Test {
         manager.claimReward(commitmentId);
         assertEq(IERC20(USDC).balanceOf(participant) - beforeBalance, 5e6);
         assertEq(IERC20(USDC).balanceOf(address(treasury)), 0);
+        assertEq(treasury.totalReservedAssets(), 0);
     }
 }
