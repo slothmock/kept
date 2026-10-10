@@ -19,6 +19,7 @@ contract DeployMonadMainnet is Script {
     error InvalidOwner();
     error AaveReserveMismatch();
     error InvalidVerifier();
+    error InvalidAdminSafe();
 
     uint256 internal constant MONAD_CHAIN_ID = 143;
     address internal constant USDC = 0x754704Bc059F8C67012fEd69BC8A327a5aafb603;
@@ -38,8 +39,12 @@ contract DeployMonadMainnet is Script {
         if (signerKey == 0) revert InvalidOwner();
         address deployer = vm.addr(signerKey);
         if (owner == address(0) || owner != deployer) revert InvalidOwner();
+        address adminSafe = vm.envAddress("MAINNET_ADMIN_SAFE");
+        if (adminSafe == address(0) || adminSafe == owner || adminSafe.code.length == 0) {
+            revert InvalidAdminSafe();
+        }
         address verifier = vm.envAddress("MAINNET_COMMITMENT_VERIFIER");
-        if (verifier == address(0) || verifier == owner) revert InvalidVerifier();
+        if (verifier == address(0) || verifier == owner || verifier == adminSafe) revert InvalidVerifier();
         if (
             IAavePool(AAVE_POOL).getReserveAToken(USDC) != A_USDC
                 || IAaveAToken(A_USDC).UNDERLYING_ASSET_ADDRESS() != USDC
@@ -54,11 +59,17 @@ contract DeployMonadMainnet is Script {
         vault.bindStrategy(address(strategy));
         manager = new CommitmentManager(IKeptTreasury(address(treasury)), owner, verifier);
         treasury.setRewardManager(address(manager));
+        // Initial bindings must be performed by deployer; Safe acceptance
+        // is a separate 2-of-3 transaction after deployment verification.
+        vault.transferOwnership(adminSafe);
+        treasury.transferOwnership(adminSafe);
+        manager.transferOwnership(adminSafe);
         vm.stopBroadcast();
 
         console2.log("MAINNET_TREASURY", address(treasury));
         console2.log("MAINNET_VAULT", address(vault));
         console2.log("MAINNET_STRATEGY", address(strategy));
         console2.log("MAINNET_COMMITMENT_MANAGER", address(manager));
+        console2.log("MAINNET_ADMIN_SAFE_PENDING_OWNER", adminSafe);
     }
 }
