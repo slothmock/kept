@@ -203,6 +203,9 @@ contract KeptTreasuryTest is Test {
             );
 
         vm.prank(rewardManager);
+        treasury.reserveReward(rewardId, 5 * USDC);
+
+        vm.prank(rewardManager);
         treasury.payReward(
             rewardId,
             bob,
@@ -234,6 +237,9 @@ contract KeptTreasuryTest is Test {
             keccak256(
                 "duplicate"
             );
+
+        vm.prank(rewardManager);
+        treasury.reserveReward(rewardId, 5 * USDC);
 
         vm.prank(rewardManager);
         treasury.payReward(
