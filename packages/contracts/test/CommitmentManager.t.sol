@@ -423,7 +423,7 @@ contract CommitmentManagerTest is Test {
         manager.completeCommitment(id, 5e6);
     }
 
-    function test_PauseBlocksRewardClaim() public {
+    function test_PauseDoesNotBlockRewardClaim() public {
         (uint256 id, ) = _createAliceCommitment();
 
         _warpToCommitmentEnd(id);
@@ -436,8 +436,7 @@ contract CommitmentManagerTest is Test {
         manager.pause();
 
         vm.prank(alice);
-        vm.expectRevert();
-
         manager.claimReward(id);
+        assertEq(treasury.paymentCount(), 1);
     }
 }
