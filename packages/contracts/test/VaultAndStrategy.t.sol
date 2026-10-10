@@ -35,6 +35,14 @@ contract WrongAssetStrategy is IYieldStrategy {
     function availableLiquidity() external pure returns (uint256) {
         return 0;
     }
+
+    function availableDepositCapacity() external pure returns (uint256) {
+        return type(uint256).max;
+    }
+
+    function rescueToken(address, address) external pure returns (uint256) {
+        return 0;
+    }
 }
 
 contract VaultAndStrategyTest is Test {
