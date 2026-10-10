@@ -123,3 +123,84 @@ jobs:
           submodules: recursive
       - uses: foundry-rs/foundry-toolchain@v1
       - run: forge test --root packages/contracts
+
+  production-web-deploy:
+    name: Deploy production web after API
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/prod' }}
+    needs:
+      - typecheck
+      - unit
+      - integration
+      - web
+      - contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      VERCEL_PRODUCTION_DEPLOY_HOOK: ${{ secrets.VERCEL_PRODUCTION_DEPLOY_HOOK }}
+      RAILWAY_PROJECT_ID: eab1644d-12af-481b-b807-d62762eed04d
+      RAILWAY_ENVIRONMENT_ID: 38700de1-78bf-4f9d-9ba9-73d03f2bb744
+      RAILWAY_SERVICE_ID: 2f212b30-6b38-4eb7-8232-a76cea3f8e9d
+    steps:
+      - name: Confirm production deployment secrets
+        run: |
+          test -n "$RAILWAY_API_TOKEN" || { echo "::error::Missing RAILWAY_API_TOKEN secret"; exit 1; }
+          test -n "$VERCEL_PRODUCTION_DEPLOY_HOOK" || { echo "::error::Missing VERCEL_PRODUCTION_DEPLOY_HOOK secret"; exit 1; }
+      - name: Wait for Railway to deploy this exact commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          query='query($input: DeploymentListInput!) { deployments(first: 5, input: $input) { edges { node { status meta } } } }'
+          for attempt in $(seq 1 60); do
+            payload=$(jq -nc \
+              --arg query "$query" \
+              --arg projectId "$RAILWAY_PROJECT_ID" \
+              --arg environmentId "$RAILWAY_ENVIRONMENT_ID" \
+              --arg serviceId "$RAILWAY_SERVICE_ID" \
+              '{query:$query,variables:{input:{projectId:$projectId,environmentId:$environmentId,serviceId:$serviceId}}}')
+            response=$(curl --fail --silent --show-error --max-time 15 \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload" https://backboard.railway.com/graphql/v2)
+            if ! echo "$response" | jq -e '.data.deployments.edges | type == "array"' >/dev/null; then
+              echo "::error::Railway deployment query returned an invalid response"
+              echo "$response" | jq '{errors: .errors}' || true
+              exit 1
+            fi
+            latest=$(echo "$response" | jq -c '.data.deployments.edges[0].node // {}')
+            sha=$(echo "$latest" | jq -r '.meta.commitHash // ""')
+            status=$(echo "$latest" | jq -r '.status // ""')
+            echo "Railway deployment: status=$status, commit=$sha; expected=$GITHUB_SHA"
+            if [[ "$sha" == "$GITHUB_SHA" && "$status" == "SUCCESS" ]]; then
+              exit 0
+            fi
+            if [[ "$sha" == "$GITHUB_SHA" && ( "$status" == "FAILED" || "$status" == "CRASHED" || "$status" == "REMOVED" || "$status" == "SKIPPED" ) ]]; then
+              echo "::error::Railway deployment of $GITHUB_SHA ended with $status"
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "::error::Railway did not deploy commit $GITHUB_SHA within 15 minutes"
+          exit 1
+      - name: Verify production API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --max-time 10 \
+              https://api.keptfinance.app/health | jq -e '.status == "ok"' >/dev/null; then
+              echo "Production API healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Production API health check failed"
+          exit 1
+      - name: Trigger production Vercel deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            --request POST "$VERCEL_PRODUCTION_DEPLOY_HOOK"
