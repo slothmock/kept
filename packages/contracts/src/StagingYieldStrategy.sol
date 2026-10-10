@@ -151,6 +151,15 @@ contract StagingYieldStrategy is IYieldStrategy {
         return IERC20(asset).balanceOf(address(this)) + previewAccruedYield();
     }
 
+    function availableDepositCapacity() external pure returns (uint256) {
+        return type(uint256).max;
+    }
+
+    // No unrelated-token rescue on the testnet-only strategy.
+    function rescueToken(address, address) external onlyVault returns (uint256) {
+        return 0;
+    }
+
     function availableLiquidity() external view returns (uint256) {
         return IERC20(asset).balanceOf(address(this)) + previewAccruedYield();
     }
