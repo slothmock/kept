@@ -35,7 +35,7 @@ import {
   CommitmentVerifier,
   AllocationWeeklySavingsEvidenceSource,
   RoutedWeeklySavingsEvidenceSource,
-  FixedRewardPolicy,
+  ProportionalWeeklySavingsRewardPolicy,
   PersistenceVerificationStore,
   PersistenceWeeklySavingsEvidenceSource,
   ViemCommitmentSettlementGateway,
@@ -47,12 +47,10 @@ const VAULT_ACTIVITY_SYNC_INTERVAL_MS = 30_000;
 
 const VERIFICATION_BATCH_SIZE = 50;
 
-// Temporary hackathon reward.
-//
-// USDC uses 6 decimals, so this is 5 USDC.
-// Keep this simple until the final commitment
-// reward economics are decided.
-const WEEKLY_SAVINGS_REWARD_ASSETS = 5_000_000n;
+// 0.1% of each verified weekly commitment, capped at 10 USDC.
+// A separate treasury-wide reservation/budget mechanism is still required.
+const WEEKLY_SAVINGS_REWARD_BPS = 10n;
+const WEEKLY_SAVINGS_REWARD_CAP_ASSETS = 10_000_000n;
 
 const STAGING_FAUCET_AMOUNT_ASSETS = 1_000_000_000n;
 
@@ -332,7 +330,10 @@ const weeklySavingsEvidence = new RoutedWeeklySavingsEvidenceSource({
 
 const verificationStore = new PersistenceVerificationStore(database.db);
 
-const rewards = new FixedRewardPolicy(WEEKLY_SAVINGS_REWARD_ASSETS);
+const rewards = new ProportionalWeeklySavingsRewardPolicy(
+  WEEKLY_SAVINGS_REWARD_BPS,
+  WEEKLY_SAVINGS_REWARD_CAP_ASSETS,
+);
 
 const commitmentVerifier = new CommitmentVerifier({
   store: verificationStore,
