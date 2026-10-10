@@ -77,6 +77,48 @@ contract VaultAndStrategyTest is Test {
         token.approve(address(vault), type(uint256).max);
     }
 
+
+    function test_MaxDepositReflectsAaveSupplyCapAndReserveStatus() public {
+        pool.setSupplyCap(100);
+        assertEq(vault.maxDeposit(alice), 100 * USDC);
+        vm.prank(alice);
+        vault.deposit(40 * USDC, alice);
+        assertEq(vault.maxDeposit(bob), 60 * USDC);
+
+        vm.prank(bob);
+        vm.expectRevert();
+        vault.deposit(61 * USDC, bob);
+
+        pool.setFrozen(true);
+        assertEq(vault.maxDeposit(alice), 0);
+        pool.setFrozen(false);
+        pool.setReservePaused(true);
+        assertEq(vault.maxDeposit(alice), 0);
+        pool.setReservePaused(false);
+        pool.setSupplyCap(0);
+        assertEq(vault.maxDeposit(alice), type(uint256).max);
+    }
+
+    function test_SafeOwnerCanRescueOnlyUnrelatedStrategyTokens() public {
+        MockUSDC unrelated = new MockUSDC();
+        unrelated.mint(address(strategy), 7 * USDC);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.rescueStrategyToken(address(unrelated), alice);
+
+        vm.prank(owner);
+        assertEq(vault.rescueStrategyToken(address(unrelated), owner), 7 * USDC);
+        assertEq(unrelated.balanceOf(owner), 7 * USDC);
+
+        vm.prank(owner);
+        vm.expectRevert(AaveUSDCStrategy.ProtectedToken.selector);
+        vault.rescueStrategyToken(address(token), owner);
+        vm.prank(owner);
+        vm.expectRevert(AaveUSDCStrategy.ProtectedToken.selector);
+        vault.rescueStrategyToken(address(aToken), owner);
+    }
+
     function test_FirstDepositSuppliesAllAssetsAndSplitsShares() public {
         uint256 preview = vault.previewDeposit(100 * USDC);
         vm.prank(alice);
