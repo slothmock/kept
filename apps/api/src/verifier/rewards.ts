@@ -35,7 +35,7 @@ export class ProportionalWeeklySavingsRewardPolicy implements RewardPolicy {
       throw new Error("Proportional rewards only support weekly savings commitments");
     }
     const raw = commitment.parameters.targetAmountAtomic;
-    if (typeof raw !== "string" || !/^[1-9]\\d*$/.test(raw)) {
+    if (typeof raw !== "string" || !/^[1-9][0-9]*$/.test(raw)) {
       throw new Error("targetAmountAtomic must be a positive atomic amount");
     }
     const calculated = BigInt(raw) * this.rewardBps / 10_000n;
