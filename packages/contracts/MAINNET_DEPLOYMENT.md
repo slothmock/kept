@@ -141,3 +141,24 @@ commitments. Rewards are Kept-funded, not taken from users' savings.
 **No Mainnet broadcast, treasury transfer, environment change, or domain
 switch is authorized by this document.** Obtain separate explicit approval
 for each live action.
+
+## Contract hardening in PR #65
+
+- The vault's `maxDeposit()` reads Aave V3 reserve active, frozen, paused
+  flags and the whole-token supply cap against current aToken supply.
+  An RPC/fork integration test must confirm the Monad reserve configuration
+  is compatible before live deployment.
+- On commitment-manager pause, new commitments and verification are blocked,
+  but already completed rewards remain claimable **unless the treasury itself
+  is paused**, liquidity is unavailable, or another payout condition fails.
+- Safe-admin `rescueStrategyToken()` can retrieve unrelated ERC-20 tokens
+  from the active Aave strategy; canonical USDC and aUSDC remain protected.
+- Safe-admin `migrateStrategy()` requires the vault to be paused. It moves
+  the **entire** existing strategy position to an independently reviewed
+  replacement, without changing user share balances. It reverts atomically
+  if the old strategy cannot withdraw all assets. **It cannot bypass an Aave
+  liquidity shortfall or an Aave withdrawal freeze.** Do not unpause until
+  the replacement's asset/vault bindings and resulting accounting are verified.
+
+The verifier's trusted settlement authority remains an operational-security
+responsibility; these contract changes do not reduce it.
