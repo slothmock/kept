@@ -77,10 +77,12 @@ contract MonadAaveForkTest is Test {
     }
 
     function _crystallizeYieldFee(KeptSavingsVault vault, address feeRecipient) internal {
+        // The fee recipient already owns deposit-fee shares.
+        uint256 feeSharesBefore = vault.balanceOf(feeRecipient);
         (uint256 feeAssets, uint256 feeShares) = vault.crystallizeYieldFee();
         assertGt(feeAssets, 0);
         assertGt(feeShares, 0);
-        assertEq(vault.balanceOf(feeRecipient), feeShares);
+        assertEq(vault.balanceOf(feeRecipient) - feeSharesBefore, feeShares);
     }
 
     function _redeemAll(KeptSavingsVault vault, AaveUSDCStrategy strategy, address feeRecipient, uint256 grossAssets)

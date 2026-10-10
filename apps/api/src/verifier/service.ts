@@ -60,24 +60,15 @@ export class CommitmentVerifier {
       };
     }
 
+    // The deadline is an operational settlement target, not a reason to
+    // penalise a saver when the verifier, RPC or treasury is unavailable.
+    // Evidence is evaluated for the original immutable commitment period,
+    // including on retries after the verification deadline.
     if (now > commitment.verificationDeadline) {
-      const decision: VerificationDecision = {
-        outcome: "FAILED",
-        evidence: {
-          reason: "verification-deadline-expired",
-        },
-      };
-
-      await this.settle(
-        commitment,
-        decision,
-        now
+      this.dependencies.onDiagnostic?.(
+        "verification.deadline_exceeded",
+        new Error(`Commitment still requires verification: ${commitment.id}`),
       );
-
-      return {
-        commitmentId,
-        decision,
-      };
     }
 
     let decision: VerificationDecision;

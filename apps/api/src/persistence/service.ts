@@ -1960,7 +1960,6 @@ export class KeptPersistenceService {
       async (repository, transaction) => {
         // Serialize activation checks across different commitments belonging
         // to the same user, rather than only locking the selected draft.
-        await transaction.execute(sql`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR UPDATE`);
         const current = await repository.findCommitmentForOwnerForUpdate(
           input.userId,
           input.commitmentId,
@@ -2086,6 +2085,7 @@ export class KeptPersistenceService {
         }
         return mapCommitment(settled);
       },
+      true,
     );
   }
 
@@ -2412,6 +2412,7 @@ export class KeptPersistenceService {
     idempotencyKey: string,
     request: unknown,
     operation: (repository: KeptRepository, transaction: Parameters<Parameters<KeptDatabase["transaction"]>[0]>[0]) => Promise<T>,
+    lockUserBeforeReservation = false,
   ): Promise<T> {
     const key = requireNonBlank(idempotencyKey, "idempotencyKey");
     const requestHash = hashRequest(request);
@@ -2420,6 +2421,12 @@ export class KeptPersistenceService {
       const repository = new KeptRepository(transaction);
       const id = randomUUID();
       const now = new Date();
+      // Activation retries with distinct idempotency keys must serialize
+      // before inserting records that reference the same user row.
+      // Otherwise competing FK ShareLocks can deadlock with FOR UPDATE.
+      if (lockUserBeforeReservation) {
+        await transaction.execute(sql`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`);
+      }
       await repository.deleteExpiredIdempotency(userId, scope, key, now);
       const reserved = await repository.reserveIdempotency({
         id,

@@ -199,6 +199,11 @@ contract CommitmentManager is Ownable2Step, Pausable, ReentrancyGuard {
             revert NoReward();
         }
 
+        bytes32 rewardId = keccak256(
+            abi.encode(address(this), commitmentId, commitment.referenceId)
+        );
+        treasury.reserveReward(rewardId, rewardAssets);
+
         commitment.status = CommitmentStatus.Completed;
 
         commitment.rewardAssets = rewardAssets;

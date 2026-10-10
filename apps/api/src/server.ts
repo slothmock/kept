@@ -29,30 +29,30 @@ import { resolveVaultActivityIndexStartAt } from "./vault-activity-index-config.
 import { createSavingsPerformanceReader } from "./savings-performance.js";
 
 import { createSavingsMarketStatusReader } from "./savings-market-status.js";
+import { readTreasuryHealth } from "./treasury-monitor.js";
 
 import {
   CommitmentVerificationWorker,
   CommitmentVerifier,
   AllocationWeeklySavingsEvidenceSource,
   RoutedWeeklySavingsEvidenceSource,
-  FixedRewardPolicy,
+  ProportionalWeeklySavingsRewardPolicy,
   PersistenceVerificationStore,
   PersistenceWeeklySavingsEvidenceSource,
   ViemCommitmentSettlementGateway,
 } from "./verifier/index.js";
 
 const VERIFICATION_INTERVAL_MS = 60_000;
+const MAINNET_TREASURY_ALERT_THRESHOLD_ASSETS = 10_000_000n;
 
 const VAULT_ACTIVITY_SYNC_INTERVAL_MS = 30_000;
 
 const VERIFICATION_BATCH_SIZE = 50;
 
-// Temporary hackathon reward.
-//
-// USDC uses 6 decimals, so this is 5 USDC.
-// Keep this simple until the final commitment
-// reward economics are decided.
-const WEEKLY_SAVINGS_REWARD_ASSETS = 5_000_000n;
+// 0.1% of each verified weekly commitment, capped at 10 USDC.
+// A separate treasury-wide reservation/budget mechanism is still required.
+const WEEKLY_SAVINGS_REWARD_BPS = 10n;
+const WEEKLY_SAVINGS_REWARD_CAP_ASSETS = 10_000_000n;
 
 const STAGING_FAUCET_AMOUNT_ASSETS = 1_000_000_000n;
 
@@ -332,7 +332,10 @@ const weeklySavingsEvidence = new RoutedWeeklySavingsEvidenceSource({
 
 const verificationStore = new PersistenceVerificationStore(database.db);
 
-const rewards = new FixedRewardPolicy(WEEKLY_SAVINGS_REWARD_ASSETS);
+const rewards = new ProportionalWeeklySavingsRewardPolicy(
+  WEEKLY_SAVINGS_REWARD_BPS,
+  WEEKLY_SAVINGS_REWARD_CAP_ASSETS,
+);
 
 const commitmentVerifier = new CommitmentVerifier({
   store: verificationStore,
@@ -641,6 +644,30 @@ async function runVaultActivitySync(): Promise<void> {
   }
 }
 
+async function logMainnetTreasuryHealth(): Promise<void> {
+  if (config.monadChainId !== 143) return;
+  try {
+    const health = await readTreasuryHealth({
+      client: publicClient,
+      vault: config.keptSavingsVaultAddress,
+      lowBalanceThresholdAssets: MAINNET_TREASURY_ALERT_THRESHOLD_ASSETS,
+    });
+    const values = {
+      treasury: health.treasury,
+      availableUsdcAtomic: health.availableAssets.toString(),
+      reservedUsdcAtomic: health.reservedAssets.toString(),
+      thresholdUsdcAtomic: MAINNET_TREASURY_ALERT_THRESHOLD_ASSETS.toString(),
+    };
+    if (health.belowThreshold) {
+      app.log.warn(values, "Mainnet treasury available reward funds below threshold");
+    } else {
+      app.log.info(values, "Mainnet treasury reward funding status");
+    }
+  } catch (error) {
+    app.log.error(error, "Mainnet treasury reward monitor failed");
+  }
+}
+
 async function runVerification(): Promise<void> {
   if (verificationRunning || closing) {
     return;
@@ -649,6 +676,7 @@ async function runVerification(): Promise<void> {
   verificationRunning = true;
 
   try {
+    await logMainnetTreasuryHealth();
     const result = await verificationWorker.runOnce();
 
     if (result.checked > 0 || result.failed > 0) {

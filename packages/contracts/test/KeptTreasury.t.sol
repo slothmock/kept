@@ -203,6 +203,9 @@ contract KeptTreasuryTest is Test {
             );
 
         vm.prank(rewardManager);
+        treasury.reserveReward(rewardId, 5 * USDC);
+
+        vm.prank(rewardManager);
         treasury.payReward(
             rewardId,
             bob,
@@ -234,6 +237,9 @@ contract KeptTreasuryTest is Test {
             keccak256(
                 "duplicate"
             );
+
+        vm.prank(rewardManager);
+        treasury.reserveReward(rewardId, 1 * USDC);
 
         vm.prank(rewardManager);
         treasury.payReward(
@@ -296,11 +302,7 @@ contract KeptTreasuryTest is Test {
             )
         );
 
-        treasury.payReward(
-            keccak256("too-large"),
-            bob,
-            11 * USDC
-        );
+        treasury.reserveReward(keccak256("too-large"), 11 * USDC);
     }
 
     function test_RewardCannotExceedTreasuryValue()
@@ -316,11 +318,7 @@ contract KeptTreasuryTest is Test {
 
         vm.expectRevert();
 
-        treasury.payReward(
-            keccak256("underfunded"),
-            bob,
-            10 * USDC
-        );
+        treasury.reserveReward(keccak256("underfunded"), 10 * USDC);
     }
 
     function test_PerformanceFeesAccumulateToTreasury()
@@ -391,5 +389,54 @@ contract KeptTreasuryTest is Test {
         secondTreasury.bindVault(
             address(vault)
         );
+    }
+
+    function test_ReservationsPreventOverspending() public {
+        token.mint(address(treasury), 3 * USDC);
+        bytes32 id = keccak256("reserved");
+        vm.prank(rewardManager);
+        treasury.reserveReward(id, 2 * USDC);
+        assertEq(treasury.totalReservedAssets(), 2 * USDC);
+        assertEq(treasury.availableRewardAssets(), 1 * USDC);
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(KeptTreasury.InsufficientTreasuryValue.selector, 2 * USDC, 1 * USDC));
+        treasury.withdrawAssets(owner, 2 * USDC);
+
+        vm.prank(rewardManager);
+        vm.expectRevert(abi.encodeWithSelector(KeptTreasury.InsufficientTreasuryValue.selector, 2 * USDC, 1 * USDC));
+        treasury.reserveReward(keccak256("second"), 2 * USDC);
+
+        vm.prank(rewardManager);
+        treasury.payReward(id, bob, 2 * USDC);
+        assertEq(treasury.totalReservedAssets(), 0);
+        assertEq(token.balanceOf(bob), 2 * USDC);
+    }
+
+    function test_ClaimsRequireMatchingReservations() public {
+        token.mint(address(treasury), 5 * USDC);
+        bytes32 id = keccak256("exact");
+        vm.prank(rewardManager);
+        vm.expectRevert(abi.encodeWithSelector(KeptTreasury.RewardNotReserved.selector, id));
+        treasury.payReward(id, bob, 1 * USDC);
+
+        vm.prank(rewardManager);
+        treasury.reserveReward(id, 2 * USDC);
+        vm.prank(rewardManager);
+        vm.expectRevert(abi.encodeWithSelector(KeptTreasury.RewardReservationMismatch.selector, 2 * USDC, 1 * USDC));
+        treasury.payReward(id, bob, 1 * USDC);
+
+        vm.prank(rewardManager);
+        treasury.payReward(id, bob, 2 * USDC);
+        assertEq(treasury.totalReservedAssets(), 0);
+    }
+
+    function test_RewardManagerCannotRotateWithPendingObligations() public {
+        token.mint(address(treasury), 1 * USDC);
+        vm.prank(rewardManager);
+        treasury.reserveReward(keccak256("pending"), 1 * USDC);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(KeptTreasury.OutstandingRewardReservations.selector, 1 * USDC));
+        treasury.setRewardManager(makeAddr("newManager"));
     }
 }

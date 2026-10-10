@@ -12,6 +12,8 @@ contract MockKeptTreasury is IKeptTreasury {
     uint256 public lastAssets;
     uint256 public paymentCount;
 
+    function reserveReward(bytes32, uint256) external {}
+
     function payReward(
         bytes32 rewardId,
         address recipient,
