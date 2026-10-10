@@ -5,6 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {KeptSavingsVault} from "../src/KeptSavingsVault.sol";
 import {AaveUSDCStrategy} from "../src/AaveUSDCStrategy.sol";
+import {KeptTreasury} from "../src/KeptTreasury.sol";
+import {CommitmentManager} from "../src/CommitmentManager.sol";
+import {IKeptTreasury} from "../src/interfaces/IKeptTreasury.sol";
 import {IAavePool, IAaveAToken} from "../src/interfaces/IAave.sol";
 
 /// @notice Read-only-on-mainnet preflight. All deployments occur on a local fork.
@@ -48,5 +51,34 @@ contract MonadMainnetPreflightTest is Test {
         vm.stopPrank();
         assertGt(received, 0);
         assertEq(vault.balanceOf(saver), 0);
+
+        KeptTreasury treasury = new KeptTreasury(IERC20(USDC), demoOwner);
+        KeptSavingsVault rewardVault = new KeptSavingsVault(IERC20(USDC), demoOwner, address(treasury));
+        vm.prank(demoOwner);
+        treasury.bindVault(address(rewardVault));
+        address verifier = makeAddr("verifier");
+        CommitmentManager manager = new CommitmentManager(
+            IKeptTreasury(address(treasury)), demoOwner, verifier
+        );
+        vm.prank(demoOwner);
+        treasury.setRewardManager(address(manager));
+
+        address participant = makeAddr("participant");
+        bytes32 referenceId = keccak256("fork-mainnet-reward");
+        uint64 startAt = uint64(block.timestamp + 1);
+        uint64 endAt = startAt + 1;
+        vm.prank(participant);
+        uint256 commitmentId = manager.createCommitment(referenceId, startAt, endAt);
+        vm.warp(endAt);
+        vm.prank(verifier);
+        manager.completeCommitment(commitmentId, 5e6);
+
+        // Prefund the reward explicitly; no real mainnet funds are transferred.
+        deal(USDC, address(treasury), 5e6);
+        uint256 beforeBalance = IERC20(USDC).balanceOf(participant);
+        vm.prank(participant);
+        manager.claimReward(commitmentId);
+        assertEq(IERC20(USDC).balanceOf(participant) - beforeBalance, 5e6);
+        assertEq(IERC20(USDC).balanceOf(address(treasury)), 0);
     }
 }
