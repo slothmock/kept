@@ -280,6 +280,21 @@ contract CommitmentManagerTest is Test {
         manager.cancelCommitment(id);
     }
 
+    function test_EarnedRewardClaimRemainsAvailableDuringManagerPause() public {
+        (uint256 id,) = _createAliceCommitment();
+        _warpToCommitmentEnd(id);
+        vm.prank(verifier);
+        manager.completeCommitment(id, 1e6);
+
+        vm.prank(owner);
+        manager.pause();
+        vm.prank(alice);
+        manager.claimReward(id);
+
+        assertEq(treasury.paymentCount(), 1);
+        assertEq(treasury.lastRecipient(), alice);
+    }
+
     function test_CompletedCommitmentCanClaimReward() public {
         (uint256 id, bytes32 referenceId) = _createAliceCommitment();
         
