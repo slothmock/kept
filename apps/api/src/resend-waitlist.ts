@@ -27,7 +27,19 @@ export function createResendWaitlist(input: {
     // Existing contacts must not be re-subscribed automatically.
     if (response.status === 409) return;
     if (!response.ok) {
-      throw new Error(`Resend waitlist signup failed (HTTP ${response.status})`);
+      // Preserve the provider error code for server-side diagnostics, not the
+      // response message (which could contain an email address).
+      let providerCode = "unknown";
+      try {
+        const payload: unknown = await response.json();
+        if (payload && typeof payload === "object" && "name" in payload
+          && typeof payload.name === "string") {
+          providerCode = payload.name.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60);
+        }
+      } catch {
+        // A non-JSON response should still be diagnosed by its HTTP status.
+      }
+      throw new Error(`Resend waitlist signup failed (HTTP ${response.status}, code ${providerCode})`);
     }
   };
 }
