@@ -38,6 +38,7 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
     error ZeroShares();
 
     event StrategyBound(address indexed strategy);
+    event StrategyTokenRescued(address indexed token, address indexed recipient, uint256 amount);
     event YieldFeeCrystallized(uint256 feeAssets, uint256 feeShares, uint256 highWaterMarkAssets);
     event DepositFeeSharesMinted(address indexed receiver, uint256 assets, uint256 feeShares);
 
@@ -86,6 +87,14 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
         strategy = candidate;
 
         emit StrategyBound(strategy_);
+    }
+
+    /// @notice Recover unrelated tokens from the strategy; USDC and aUSDC are protected there.
+    function rescueStrategyToken(address token, address recipient) external onlyOwner nonReentrant returns (uint256 amount) {
+        IYieldStrategy bound = strategy;
+        if (address(bound) == address(0)) revert StrategyNotBound();
+        amount = bound.rescueToken(token, recipient);
+        emit StrategyTokenRescued(token, recipient, amount);
     }
 
     function pause() external onlyOwner {
@@ -172,7 +181,9 @@ contract KeptSavingsVault is ERC4626, Ownable2Step, Pausable, ReentrancyGuard {
 
     function maxDeposit(address receiver) public view override returns (uint256) {
         if (paused() || address(strategy) == address(0)) return 0;
-        return super.maxDeposit(receiver);
+        uint256 cap = strategy.availableDepositCapacity();
+        uint256 standardMaximum = super.maxDeposit(receiver);
+        return cap < standardMaximum ? cap : standardMaximum;
     }
 
     function maxMint(address) public pure override returns (uint256) {
