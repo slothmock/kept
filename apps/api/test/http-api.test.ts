@@ -1554,7 +1554,99 @@ describe("Kept HTTP API", () => {
     ]);
     await app.close();
   });
-  it("calculates indexed savings earnings from one confirmed block snapshot", async () => {
+
+  it("uses the Mainnet index for the dashboard instead of scanning chain history", async () => {
+    const readPerformance = vi.fn(async () => {
+      throw new Error("full-chain RPC activity scan must never run");
+    });
+    const readAccountActivity = vi.fn(async () => ({
+      depositedAssets: 0n,
+      withdrawnAssets: 0n,
+      netAssets: 0n,
+    }));
+    const readCurrentAssets = vi.fn(async () => 0n);
+    const dependencies = buildDependencies({
+      chainId: 143,
+      savingsPerformance: { readPerformance },
+      savingsCurrentAssets: { read: readCurrentAssets },
+      savingsActivityIndex: {
+        isReady: () => true,
+        status: () => ({
+          ready: true,
+          startBlock: 112212430n,
+          currentBlock: 112212450n,
+          targetBlock: 112212450n,
+          progressPercent: 100,
+        }),
+        readAccountActivity,
+      },
+    });
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/dashboard",
+      headers: auth,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().savings.performance).toEqual({
+      kind: "ready",
+      data: {
+        depositedAssetsAtomic: "0",
+        withdrawnAssetsAtomic: "0",
+        netContributionsAtomic: "0",
+        currentAssetsAtomic: "0",
+        earningsAssetsAtomic: "0",
+      },
+    });
+    expect(readAccountActivity).toHaveBeenCalledWith(
+      "0x0000000000000000000000000000000000000001",
+      112212450n,
+    );
+    expect(readCurrentAssets).toHaveBeenCalledTimes(1);
+    expect(readPerformance).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("reports Mainnet indexing progress without launching the historical RPC scan", async () => {
+    const readPerformance = vi.fn(async () => {
+      throw new Error("full-chain RPC activity scan must never run");
+    });
+    const dependencies = buildDependencies({
+      chainId: 143,
+      savingsPerformance: { readPerformance },
+      savingsCurrentAssets: { read: vi.fn(async () => 0n) },
+      savingsActivityIndex: {
+        isReady: () => false,
+        status: () => ({
+          ready: false,
+          startBlock: 112212430n,
+          currentBlock: 112212431n,
+          targetBlock: 112212450n,
+          progressPercent: 5,
+        }),
+        readAccountActivity: vi.fn(async () => ({
+          depositedAssets: 0n,
+          withdrawnAssets: 0n,
+          netAssets: 0n,
+        })),
+      },
+    });
+    const app = buildApp(dependencies);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/dashboard",
+      headers: auth,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().savings.performance).toMatchObject({
+      kind: "synchronizing",
+      progressPercent: 5,
+    });
+    expect(readPerformance).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([143, 10_143] as const)("calculates indexed savings earnings on chain %i from one confirmed block snapshot", async (chainId) => {
     const wallet =
       "0x0000000000000000000000000000000000000001";
 
@@ -1590,7 +1682,7 @@ describe("Kept HTTP API", () => {
 
     const app = buildApp(
       buildDependencies({
-        chainId: 10_143,
+        chainId,
         savingsCurrentAssets: {
           read: readCurrentAssets,
         },
